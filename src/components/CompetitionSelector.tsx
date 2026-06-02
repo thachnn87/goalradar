@@ -8,7 +8,7 @@ export default function CompetitionSelector({ selected }: { selected: string }) 
   const searchParams = useSearchParams();
 
   function select(code: string) {
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(searchParams?.toString() ?? '');
     params.set('competition', code);
     router.push(`?${params.toString()}`);
   }

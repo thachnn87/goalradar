@@ -11,7 +11,7 @@ const links = [
 ];
 
 export default function Navbar() {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? '';
 
   return (
     <nav className="bg-gray-900 border-b border-gray-800 sticky top-0 z-50">
@@ -19,13 +19,18 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
           <Link href="/" className="flex items-center gap-2 shrink-0">
             <span className="text-2xl">⚽</span>
-            <span className="text-white font-bold text-xl tracking-tight">GoalRadar</span>
+            <span className="text-white font-bold text-xl tracking-tight">
+              GoalRadar
+            </span>
           </Link>
 
           <div className="flex items-center gap-1">
             {links.map(({ href, label }) => {
               const isActive =
-                href === '/' ? pathname === '/' : pathname.startsWith(href);
+                href === '/'
+                  ? pathname === '/'
+                  : pathname.startsWith(href);
+
               return (
                 <Link
                   key={href}
