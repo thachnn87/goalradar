@@ -6,6 +6,6 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: "*",
       allow: "/",
     },
-    sitemap: "https://goalradar-two.vercel.app/sitemap.xml",
+    sitemap: "https://goalradar.org/sitemap.xml",
   };
 }
