@@ -42,11 +42,19 @@ async function StandingsContent({ competition }: { competition: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        {competitionEmblem && (
-          <img src={competitionEmblem} alt="" width={32} height={32} className="object-contain" />
-        )}
-        <h2 className="text-lg font-semibold text-white">{competitionName}</h2>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          {competitionEmblem && (
+            <img src={competitionEmblem} alt="" width={32} height={32} className="object-contain" />
+          )}
+          <h2 className="text-lg font-semibold text-white">{competitionName}</h2>
+        </div>
+        <a
+          href={`/competition/${competition}`}
+          className="text-xs text-gray-500 hover:text-white transition-colors shrink-0"
+        >
+          Full competition →
+        </a>
       </div>
       <StandingsTable table={totalTable.table} />
     </div>

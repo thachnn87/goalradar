@@ -8,6 +8,7 @@ const links = [
   { href: '/schedule', label: 'Schedule' },
   { href: '/live', label: 'Live' },
   { href: '/standings', label: 'Standings' },
+  { href: '/competition/PL', label: 'Leagues' },
 ];
 
 export default function Navbar() {
