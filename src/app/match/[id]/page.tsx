@@ -213,33 +213,31 @@ function ScoreHero({ match }: { match: MatchDetail }) {
 // ---------------------------------------------------------------------------
 
 function MatchSummary({ match }: { match: MatchDetail }) {
-  const goals = match.goals ?? [];
-  const bookings = match.bookings ?? [];
-  const subs = match.substitutions ?? [];
-  const yellows = bookings.filter((b) => b.card === 'YELLOW').length;
-  const reds = bookings.filter((b) => b.card === 'RED' || b.card === 'YELLOW_RED').length;
+  const { score, homeTeam, awayTeam, status } = match;
 
-  const homeGoals = goals.filter((g) => g.team?.id === match.homeTeam.id).length;
-  const awayGoals = goals.filter((g) => g.team?.id === match.awayTeam.id).length;
-
-  let resultText = '';
-  if (match.status === 'FINISHED') {
-    if (match.score.winner === 'HOME_TEAM')
-      resultText = `${match.homeTeam.shortName || match.homeTeam.name} win`;
-    else if (match.score.winner === 'AWAY_TEAM')
-      resultText = `${match.awayTeam.shortName || match.awayTeam.name} win`;
-    else resultText = 'Draw';
+  let winner = '';
+  if (status === 'FINISHED') {
+    if (score.winner === 'HOME_TEAM')
+      winner = homeTeam.shortName || homeTeam.name;
+    else if (score.winner === 'AWAY_TEAM')
+      winner = awayTeam.shortName || awayTeam.name;
+    else if (score.winner === 'DRAW')
+      winner = 'Draw';
   }
 
-  const stats = [
-    { label: 'Goals', value: `${homeGoals} – ${awayGoals}` },
-    { label: 'Yellow Cards', value: String(yellows) },
-    { label: 'Red Cards', value: String(reds) },
-    { label: 'Substitutions', value: String(subs.length) },
-    ...(match.score.duration !== 'REGULAR'
-      ? [{ label: 'Duration', value: match.score.duration.replace('_', ' ') }]
+  const stats: { label: string; value: string }[] = [
+    ...(winner ? [{ label: 'Winner', value: winner }] : []),
+    {
+      label: 'Full Time',
+      value: `${score.fullTime.home ?? '–'} – ${score.fullTime.away ?? '–'}`,
+    },
+    ...(score.halfTime.home !== null
+      ? [{ label: 'Half Time', value: `${score.halfTime.home} – ${score.halfTime.away}` }]
       : []),
-    ...(resultText ? [{ label: 'Result', value: resultText }] : []),
+    ...(score.duration !== 'REGULAR'
+      ? [{ label: 'Duration', value: score.duration.replace('_', ' ') }]
+      : []),
+    { label: 'Competition', value: match.competition?.name ?? '–' },
   ];
 
   return (
@@ -249,7 +247,7 @@ function MatchSummary({ match }: { match: MatchDetail }) {
         {stats.map(({ label, value }) => (
           <div key={label} className="bg-gray-800/50 rounded-xl p-3 text-center">
             <dt className="text-xs text-gray-500 mb-1">{label}</dt>
-            <dd className="text-white font-bold text-base">{value}</dd>
+            <dd className="text-white font-bold text-sm">{value}</dd>
           </div>
         ))}
       </dl>
