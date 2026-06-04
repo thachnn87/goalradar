@@ -112,6 +112,33 @@ export interface MatchDetail extends Match {
   referees: Referee[];
 }
 
+export interface TeamDetail {
+  id: number;
+  name: string;
+  shortName: string;
+  tla: string;
+  crest: string;
+  address: string | null;
+  website: string | null;
+  founded: number | null;
+  clubColors: string | null;
+  venue: string | null;
+  area: Area;
+  runningCompetitions: {
+    id: number;
+    name: string;
+    code: string;
+    type: string;
+    emblem: string;
+  }[];
+  coach: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    nationality: string | null;
+  } | null;
+}
+
 export interface H2HTeamStat {
   id: number;
   name: string;

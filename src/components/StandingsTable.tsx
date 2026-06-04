@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { StandingEntry } from '@/lib/types';
 
 export default function StandingsTable({ table }: { table: StandingEntry[] }) {
@@ -37,7 +38,10 @@ export default function StandingsTable({ table }: { table: StandingEntry[] }) {
                 >
                   <td className="px-4 py-3 text-gray-400 text-center">{entry.position}</td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
+                    <Link
+                      href={`/team/${entry.team.id}`}
+                      className="flex items-center gap-2 hover:text-green-400 transition-colors group w-fit"
+                    >
                       {entry.team.crest && (
                         <img
                           src={entry.team.crest}
@@ -47,10 +51,10 @@ export default function StandingsTable({ table }: { table: StandingEntry[] }) {
                           className="object-contain shrink-0"
                         />
                       )}
-                      <span className="text-white font-medium">
+                      <span className="text-white font-medium group-hover:text-green-400 transition-colors">
                         {entry.team.shortName || entry.team.name}
                       </span>
-                    </div>
+                    </Link>
                   </td>
                   <td className="px-4 py-3 text-center text-gray-400">{entry.playedGames}</td>
                   <td className="px-4 py-3 text-center text-gray-400">{entry.won}</td>
