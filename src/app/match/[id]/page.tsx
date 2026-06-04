@@ -256,6 +256,114 @@ function MatchSummary({ match }: { match: MatchDetail }) {
 }
 
 // ---------------------------------------------------------------------------
+// Match report (SEO article, server-rendered)
+// ---------------------------------------------------------------------------
+
+function generateReport(match: MatchDetail): string {
+  const home = match.homeTeam.name;
+  const away = match.awayTeam.name;
+  const homeShort = match.homeTeam.shortName || home;
+  const awayShort = match.awayTeam.shortName || away;
+  const comp = match.competition?.name ?? 'the league';
+  const { score, status, matchday } = match;
+  const ftHome = score.fullTime.home ?? 0;
+  const ftAway = score.fullTime.away ?? 0;
+  const htHome = score.halfTime.home;
+  const htAway = score.halfTime.away;
+
+  const matchDate = new Date(match.utcDate).toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+
+  const matchdayText = matchday ? ` in Matchday ${matchday} of` : ' in';
+  const totalGoals = ftHome + ftAway;
+
+  // Opening paragraph — context
+  let opening = '';
+  if (status === 'FINISHED') {
+    if (score.winner === 'HOME_TEAM') {
+      opening = `${home} claimed a ${ftHome}–${ftAway} victory over ${away}${matchdayText} the ${comp} on ${matchDate}. ` +
+        `The home side were dominant throughout, securing all three points in front of their supporters.`;
+    } else if (score.winner === 'AWAY_TEAM') {
+      opening = `${away} came away with an impressive ${ftHome}–${ftAway} win against ${home}${matchdayText} the ${comp} on ${matchDate}. ` +
+        `The visitors proved too strong, taking the points back on the road.`;
+    } else {
+      opening = `${home} and ${away} played out a ${ftHome}–${ftAway} draw${matchdayText} the ${comp} on ${matchDate}. ` +
+        `Both sides were unable to find a winner, sharing the spoils at the final whistle.`;
+    }
+  } else if (status === 'IN_PLAY' || status === 'PAUSED') {
+    opening = `${home} and ${away} are currently facing off${matchdayText} the ${comp} on ${matchDate}. ` +
+      `The match is underway and the score currently stands at ${ftHome}–${ftAway}.`;
+  } else {
+    opening = `${home} are set to host ${away}${matchdayText} the ${comp} on ${matchDate}. ` +
+      `Both teams will be looking to secure an important result in this fixture.`;
+  }
+
+  // Half-time paragraph
+  let halfTimePara = '';
+  if (htHome !== null && htAway !== null && status === 'FINISHED') {
+    if (htHome === ftHome && htAway === ftAway) {
+      halfTimePara = `The first half set the tone for the encounter, with the score at ${htHome}–${htAway} at the break — a lead that would prove decisive as the second half failed to produce any further goals.`;
+    } else if (htHome > htAway) {
+      halfTimePara = `${homeShort} went into the half-time interval leading ${htHome}–${htAway}, having carved out opportunities in the opening 45 minutes. ` +
+        `The second half saw further action, with the score moving from ${htHome}–${htAway} to the final tally of ${ftHome}–${ftAway}.`;
+    } else if (htAway > htHome) {
+      halfTimePara = `${awayShort} held a ${htHome}–${htAway} advantage at the break, demonstrating their quality in the first period. ` +
+        `The second half continued to produce goals, ending ${ftHome}–${ftAway} at full time.`;
+    } else {
+      halfTimePara = `Neither side could separate themselves before the break, with the half-time score locked at ${htHome}–${htAway}. ` +
+        `The second period proved more decisive, with the match ultimately finishing ${ftHome}–${ftAway}.`;
+    }
+  }
+
+  // Goals narrative
+  let goalsPara = '';
+  if (status === 'FINISHED') {
+    if (totalGoals === 0) {
+      goalsPara = `It was a tight, disciplined contest with both defences keeping clean sheets — ${homeShort} and ${awayShort} cancelling each other out across 90 minutes.`;
+    } else if (totalGoals === 1) {
+      const scorer = score.winner === 'HOME_TEAM' ? homeShort : awayShort;
+      goalsPara = `A single goal proved the difference, with ${scorer} finding the net to separate the two sides in what was a closely contested encounter.`;
+    } else if (totalGoals <= 3) {
+      goalsPara = `The ${totalGoals} goals shared between the two teams made for an engaging contest, with moments of quality from both ${homeShort} and ${awayShort}.`;
+    } else {
+      goalsPara = `It was a high-scoring affair with ${totalGoals} goals in total, providing plenty of entertainment for spectators as ${homeShort} and ${awayShort} produced an open and attacking game.`;
+    }
+  }
+
+  // Closing paragraph — competition context
+  const closing = `This fixture was part of the ${comp} season. ` +
+    `Follow GoalRadar for live scores, results, and full coverage of ${comp} matches throughout the season.`;
+
+  return [opening, halfTimePara, goalsPara, closing]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+function MatchReport({ match }: { match: MatchDetail }) {
+  const paragraphs = generateReport(match).split('\n\n');
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+      <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">
+        Match Report
+      </h2>
+      <div className="prose prose-invert prose-sm max-w-none space-y-3">
+        {paragraphs.map((para, i) => (
+          <p key={i} className="text-gray-300 text-sm leading-relaxed">
+            {para}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Goals
 // ---------------------------------------------------------------------------
 
@@ -658,6 +766,8 @@ export default async function MatchDetailPage({ params }: Params) {
         <ScoreHero match={match} />
 
         {showStats && <MatchSummary match={match} />}
+
+        <MatchReport match={match} />
 
         {showStats && hasEvents && <MatchStatistics match={match} />}
 
