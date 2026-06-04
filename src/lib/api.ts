@@ -1,4 +1,4 @@
-import { Match, MatchDetail, StandingTable } from './types';
+import { Match, MatchDetail, HeadToHead, StandingTable } from './types';
 
 const BASE_URL = 'https://api.football-data.org/v4';
 
@@ -138,6 +138,15 @@ export async function getMatchDetail(
 ): Promise<MatchDetail> {
   return fetchAPI(
     `/matches/${id}`,
+    60
+  );
+}
+
+export async function getHeadToHead(
+  id: string
+): Promise<HeadToHead> {
+  return fetchAPI(
+    `/matches/${id}/head2head`,
     60
   );
 }

@@ -97,10 +97,43 @@ export interface Substitution {
   playerIn: { id: number; name: string };
 }
 
+export interface Referee {
+  id: number;
+  name: string;
+  type: string;
+  nationality: string | null;
+}
+
 export interface MatchDetail extends Match {
   goals: Goal[];
   bookings: Booking[];
   substitutions: Substitution[];
+  venue: string | null;
+  referees: Referee[];
+}
+
+export interface H2HTeamStat {
+  id: number;
+  name: string;
+  wins: number;
+  draws: number;
+  losses: number;
+}
+
+export interface HeadToHead {
+  resultSet: {
+    count: number;
+    first: string;
+    last: string;
+    played: number;
+  };
+  aggregates: {
+    numberOfMatches: number;
+    totalGoals: number;
+    homeTeam: H2HTeamStat;
+    awayTeam: H2HTeamStat;
+  };
+  matches: Match[];
 }
 
 export const COMPETITIONS: { code: string; name: string; flag: string }[] = [
