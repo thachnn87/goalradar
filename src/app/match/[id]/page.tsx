@@ -132,10 +132,13 @@ function ScoreHero({ match }: { match: MatchDetail }) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 sm:p-8">
       <div className="text-center mb-4">
-        <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">
+        <Link
+          href={`/competition/${match.competition?.code}`}
+          className="text-xs text-gray-500 uppercase tracking-wider font-medium hover:text-white transition-colors"
+        >
           {match.competition?.name}
           {match.matchday ? ` · Matchday ${match.matchday}` : ''}
-        </p>
+        </Link>
         <p className="text-xs text-gray-500 mt-1">{formatMatchDate(match.utcDate)}</p>
       </div>
 
@@ -145,20 +148,20 @@ function ScoreHero({ match }: { match: MatchDetail }) {
 
       <div className="grid grid-cols-3 items-center gap-4">
         {/* Home */}
-        <div className="text-center">
+        <Link href={`/team/${homeTeam.id}`} className="text-center group block">
           {homeTeam.crest && (
             <img
               src={homeTeam.crest}
               alt={homeTeam.name}
               width={64}
               height={64}
-              className="object-contain mx-auto mb-3"
+              className="object-contain mx-auto mb-3 group-hover:opacity-80 transition-opacity"
             />
           )}
-          <p className="font-bold text-white text-sm sm:text-base leading-tight">
+          <p className="font-bold text-white text-sm sm:text-base leading-tight group-hover:text-green-400 transition-colors">
             {homeTeam.shortName || homeTeam.name}
           </p>
-        </div>
+        </Link>
 
         {/* Score */}
         <div className="text-center">
@@ -181,20 +184,20 @@ function ScoreHero({ match }: { match: MatchDetail }) {
         </div>
 
         {/* Away */}
-        <div className="text-center">
+        <Link href={`/team/${awayTeam.id}`} className="text-center group block">
           {awayTeam.crest && (
             <img
               src={awayTeam.crest}
               alt={awayTeam.name}
               width={64}
               height={64}
-              className="object-contain mx-auto mb-3"
+              className="object-contain mx-auto mb-3 group-hover:opacity-80 transition-opacity"
             />
           )}
-          <p className="font-bold text-white text-sm sm:text-base leading-tight">
+          <p className="font-bold text-white text-sm sm:text-base leading-tight group-hover:text-green-400 transition-colors">
             {awayTeam.shortName || awayTeam.name}
           </p>
-        </div>
+        </Link>
       </div>
 
       {/* Venue / referee meta */}
