@@ -13,7 +13,7 @@
  * States: idle → loading → success | error
  */
 
-import { useState, useRef, type FormEvent } from 'react';
+import { useState, useRef, useEffect, type FormEvent } from 'react';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -167,6 +167,15 @@ function CardForm({
 
       {/* Form */}
       <form onSubmit={onSubmit} className="flex flex-col sm:flex-row gap-2" noValidate>
+        {/* Anti-spam honeypot — hidden from real users, must stay empty */}
+        <input
+          type="text"
+          name="_hp"
+          tabIndex={-1}
+          autoComplete="off"
+          aria-hidden="true"
+          className="absolute opacity-0 pointer-events-none w-0 h-0 overflow-hidden"
+        />
         <EmailInput
           value={email}
           onChange={setEmail}
@@ -215,6 +224,15 @@ function InlineForm({
   return (
     <div className="space-y-2">
       <form onSubmit={onSubmit} className="flex gap-2" noValidate>
+        {/* Anti-spam honeypot */}
+        <input
+          type="text"
+          name="_hp"
+          tabIndex={-1}
+          autoComplete="off"
+          aria-hidden="true"
+          className="absolute opacity-0 pointer-events-none w-0 h-0 overflow-hidden"
+        />
         <EmailInput
           value={email}
           onChange={setEmail}
@@ -245,10 +263,14 @@ export default function NewsletterSignup({
   heading     = DEFAULT_HEADING,
   description = DEFAULT_DESCRIPTION,
 }: Props) {
-  const [email, setEmail] = useState('');
-  const [state, setState] = useState<State>('idle');
-  const [error, setError] = useState('');
+  const [email, setEmail]     = useState('');
+  const [state, setState]     = useState<State>('idle');
+  const [error, setError]     = useState('');
+  const [loadTime, setLoadTime] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Record when the form was rendered — used server-side to detect instant-submit bots
+  useEffect(() => { setLoadTime(Date.now()); }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -261,13 +283,17 @@ export default function NewsletterSignup({
       return;
     }
 
+    // Client-side: read honeypot field directly from the form element
+    const form     = e.currentTarget as HTMLFormElement;
+    const honeypot = (form.elements.namedItem('_hp') as HTMLInputElement | null)?.value ?? '';
+
     setState('loading');
 
     try {
       const res = await fetch('/api/newsletter/subscribe', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ email: trimmed, source }),
+        body:    JSON.stringify({ email: trimmed, source, _hp: honeypot, _t: loadTime }),
       });
 
       const data: { ok?: boolean; error?: string } = await res.json();
