@@ -1,11 +1,32 @@
+import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { getStandings } from '@/lib/api';
 import StandingsTable from '@/components/StandingsTable';
 import CompetitionSelector from '@/components/CompetitionSelector';
 import Breadcrumb from '@/components/Breadcrumb';
+import AdSlot from '@/components/AdSlot';
 import { StandingTable } from '@/lib/types';
 
 export const revalidate = 3600;
+
+export const metadata: Metadata = {
+  title: 'Football Standings & League Tables | GoalRadar',
+  description:
+    'Live football standings and league tables — World Cup 2026 group standings, Premier League table, Champions League, La Liga and all top European leagues updated after every match.',
+  alternates: { canonical: 'https://goalradar.org/standings' },
+  openGraph: {
+    title: 'Football Standings & League Tables | GoalRadar',
+    description:
+      'Live football league tables — World Cup 2026 groups, Premier League, Champions League and more.',
+    type: 'website',
+    url: 'https://goalradar.org/standings',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Football Standings & League Tables | GoalRadar',
+    description: 'Live football standings for all top leagues and World Cup 2026 groups.',
+  },
+};
 
 async function StandingsContent({ competition }: { competition: string }) {
   let standings: StandingTable[] = [];
@@ -85,6 +106,8 @@ export default async function StandingsPage({
         <CompetitionSelector selected={competition} />
       </Suspense>
 
+      <AdSlot slotId="standings-top" variant="banner" />
+
       <Suspense
         fallback={
           <div className="bg-gray-900 border border-gray-800 rounded-xl h-96 animate-pulse" />
@@ -92,6 +115,8 @@ export default async function StandingsPage({
       >
         <StandingsContent competition={competition} />
       </Suspense>
+
+      <AdSlot slotId="standings-bottom" variant="banner" />
     </div>
   );
 }

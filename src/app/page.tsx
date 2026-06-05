@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import {
@@ -17,6 +18,26 @@ import AdSlot from '@/components/AdSlot';
 import WCCountdownBanner from '@/components/WCCountdownBanner';
 
 export const revalidate = 30;
+
+export const metadata: Metadata = {
+  title: 'GoalRadar — Live Football Scores, World Cup 2026 & Match Schedules',
+  description:
+    'GoalRadar delivers live football scores, World Cup 2026 fixtures, results, standings and streaming guides. Follow every match in real time — from group stage to the FIFA World Cup 2026 Final.',
+  alternates: { canonical: 'https://goalradar.org' },
+  openGraph: {
+    title: 'GoalRadar — Live Football Scores & World Cup 2026',
+    description:
+      'Live scores, World Cup 2026 fixtures, group standings, streaming guides and match schedules. Your home for football in 2026.',
+    type: 'website',
+    url: 'https://goalradar.org',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'GoalRadar — Live Football Scores & World Cup 2026',
+    description:
+      'Live football scores, World Cup 2026 fixtures, standings and streaming guides.',
+  },
+};
 
 const WC_START = '2026-06-11';
 const WC_END   = '2026-07-19';
@@ -434,7 +455,41 @@ export default async function HomePage() {
   const upcomingCount =
     wcUpcomingResult.status === 'fulfilled' ? wcUpcomingResult.value.matches.length : 0;
 
+  const jsonLdWebSite = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'GoalRadar',
+    url: 'https://goalradar.org',
+    description: 'Live football scores, World Cup 2026 fixtures, group standings, streaming guides and match schedules.',
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: 'https://goalradar.org/schedule',
+      'query-input': 'required name=search_term_string',
+    },
+  };
+
+  const jsonLdSportsEvent = {
+    '@context': 'https://schema.org',
+    '@type': 'SportsEvent',
+    name: 'FIFA World Cup 2026',
+    startDate: '2026-06-11',
+    endDate: '2026-07-19',
+    location: {
+      '@type': 'Place',
+      name: 'USA, Canada & Mexico',
+    },
+    organizer: {
+      '@type': 'SportsOrganization',
+      name: 'FIFA',
+      url: 'https://www.fifa.com',
+    },
+    url: 'https://goalradar.org/world-cup-2026',
+  };
+
   return (
+    <>
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdWebSite) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdSportsEvent) }} />
     <div className="space-y-10">
 
       {/* ── Countdown banner — sits above everything, slim strip ─────────── */}
@@ -589,5 +644,6 @@ export default async function HomePage() {
       </section>
 
     </div>
+    </>
   );
 }

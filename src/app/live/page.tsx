@@ -1,10 +1,31 @@
+import type { Metadata } from 'next';
 import { getLiveMatches } from '@/lib/api';
 import MatchCard from '@/components/MatchCard';
 import LiveRefresher from '@/components/LiveRefresher';
 import Breadcrumb from '@/components/Breadcrumb';
+import AdSlot from '@/components/AdSlot';
 import { Match } from '@/lib/types';
 
 export const revalidate = 30;
+
+export const metadata: Metadata = {
+  title: 'Live Football Scores | Live Match Updates | GoalRadar',
+  description:
+    'Live football scores updated in real time. Follow every goal, card and event from matches currently in play — World Cup 2026, Premier League, Champions League and more.',
+  alternates: { canonical: 'https://goalradar.org/live' },
+  openGraph: {
+    title: 'Live Football Scores | GoalRadar',
+    description:
+      'Real-time live football scores and match updates from World Cup 2026 and top European leagues.',
+    type: 'website',
+    url: 'https://goalradar.org/live',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Live Football Scores | GoalRadar',
+    description: 'Real-time live football scores and match updates.',
+  },
+};
 
 export default async function LivePage() {
   let matches: Match[] = [];
@@ -53,6 +74,8 @@ export default async function LivePage() {
         </div>
       )}
 
+      <AdSlot slotId="live-top" variant="banner" />
+
       {!error && matches.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {matches.map((match) => (
@@ -60,6 +83,8 @@ export default async function LivePage() {
           ))}
         </div>
       )}
+
+      <AdSlot slotId="live-bottom" variant="banner" />
     </div>
   );
 }
