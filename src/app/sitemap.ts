@@ -6,6 +6,7 @@ import { WC_TEAM_SLUGS } from '@/lib/wc-teams';
 import { WC_WATCH_COUNTRY_SLUGS } from '@/lib/wc-watch-countries';
 import { WC_TV_COUNTRY_SLUGS } from '@/lib/wc-tv-countries';
 import { WC_VENUE_SLUGS } from '@/lib/wc-venues';
+import { WC_ALL_TEAM_SLUGS } from '@/lib/wc-all-teams';
 
 const BASE_URL = 'https://goalradar.org';
 
@@ -142,6 +143,56 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: new Date(),
       changeFrequency: 'weekly' as const,
       priority: 0.80,
+    })),
+    // Phase 2 — programmatic flat-URL SEO pages (high-volume keyword targets)
+    {
+      url: `${BASE_URL}/world-cup-2026-schedule`,
+      lastModified: new Date(),
+      changeFrequency: 'hourly' as const,
+      priority: 0.93,
+    },
+    {
+      url: `${BASE_URL}/world-cup-2026-results`,
+      lastModified: new Date(),
+      changeFrequency: 'always' as const,
+      priority: 0.92,
+    },
+    {
+      url: `${BASE_URL}/world-cup-2026-standings`,
+      lastModified: new Date(),
+      changeFrequency: 'hourly' as const,
+      priority: 0.91,
+    },
+    {
+      url: `${BASE_URL}/world-cup-2026-bracket`,
+      lastModified: new Date(),
+      changeFrequency: 'hourly' as const,
+      priority: 0.90,
+    },
+    {
+      url: `${BASE_URL}/world-cup-2026-live-stream`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: 0.88,
+    },
+    {
+      url: `${BASE_URL}/world-cup-2026-tv-guide`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: 0.88,
+    },
+    {
+      url: `${BASE_URL}/world-cup-2026-groups`,
+      lastModified: new Date(),
+      changeFrequency: 'hourly' as const,
+      priority: 0.91,
+    },
+    // Phase 3 — all 48 WC team pages at /world-cup-2026/teams/[slug]
+    ...WC_ALL_TEAM_SLUGS.map((slug) => ({
+      url: `${BASE_URL}/world-cup-2026/teams/${slug}`,
+      lastModified: new Date(),
+      changeFrequency: 'hourly' as const,
+      priority: 0.85,
     })),
   ];
 
