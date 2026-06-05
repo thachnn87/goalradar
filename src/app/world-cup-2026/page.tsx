@@ -382,13 +382,19 @@ export default async function WorldCup2026Page() {
           {groupTables.length > 0 ? (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {groupTables.map((t) => (
-                  <WCGroupTable
-                    key={t.group ?? t.stage}
-                    group={t.group ?? t.stage}
-                    table={t.table}
-                  />
-                ))}
+                {groupTables.map((t) => {
+                  const groupSlug = (t.group ?? '')
+                    .toLowerCase()
+                    .replace('_', '-'); // GROUP_A → group-a
+                  return (
+                    <WCGroupTable
+                      key={t.group ?? t.stage}
+                      group={t.group ?? t.stage}
+                      table={t.table}
+                      href={groupSlug ? `/world-cup-2026/${groupSlug}` : undefined}
+                    />
+                  );
+                })}
               </div>
               <p className="text-xs text-gray-600 mt-3 flex items-center gap-1.5">
                 <span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500 shrink-0" />

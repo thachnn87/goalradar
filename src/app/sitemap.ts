@@ -1,12 +1,16 @@
 import { MetadataRoute } from 'next';
 import { COMPETITIONS } from '@/lib/types';
-import { getRecentMatches } from '@/lib/api';
+import { getRecentMatches, getUpcomingMatches } from '@/lib/api';
 
 const BASE_URL = 'https://goalradar.org';
 
 export const revalidate = 3600;
 
+// WC 2026 group slugs (A–L)
+const WC_GROUPS = ['a','b','c','d','e','f','g','h','i','j','k','l'];
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  // ── Static routes ──────────────────────────────────────────────────────────
   const staticRoutes: MetadataRoute.Sitemap = [
     {
       url: BASE_URL,
@@ -32,26 +36,51 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'daily',
       priority: 0.8,
     },
+    // World Cup hub
+    {
+      url: `${BASE_URL}/world-cup-2026`,
+      lastModified: new Date(),
+      changeFrequency: 'always',
+      priority: 0.95,
+    },
+    // World Cup group pages (A–L)
+    ...WC_GROUPS.map((g) => ({
+      url: `${BASE_URL}/world-cup-2026/group-${g}`,
+      lastModified: new Date(),
+      changeFrequency: 'hourly' as const,
+      priority: 0.85,
+    })),
   ];
 
-  // Fetch recent matches for all competitions in parallel, ignore individual failures
-  const results = await Promise.allSettled(
-    COMPETITIONS.map((c) => getRecentMatches(c.code))
-  );
+  // ── Match URLs ─────────────────────────────────────────────────────────────
+  // Fetch recent + upcoming for every competition (including WC).
+  // Upcoming covers future fixtures that getRecentMatches misses.
+  const [recentResults, upcomingResults] = await Promise.all([
+    Promise.allSettled(COMPETITIONS.map((c) => getRecentMatches(c.code))),
+    Promise.allSettled(COMPETITIONS.map((c) => getUpcomingMatches(c.code))),
+  ]);
 
-  const matchUrls: MetadataRoute.Sitemap = results
-    .flatMap((r) => (r.status === 'fulfilled' ? r.value.matches : []))
-    .filter(
-      (match, index, self) =>
-        // deduplicate by id (same match can appear in multiple competition queries)
-        index === self.findIndex((m) => m.id === match.id)
-    )
-    .map((match) => ({
+  const allMatches = [
+    ...recentResults.flatMap((r) => (r.status === 'fulfilled' ? r.value.matches : [])),
+    ...upcomingResults.flatMap((r) => (r.status === 'fulfilled' ? r.value.matches : [])),
+  ];
+
+  // Deduplicate by match id
+  const seen = new Set<number>();
+  const matchUrls: MetadataRoute.Sitemap = [];
+
+  for (const match of allMatches) {
+    if (seen.has(match.id)) continue;
+    seen.add(match.id);
+
+    const isWC = match.competition?.code === 'WC';
+    matchUrls.push({
       url: `${BASE_URL}/match/${match.id}`,
       lastModified: new Date(match.lastUpdated),
-      changeFrequency: 'hourly' as const,
-      priority: 0.7,
-    }));
+      changeFrequency: isWC ? ('always' as const) : ('hourly' as const),
+      priority: isWC ? 0.9 : 0.7,
+    });
+  }
 
   return [...staticRoutes, ...matchUrls];
 }

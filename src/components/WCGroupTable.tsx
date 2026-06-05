@@ -9,16 +9,32 @@ function groupLabel(raw: string | null) {
 export default function WCGroupTable({
   group,
   table,
+  href,
 }: {
   group: string;
   table: StandingEntry[];
+  /** Optional link destination for the group header (e.g. /world-cup-2026/group-a) */
+  href?: string;
 }) {
+  const label = groupLabel(group);
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
       <div className="bg-gray-800/80 px-4 py-2.5">
-        <h3 className="text-xs font-bold text-gray-200 uppercase tracking-wider">
-          {groupLabel(group)}
-        </h3>
+        {href ? (
+          <Link
+            href={href}
+            className="flex items-center justify-between group"
+          >
+            <h3 className="text-xs font-bold text-gray-200 uppercase tracking-wider group-hover:text-white transition-colors">
+              {label}
+            </h3>
+            <span className="text-gray-600 text-xs group-hover:text-gray-400 transition-colors">→</span>
+          </Link>
+        ) : (
+          <h3 className="text-xs font-bold text-gray-200 uppercase tracking-wider">
+            {label}
+          </h3>
+        )}
       </div>
       <table className="w-full text-xs">
         <thead>
