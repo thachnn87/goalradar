@@ -11,6 +11,7 @@ import {
 import type { Match, StandingTable } from '@/lib/types';
 import MatchCard from '@/components/MatchCard';
 import WCGroupTable from '@/components/WCGroupTable';
+import WCCountdown from '@/components/WCCountdown';
 
 export const revalidate = 30;
 
@@ -437,6 +438,9 @@ export default async function HomePage() {
       {wcActive
         ? <WCHero liveCount={wcLive.length} wcActive={wcActive} />
         : <StandardHero />}
+
+      {/* ── Countdown (shown before tournament starts, or live banner) ──── */}
+      <WCCountdown />
 
       {/* ── 2. Today's World Cup Matches ─────────────────────────────────── */}
       {wcActive && (

@@ -3,6 +3,7 @@ import { getUpcomingMatches, getRecentMatches } from '@/lib/api';
 import MatchCard from '@/components/MatchCard';
 import CompetitionSelector from '@/components/CompetitionSelector';
 import Breadcrumb from '@/components/Breadcrumb';
+import WCCountdown from '@/components/WCCountdown';
 import type { Metadata } from 'next';
 import { Match } from '@/lib/types';
 
@@ -212,6 +213,9 @@ export default async function SchedulePage({
           current season
         </p>
       </div>
+
+      {/* Show compact countdown only when WC tab is selected */}
+      {competition === 'WC' && <WCCountdown compact />}
 
       <Suspense fallback={null}>
         <CompetitionSelector

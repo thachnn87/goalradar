@@ -13,6 +13,7 @@ import MatchCard from '@/components/MatchCard';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCBracket from '@/components/WCBracket';
 import WCGroupTable from '@/components/WCGroupTable';
+import WCCountdown from '@/components/WCCountdown';
 
 export const revalidate = 30;
 
@@ -337,6 +338,9 @@ export default async function WorldCup2026Page() {
             </div>
           </div>
         </div>
+
+        {/* ── Countdown ────────────────────────────────────────────────── */}
+        <WCCountdown compact />
 
         {/* ── 1. Live Matches ───────────────────────────────────────────── */}
         {liveMatches.length > 0 && (
