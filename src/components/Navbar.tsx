@@ -4,12 +4,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const links = [
+  { href: '/world-cup-2026', label: 'World Cup 2026' }, // pinned first
   { href: '/', label: 'Home' },
   { href: '/schedule', label: 'Schedule' },
   { href: '/live', label: 'Live' },
   { href: '/standings', label: 'Standings' },
   { href: '/competition/PL', label: 'Leagues' },
-  { href: '/world-cup-2026', label: 'World Cup 2026' },
 ];
 
 export default function Navbar() {

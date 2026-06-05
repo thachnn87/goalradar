@@ -191,7 +191,7 @@ export default async function SchedulePage({
   }>;
 }) {
   const {
-    competition = 'PL',
+    competition = 'WC', // World Cup is the default competition
   } = await searchParams;
 
   return (

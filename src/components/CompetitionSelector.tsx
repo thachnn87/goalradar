@@ -3,6 +3,13 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { COMPETITIONS } from '@/lib/types';
 
+// WC is always pinned first; remaining competitions follow in their defined order
+const WC_CODE = 'WC';
+const sorted = [
+  COMPETITIONS.find((c) => c.code === WC_CODE)!,
+  ...COMPETITIONS.filter((c) => c.code !== WC_CODE),
+].filter(Boolean);
+
 export default function CompetitionSelector({ selected }: { selected: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -15,20 +22,29 @@ export default function CompetitionSelector({ selected }: { selected: string }) 
 
   return (
     <div className="flex flex-wrap gap-2">
-      {COMPETITIONS.map(({ code, name, flag }) => (
-        <button
-          key={code}
-          onClick={() => select(code)}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
-            selected === code
-              ? 'bg-green-500 text-white'
-              : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
-          }`}
-        >
-          <span>{flag}</span>
-          <span>{name}</span>
-        </button>
-      ))}
+      {sorted.map(({ code, name, flag }) => {
+        const isWC      = code === WC_CODE;
+        const isSelected = selected === code;
+
+        let className = 'px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ';
+
+        if (isWC) {
+          className += isSelected
+            ? 'bg-yellow-500 text-black border border-yellow-400 shadow shadow-yellow-500/20'
+            : 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 hover:bg-yellow-500/20 hover:text-yellow-300';
+        } else {
+          className += isSelected
+            ? 'bg-green-500 text-white'
+            : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white';
+        }
+
+        return (
+          <button key={code} onClick={() => select(code)} className={className}>
+            <span>{flag}</span>
+            <span>{isWC && !isSelected ? '🏆 ' : ''}{name}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
