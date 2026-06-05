@@ -5,6 +5,7 @@ import { getWCResults } from '@/lib/api';
 import type { Match } from '@/lib/types';
 import { matchPath } from '@/lib/url';
 import Breadcrumb from '@/components/Breadcrumb';
+import MatchCard from '@/components/MatchCard';
 
 export const revalidate = 60;
 
@@ -92,6 +93,12 @@ const STAGE_LABELS: Record<string, string> = {
   FINAL:          'Final',
 };
 
+/** Stage ordering weight — lower = earlier in the tournament */
+const STAGE_ORDER: Record<string, number> = {
+  GROUP_STAGE: 0, LAST_32: 1, LAST_16: 2,
+  QUARTER_FINALS: 3, SEMI_FINALS: 4, THIRD_PLACE: 5, FINAL: 6,
+};
+
 function formatDayHeading(isoDate: string) {
   return new Date(isoDate + 'T00:00:00Z').toLocaleDateString('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
@@ -107,90 +114,45 @@ function groupByDate(matches: Match[]): Record<string, Match[]> {
   }, {});
 }
 
-// ---------------------------------------------------------------------------
-// Result row — compact, link to full match report
-// ---------------------------------------------------------------------------
-
-function ResultRow({ match }: { match: Match }) {
-  const { score } = match;
-  const hn    = match.homeTeam?.shortName || match.homeTeam?.name || 'TBD';
-  const an    = match.awayTeam?.shortName || match.awayTeam?.name || 'TBD';
-  const hWins = score.winner === 'HOME_TEAM';
-  const aWins = score.winner === 'AWAY_TEAM';
-  const stageLabel = STAGE_LABELS[match.stage] ?? match.stage.replace(/_/g, ' ');
-  const groupLabel = match.group ? ` · ${match.group.replace('GROUP_', 'Group ')}` : '';
-
-  return (
-    <Link
-      href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}
-      className="flex items-center gap-3 px-4 py-3.5 hover:bg-gray-800/60 transition-colors group"
-    >
-      {/* Stage badge */}
-      <span className="text-gray-700 text-[10px] uppercase tracking-wider w-20 shrink-0 leading-tight hidden sm:block">
-        {stageLabel}{groupLabel}
-      </span>
-
-      {/* Home team */}
-      <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
-        {match.homeTeam?.crest && (
-          <img src={match.homeTeam.crest} alt="" width={20} height={20} className="object-contain shrink-0" />
-        )}
-        <span className={`text-sm font-semibold truncate text-right ${hWins ? 'text-white' : 'text-gray-400'}`}>
-          {hn}
-        </span>
-      </div>
-
-      {/* Score */}
-      <div className="text-center shrink-0 w-20">
-        <span className="text-white font-black tabular-nums text-base tracking-tight">
-          {score.fullTime.home ?? '–'} – {score.fullTime.away ?? '–'}
-        </span>
-        {score.duration !== 'REGULAR' && (
-          <p className="text-gray-600 text-[10px] mt-0.5">
-            {score.duration === 'EXTRA_TIME' ? 'AET' : 'PSO'}
-          </p>
-        )}
-      </div>
-
-      {/* Away team */}
-      <div className="flex items-center gap-2 flex-1 min-w-0">
-        <span className={`text-sm font-semibold truncate ${aWins ? 'text-white' : 'text-gray-400'}`}>
-          {an}
-        </span>
-        {match.awayTeam?.crest && (
-          <img src={match.awayTeam.crest} alt="" width={20} height={20} className="object-contain shrink-0" />
-        )}
-      </div>
-
-      {/* Arrow — visible on hover */}
-      <span className="text-gray-700 group-hover:text-gray-400 transition-colors text-xs shrink-0">→</span>
-    </Link>
-  );
+function topStageLabel(dayMatches: Match[]) {
+  const stages = [...new Set(dayMatches.map((m) => m.stage))];
+  stages.sort((a, b) => (STAGE_ORDER[b] ?? 0) - (STAGE_ORDER[a] ?? 0));
+  return stages
+    .map((s) => STAGE_LABELS[s] ?? s.replace(/_/g, ' '))
+    .join(' · ');
 }
 
 // ---------------------------------------------------------------------------
-// Stats summary bar
+// Stats summary
 // ---------------------------------------------------------------------------
 
 function StatsSummary({ results }: { results: Match[] }) {
-  const totalGoals  = results.reduce((s, m) => s + (m.score.fullTime.home ?? 0) + (m.score.fullTime.away ?? 0), 0);
-  const homeWins    = results.filter((m) => m.score.winner === 'HOME_TEAM').length;
-  const draws       = results.filter((m) => m.score.winner === 'DRAW').length;
-  const awayWins    = results.filter((m) => m.score.winner === 'AWAY_TEAM').length;
-  const avgGoals    = results.length > 0 ? (totalGoals / results.length).toFixed(1) : '–';
+  const played    = results.length;
+  const goals     = results.reduce((s, m) => s + (m.score.fullTime.home ?? 0) + (m.score.fullTime.away ?? 0), 0);
+  const homeWins  = results.filter((m) => m.score.winner === 'HOME_TEAM').length;
+  const draws     = results.filter((m) => m.score.winner === 'DRAW').length;
+  const awayWins  = results.filter((m) => m.score.winner === 'AWAY_TEAM').length;
+  const avgGoals  = played > 0 ? (goals / played).toFixed(1) : '–';
+  const cleanShts = results.filter(
+    (m) => (m.score.fullTime.home ?? 1) === 0 || (m.score.fullTime.away ?? 1) === 0
+  ).length;
+
+  const stats = [
+    { label: 'Matches',      value: String(played),    sub: 'played' },
+    { label: 'Goals',        value: String(goals),     sub: `${avgGoals} per match` },
+    { label: 'Home Wins',    value: String(homeWins),  sub: 'home advantage' },
+    { label: 'Draws',        value: String(draws),     sub: 'shared points' },
+    { label: 'Away Wins',    value: String(awayWins),  sub: 'on the road' },
+    { label: 'Clean Sheets', value: String(cleanShts), sub: 'shutouts' },
+  ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      {[
-        { label: 'Matches Played', value: String(results.length) },
-        { label: 'Total Goals',    value: String(totalGoals), sub: `${avgGoals} per match` },
-        { label: 'Home / Draw / Away', value: `${homeWins} / ${draws} / ${awayWins}` },
-        { label: 'Clean Sheets',  value: String(results.filter((m) => (m.score.fullTime.home ?? 1) === 0 || (m.score.fullTime.away ?? 1) === 0).length) },
-      ].map(({ label, value, sub }) => (
-        <div key={label} className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
-          <p className="text-xs text-gray-500 mb-1">{label}</p>
-          <p className="text-xl font-black text-white">{value}</p>
-          {sub && <p className="text-xs text-gray-600 mt-0.5">{sub}</p>}
+    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-3">
+      {stats.map(({ label, value, sub }) => (
+        <div key={label} className="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
+          <p className="text-[10px] text-gray-600 mb-1 uppercase tracking-wider">{label}</p>
+          <p className="text-lg sm:text-xl font-black text-white leading-none">{value}</p>
+          <p className="text-[10px] text-gray-600 mt-1 hidden sm:block">{sub}</p>
         </div>
       ))}
     </div>
@@ -209,7 +171,7 @@ export default async function WCResultsPage() {
       (a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime()
     );
   } catch {
-    // graceful degradation — show empty state
+    // graceful degradation
   }
 
   const byDate = groupByDate(results);
@@ -219,7 +181,7 @@ export default async function WCResultsPage() {
     <>
       <JsonLd results={results} />
 
-      <div className="max-w-3xl mx-auto space-y-8 pb-12">
+      <div className="max-w-5xl mx-auto space-y-8 pb-12">
         {/* Breadcrumb */}
         <Breadcrumb
           items={[
@@ -234,74 +196,103 @@ export default async function WCResultsPage() {
           <div>
             <div className="flex items-center gap-3 mb-1">
               <span className="text-2xl">🏁</span>
-              <h1 className="text-2xl sm:text-3xl font-black text-white">Results</h1>
+              <h1 className="text-2xl sm:text-3xl font-black text-white">
+                World Cup Results
+                {results.length > 0 && (
+                  <span className="ml-2 text-base font-normal text-gray-500">
+                    ({results.length} matches)
+                  </span>
+                )}
+              </h1>
             </div>
             <p className="text-gray-500 text-sm">
-              FIFA World Cup 2026 · All match scores
+              FIFA World Cup 2026 · All full-time scores
             </p>
           </div>
           <Link
             href="/world-cup-2026"
             className="text-xs text-yellow-500 hover:text-yellow-300 transition-colors font-medium shrink-0 mt-1"
           >
-            ← World Cup Hub
+            ← WC Hub
           </Link>
         </div>
 
-        {/* Quick nav */}
-        <div className="flex flex-wrap gap-2 text-sm">
-          <Link href="/world-cup-2026"              className="bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg border border-gray-700 transition-colors">🏆 Hub</Link>
-          <Link href="/world-cup-2026/bracket"      className="bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg border border-gray-700 transition-colors">🔗 Bracket</Link>
-          <Link href="/schedule?competition=WC"     className="bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg border border-gray-700 transition-colors">📅 Fixtures</Link>
-          <Link href="/world-cup-2026/group-a"      className="bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg border border-gray-700 transition-colors">📊 Groups</Link>
-        </div>
+        {/* Internal navigation */}
+        <nav aria-label="World Cup navigation" className="flex flex-wrap gap-2">
+          {[
+            { href: '/world-cup-2026',          label: '🏆 Hub' },
+            { href: '/schedule?competition=WC', label: '📅 Fixtures' },
+            { href: '/world-cup-2026/bracket',  label: '🔗 Bracket' },
+            { href: '/world-cup-2026/group-a',  label: '📊 Group A' },
+            { href: '/world-cup-2026/group-b',  label: 'Group B' },
+            { href: '/world-cup-2026/group-c',  label: 'Group C' },
+            { href: '/live',                    label: '🔴 Live' },
+          ].map(({ href, label }) => (
+            <Link
+              key={href}
+              href={href}
+              className="bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-700 transition-colors"
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
 
         {/* Stats summary */}
         {results.length > 0 && <StatsSummary results={results} />}
 
-        {/* Results by date */}
+        {/* Results grouped by date — MatchCard grid */}
         {results.length === 0 ? (
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-10 text-center">
-            <div className="text-4xl mb-3">🏁</div>
-            <p className="text-gray-300 font-semibold text-lg">No results yet</p>
-            <p className="text-gray-500 text-sm mt-1">
+            <div className="text-5xl mb-4">🏁</div>
+            <h2 className="text-gray-200 font-bold text-xl mb-2">No results yet</h2>
+            <p className="text-gray-500 text-sm mb-4">
               Results will appear here once the tournament kicks off on 11 June 2026.
             </p>
-            <Link
-              href="/schedule?competition=WC"
-              className="inline-block mt-4 text-sm text-yellow-500 hover:text-yellow-300 transition-colors"
-            >
-              View upcoming fixtures →
-            </Link>
+            <div className="flex flex-wrap justify-center gap-3">
+              <Link
+                href="/schedule?competition=WC"
+                className="bg-yellow-500 hover:bg-yellow-400 text-black px-4 py-2 rounded-lg text-sm font-bold transition-colors"
+              >
+                📅 View Fixtures
+              </Link>
+              <Link
+                href="/world-cup-2026"
+                className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors border border-gray-700"
+              >
+                🏆 World Cup Hub
+              </Link>
+            </div>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-8">
             {dates.map((date) => {
               const dayMatches = byDate[date];
-              // Determine the highest stage played on this date for labelling
-              const stages = [...new Set(dayMatches.map((m) => m.stage))];
-              const stagesLabel = stages.map((s) => STAGE_LABELS[s] ?? s.replace(/_/g, ' ')).join(' · ');
+              const stagesLabel = topStageLabel(dayMatches);
 
               return (
                 <section key={date} aria-labelledby={`date-${date}`}>
-                  {/* Date heading */}
-                  <div className="flex items-baseline gap-3 mb-2">
+                  {/* Date + stage heading */}
+                  <div className="flex items-center gap-3 mb-3">
                     <h2
                       id={`date-${date}`}
                       className="text-sm font-bold text-gray-200"
                     >
                       {formatDayHeading(date)}
                     </h2>
-                    <span className="text-gray-600 text-xs">{stagesLabel}</span>
+                    <span className="text-gray-600 text-xs hidden sm:inline">{stagesLabel}</span>
                     <span className="text-gray-700 text-xs ml-auto shrink-0">
                       {dayMatches.length} match{dayMatches.length !== 1 ? 'es' : ''}
                     </span>
                   </div>
 
-                  {/* Results card */}
-                  <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden divide-y divide-gray-800/50">
+                  {/* Stage label — mobile only */}
+                  <p className="text-gray-600 text-xs mb-3 sm:hidden">{stagesLabel}</p>
+
+                  {/* Match cards grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {dayMatches.map((m) => (
-                      <ResultRow key={m.id} match={m} />
+                      <MatchCard key={m.id} match={m} />
                     ))}
                   </div>
                 </section>
@@ -310,12 +301,13 @@ export default async function WCResultsPage() {
           </div>
         )}
 
-        {/* Footer links */}
+        {/* Footer internal links */}
         <div className="border-t border-gray-800 pt-6 flex flex-wrap justify-center gap-4 text-sm text-gray-500">
-          <Link href="/world-cup-2026"          className="hover:text-white transition-colors">🏆 Tournament Hub</Link>
-          <Link href="/world-cup-2026/bracket"  className="hover:text-white transition-colors">🔗 Knockout Bracket</Link>
-          <Link href="/schedule?competition=WC" className="hover:text-white transition-colors">📅 Upcoming Fixtures</Link>
-          <Link href="/live"                    className="hover:text-white transition-colors">🔴 Live Scores</Link>
+          <Link href="/world-cup-2026"           className="hover:text-white transition-colors">🏆 Tournament Hub</Link>
+          <Link href="/world-cup-2026/bracket"   className="hover:text-white transition-colors">🔗 Knockout Bracket</Link>
+          <Link href="/schedule?competition=WC"  className="hover:text-white transition-colors">📅 Upcoming Fixtures</Link>
+          <Link href="/world-cup-2026/group-a"   className="hover:text-white transition-colors">📊 Group Standings</Link>
+          <Link href="/live"                     className="hover:text-white transition-colors">🔴 Live Scores</Link>
         </div>
       </div>
     </>
