@@ -506,6 +506,35 @@ export default async function WatchLivePage() {
           className="mb-8"
         />
 
+        {/* ── Watch by Country ─────────────────────────────────────────────── */}
+        <div className="my-10">
+          <h2 className="text-2xl font-bold text-white mb-2">Watch World Cup 2026 By Country</h2>
+          <p className="text-gray-400 text-sm mb-6">
+            Select your country for a dedicated guide with broadcaster details, streaming options,
+            kick-off times and local FAQs.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {([
+              { href: '/world-cup-2026/watch-live/us',        flag: '🇺🇸', label: 'United States',  sub: 'Fox · Telemundo · Peacock' },
+              { href: '/world-cup-2026/watch-live/uk',        flag: '🇬🇧', label: 'United Kingdom', sub: 'BBC · ITV (all free)' },
+              { href: '/world-cup-2026/watch-live/canada',    flag: '🇨🇦', label: 'Canada',         sub: 'CTV free · TSN full' },
+              { href: '/world-cup-2026/watch-live/australia', flag: '🇦🇺', label: 'Australia',      sub: 'SBS free — all 104 matches' },
+              { href: '/world-cup-2026/watch-live/thailand',  flag: '🇹🇭', label: 'Thailand',       sub: 'TrueVisions · TrueID' },
+              { href: '/world-cup-2026/watch-live/vietnam',   flag: '🇻🇳', label: 'Vietnam',        sub: 'FPT Play · VTV' },
+            ] as { href: string; flag: string; label: string; sub: string }[]).map(({ href, flag, label, sub }) => (
+              <Link
+                key={href}
+                href={href}
+                className="group flex flex-col items-center text-center gap-2 bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-yellow-500/50 rounded-2xl p-4 transition-all"
+              >
+                <span className="text-4xl">{flag}</span>
+                <span className="font-semibold text-white group-hover:text-yellow-400 transition-colors text-sm">{label}</span>
+                <span className="text-xs text-gray-500 leading-tight">{sub}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+
         {/* ── Newsletter ───────────────────────────────────────────────────── */}
         <NewsletterSignup
           source="watch-live"

@@ -3,6 +3,7 @@ import { COMPETITIONS } from '@/lib/types';
 import { getRecentMatches, getUpcomingMatches } from '@/lib/api';
 import { matchPath } from '@/lib/url';
 import { WC_TEAM_SLUGS } from '@/lib/wc-teams';
+import { WC_WATCH_COUNTRY_SLUGS } from '@/lib/wc-watch-countries';
 
 const BASE_URL = 'https://goalradar.org';
 
@@ -105,6 +106,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: new Date(),
       changeFrequency: 'hourly' as const,
       priority: 0.88,
+    })),
+    // World Cup Watch Live — country sub-pages
+    ...WC_WATCH_COUNTRY_SLUGS.map((slug) => ({
+      url: `${BASE_URL}/world-cup-2026/watch-live/${slug}`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: 0.82,
     })),
   ];
 

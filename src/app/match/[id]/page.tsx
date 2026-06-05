@@ -1102,6 +1102,7 @@ function WCNavBox({
       : [{ href: '/world-cup-2026',              icon: '📊', label: 'Groups',    desc: 'All group standings'        }]
     ),
     { href: '/world-cup-2026',            icon: '🏆', label: 'WC Hub',      desc: 'Tournament overview'       },
+    { href: '/world-cup-2026/watch-live', icon: '📺', label: 'Watch Live',  desc: 'Broadcasters by country'   },
     { href: '/live',                      icon: '🔴', label: 'Live Scores', desc: 'Matches in play'           },
   ];
 
