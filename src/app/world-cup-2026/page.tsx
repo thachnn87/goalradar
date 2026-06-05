@@ -414,9 +414,17 @@ export default async function WorldCup2026Page() {
           <SectionHeader title="Knockout Bracket" />
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 sm:p-6">
             <WCBracket matches={knockoutMatches} />
-            <p className="text-xs text-gray-700 mt-4 text-center">
-              Bracket auto-updates as teams advance · Scroll horizontally on small screens
-            </p>
+            <div className="mt-4 flex items-center justify-between">
+              <p className="text-xs text-gray-700">
+                Bracket auto-updates as teams advance · Scroll horizontally on small screens
+              </p>
+              <Link
+                href="/world-cup-2026/bracket"
+                className="text-xs text-yellow-500 hover:text-yellow-300 transition-colors font-medium shrink-0 ml-4"
+              >
+                Full bracket →
+              </Link>
+            </div>
           </div>
         </section>
 

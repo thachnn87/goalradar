@@ -43,6 +43,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'always',
       priority: 0.95,
     },
+    // World Cup bracket page
+    {
+      url: `${BASE_URL}/world-cup-2026/bracket`,
+      lastModified: new Date(),
+      changeFrequency: 'hourly',
+      priority: 0.9,
+    },
     // World Cup group pages (A–L)
     ...WC_GROUPS.map((g) => ({
       url: `${BASE_URL}/world-cup-2026/group-${g}`,
