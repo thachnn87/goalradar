@@ -11,6 +11,7 @@ import { matchPath, extractMatchId } from '@/lib/url';
 import AdSlot from '@/components/AdSlot';
 import AffiliateBlock from '@/components/AffiliateBlock';
 import NewsletterSignup from '@/components/NewsletterSignup';
+import { WC_TEAMS } from '@/lib/wc-teams';
 import type {
   Goal,
   Booking,
@@ -1188,6 +1189,248 @@ function NextPrevNav({
 }
 
 // ---------------------------------------------------------------------------
+// Revenue funnel — WC-only CTAs
+// ---------------------------------------------------------------------------
+
+// ── 1. Above-fold: compact "How to watch" strip ──────────────────────────────
+
+const COUNTRY_PILLS: { slug: string; flag: string; label: string }[] = [
+  { slug: 'us',        flag: '🇺🇸', label: 'USA'       },
+  { slug: 'uk',        flag: '🇬🇧', label: 'UK'        },
+  { slug: 'canada',    flag: '🇨🇦', label: 'Canada'    },
+  { slug: 'australia', flag: '🇦🇺', label: 'Australia' },
+  { slug: 'thailand',  flag: '🇹🇭', label: 'Thailand'  },
+  { slug: 'vietnam',   flag: '🇻🇳', label: 'Vietnam'   },
+];
+
+function WCAboveFoldCTA() {
+  return (
+    <div className="bg-gradient-to-r from-yellow-950/40 via-gray-900 to-gray-900 border border-yellow-800/30 rounded-2xl overflow-hidden">
+      {/* Header row */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 px-4 py-3">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="text-xl shrink-0">📺</span>
+          <div>
+            <p className="text-sm font-bold text-white leading-tight">How to Watch This Match</p>
+            <p className="text-xs text-yellow-400/80 leading-tight">FIFA World Cup 2026</p>
+          </div>
+        </div>
+        {/* Quick-access nav buttons */}
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/world-cup-2026/watch-live"
+            className="inline-flex items-center gap-1.5 bg-yellow-500 hover:bg-yellow-400 text-gray-950 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <span>📺</span> Watch Live
+          </Link>
+          <Link
+            href="/world-cup-2026/tv-schedule"
+            className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/15 text-white text-xs font-semibold px-3 py-1.5 rounded-lg border border-white/10 transition-colors"
+          >
+            <span>🗓️</span> TV Schedule
+          </Link>
+          <Link
+            href="/world-cup-2026/streaming-guide"
+            className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/15 text-white text-xs font-semibold px-3 py-1.5 rounded-lg border border-white/10 transition-colors"
+          >
+            <span>📡</span> Streaming
+          </Link>
+        </div>
+      </div>
+      {/* Country pills */}
+      <div className="px-4 pb-3 flex flex-wrap gap-1.5 border-t border-white/5 pt-2.5">
+        <span className="text-xs text-gray-600 self-center shrink-0 mr-1">Your country:</span>
+        {COUNTRY_PILLS.map(({ slug, flag, label }) => (
+          <Link
+            key={slug}
+            href={`/world-cup-2026/watch-live/${slug}`}
+            className="inline-flex items-center gap-1 text-xs text-white/60 hover:text-yellow-400 bg-white/5 hover:bg-white/10 border border-white/8 rounded-full px-2 py-0.5 transition-colors"
+          >
+            {flag} {label}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── 2. Mid-content: 2-card affiliate grid ────────────────────────────────────
+
+function WCMidFunnel() {
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold px-0.5">
+        Watch World Cup 2026
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <AffiliateBlock
+          title="📺 Stream Every Match Live"
+          description="Official broadcasters in the US, UK, Canada, Australia and more — no illegal streams."
+          cta="Find a Stream"
+          url="#"
+          tag="match-mid-watch-live"
+        />
+        <AffiliateBlock
+          title="📡 Full Streaming Guide"
+          description="Compare every platform: Fubo TV, Peacock, SBS On Demand, BBC iPlayer, TSN and more."
+          cta="View Streaming Guide"
+          url="#"
+          tag="match-mid-streaming"
+          variant="green"
+        />
+      </div>
+    </div>
+  );
+}
+
+// ── 3. Bottom: comprehensive revenue funnel ───────────────────────────────────
+
+const ALL_WC_TEAMS_LIST = Object.values(WC_TEAMS);
+
+function WCBottomFunnel({
+  match,
+  matchGroupSlug,
+  matchGroupLabel,
+}: {
+  match: MatchDetail;
+  matchGroupSlug: string | null;
+  matchGroupLabel: string | null;
+}) {
+  const homeWCTeam = ALL_WC_TEAMS_LIST.find((t) => t.apiName === match.homeTeam.name);
+  const awayWCTeam = ALL_WC_TEAMS_LIST.find((t) => t.apiName === match.awayTeam.name);
+
+  const homeShort = match.homeTeam.shortName || match.homeTeam.name || 'Home';
+  const awayShort = match.awayTeam.shortName || match.awayTeam.name || 'Away';
+
+  return (
+    <div className="space-y-5">
+      {/* Section header */}
+      <div className="border-t border-white/8 pt-5">
+        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">
+          World Cup 2026 — Watch &amp; Explore
+        </h2>
+
+        {/* Row 1: Watch Live / TV Channels / Streaming Guide */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+          <Link
+            href="/world-cup-2026/watch-live"
+            className="group flex flex-col gap-1 bg-gradient-to-br from-yellow-950/40 to-gray-900 border border-yellow-800/30 hover:border-yellow-600/50 rounded-xl p-4 transition-all"
+          >
+            <span className="text-2xl mb-1">📺</span>
+            <span className="text-sm font-bold text-white group-hover:text-yellow-400 transition-colors">
+              Watch Live
+            </span>
+            <span className="text-xs text-gray-500 leading-tight">
+              Official broadcasters by country — US, UK, Australia and more
+            </span>
+          </Link>
+
+          <Link
+            href="/world-cup-2026/tv-schedule"
+            className="group flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-yellow-700/40 rounded-xl p-4 transition-all"
+          >
+            <span className="text-2xl mb-1">🗓️</span>
+            <span className="text-sm font-bold text-white group-hover:text-yellow-400 transition-colors">
+              TV Channel Guide
+            </span>
+            <span className="text-xs text-gray-500 leading-tight">
+              Fox, ITV, BBC, Telemundo — which channel shows each match
+            </span>
+          </Link>
+
+          <Link
+            href="/world-cup-2026/streaming-guide"
+            className="group flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-yellow-700/40 rounded-xl p-4 transition-all"
+          >
+            <span className="text-2xl mb-1">📡</span>
+            <span className="text-sm font-bold text-white group-hover:text-yellow-400 transition-colors">
+              Streaming Guide
+            </span>
+            <span className="text-xs text-gray-500 leading-tight">
+              Fubo TV, Peacock, SBS, BBC iPlayer, TSN+ compared
+            </span>
+          </Link>
+        </div>
+
+        {/* Row 2: Team Pages (conditional) + Group Page */}
+        {(homeWCTeam || awayWCTeam || matchGroupSlug) && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {homeWCTeam && (
+              <Link
+                href={`/world-cup-2026/${homeWCTeam.slug}`}
+                className="group flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-blue-700/40 rounded-xl p-4 transition-all"
+              >
+                <span className="text-2xl mb-1">{homeWCTeam.flag}</span>
+                <span className="text-xs font-bold text-white group-hover:text-blue-400 transition-colors leading-tight">
+                  {homeShort} Team Page
+                </span>
+                <span className="text-[10px] text-gray-600 leading-tight">
+                  Squad, fixtures &amp; group
+                </span>
+              </Link>
+            )}
+
+            {awayWCTeam && (
+              <Link
+                href={`/world-cup-2026/${awayWCTeam.slug}`}
+                className="group flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-blue-700/40 rounded-xl p-4 transition-all"
+              >
+                <span className="text-2xl mb-1">{awayWCTeam.flag}</span>
+                <span className="text-xs font-bold text-white group-hover:text-blue-400 transition-colors leading-tight">
+                  {awayShort} Team Page
+                </span>
+                <span className="text-[10px] text-gray-600 leading-tight">
+                  Squad, fixtures &amp; group
+                </span>
+              </Link>
+            )}
+
+            {matchGroupSlug && matchGroupLabel && (
+              <Link
+                href={`/world-cup-2026/${matchGroupSlug}`}
+                className="group flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-green-700/40 rounded-xl p-4 transition-all"
+              >
+                <span className="text-2xl mb-1">📊</span>
+                <span className="text-xs font-bold text-white group-hover:text-green-400 transition-colors leading-tight">
+                  {matchGroupLabel} Standings
+                </span>
+                <span className="text-[10px] text-gray-600 leading-tight">
+                  Table, results &amp; fixtures
+                </span>
+              </Link>
+            )}
+
+            {/* Fallback filler — always show WC Hub */}
+            <Link
+              href="/world-cup-2026"
+              className="group flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-yellow-700/40 rounded-xl p-4 transition-all"
+            >
+              <span className="text-2xl mb-1">🏆</span>
+              <span className="text-xs font-bold text-white group-hover:text-yellow-400 transition-colors leading-tight">
+                WC 2026 Hub
+              </span>
+              <span className="text-[10px] text-gray-600 leading-tight">
+                Scores, fixtures &amp; standings
+              </span>
+            </Link>
+          </div>
+        )}
+      </div>
+
+      {/* Affiliate: VPN CTA */}
+      <AffiliateBlock
+        title="🌍 Watching from Abroad?"
+        description="Access your home broadcaster from anywhere. Fast VPN servers in 100+ countries, 30-day money-back guarantee."
+        cta="Get a VPN"
+        url="#"
+        tag="match-bottom-vpn"
+        variant="blue"
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // JSON-LD
 // ---------------------------------------------------------------------------
 
@@ -1395,6 +1638,9 @@ export default async function MatchDetailPage({ params }: Params) {
 
         <ScoreHero match={match} />
 
+        {/* ── Above-fold revenue funnel (WC only) ─────────────────────────── */}
+        {isWC && <WCAboveFoldCTA />}
+
         {/* Ad: below score hero — high visibility placement */}
         <AdSlot slotId="match-top" variant="banner" />
 
@@ -1402,16 +1648,8 @@ export default async function MatchDetailPage({ params }: Params) {
 
         <MatchReport match={match} />
 
-        {/* Affiliate: shown only on WC match pages. Replace url="#" to activate. */}
-        {isWC && (
-          <AffiliateBlock
-            title="Watch FIFA World Cup 2026 Live"
-            description="Stream every match live on your phone, TV or laptop. Official broadcasters — no illegal streams."
-            cta="Watch Live"
-            url="#"
-            tag={`match-detail-${match.id}`}
-          />
-        )}
+        {/* ── Mid-content revenue funnel (WC only) ────────────────────────── */}
+        {isWC && <WCMidFunnel />}
 
         {showStats && hasEvents && <MatchStatistics match={match} />}
 
@@ -1471,6 +1709,15 @@ export default async function MatchDetailPage({ params }: Params) {
           : <CompetitionLinks match={match} />
         }
 
+        {/* ── Bottom revenue funnel (WC only) ─────────────────────────────── */}
+        {isWC && (
+          <WCBottomFunnel
+            match={match}
+            matchGroupSlug={matchGroupSlug}
+            matchGroupLabel={matchGroupLabel}
+          />
+        )}
+
         {/* Newsletter — contextual copy for WC vs non-WC matches */}
         <NewsletterSignup
           source="match-page"
@@ -1481,6 +1728,9 @@ export default async function MatchDetailPage({ params }: Params) {
               : `Get ${match.competition?.name ?? 'football'} updates`
           }
         />
+
+        {/* Ad: bottom of page */}
+        <AdSlot slotId="match-bottom" variant="banner" />
       </div>
     </>
   );
