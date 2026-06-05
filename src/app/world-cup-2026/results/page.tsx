@@ -17,21 +17,23 @@ const PAGE_URL = `${BASE_URL}/world-cup-2026/results`;
 // Metadata
 // ---------------------------------------------------------------------------
 
+const META_TITLE = 'FIFA World Cup 2026 Results | GoalRadar';
+const META_DESC  = 'Latest FIFA World Cup 2026 results, scores and completed matches.';
+
 export const metadata: Metadata = {
-  title: 'FIFA World Cup 2026 Results – All Scores and Match Reports | GoalRadar',
-  description:
-    'All FIFA World Cup 2026 results with full-time scores, match reports and group stage outcomes. Follow every result from the opening match to the Final.',
+  title: META_TITLE,
+  description: META_DESC,
   alternates: { canonical: PAGE_URL },
   openGraph: {
-    title: 'FIFA World Cup 2026 Results | GoalRadar',
-    description: 'Complete FIFA World Cup 2026 match results — group stage and knockout rounds.',
+    title: META_TITLE,
+    description: META_DESC,
     type: 'website',
     url: PAGE_URL,
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'World Cup 2026 Results | GoalRadar',
-    description: 'All World Cup 2026 scores and match results in one place.',
+    title: META_TITLE,
+    description: META_DESC,
   },
 };
 
@@ -53,8 +55,8 @@ function JsonLd({ results }: { results: Match[] }) {
   const collection = {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
-    name: 'FIFA World Cup 2026 Results',
-    description: 'All FIFA World Cup 2026 match results, scores and links to full match reports.',
+    name: META_TITLE,
+    description: META_DESC,
     url: PAGE_URL,
     isPartOf: { '@type': 'WebSite', name: 'GoalRadar', url: BASE_URL },
     hasPart: results.map((m) => ({

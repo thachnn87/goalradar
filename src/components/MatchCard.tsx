@@ -10,15 +10,33 @@ function formatTime(utcDate: string) {
   });
 }
 
-function StatusBadge({ status }: { status: Match['status'] }) {
+function StatusBadge({
+  status,
+  duration,
+}: {
+  status:    Match['status'];
+  duration?: string;
+}) {
   const map: Partial<Record<Match['status'], { text: string; className: string }>> = {
-    IN_PLAY: { text: 'LIVE', className: 'bg-red-500/20 text-red-400 border border-red-500/30' },
-    PAUSED: { text: 'HT', className: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' },
-    FINISHED: { text: 'FT', className: 'bg-gray-700 text-gray-400' },
-    POSTPONED: { text: 'PST', className: 'bg-orange-500/20 text-orange-400' },
+    IN_PLAY:   { text: 'LIVE', className: 'bg-red-500/20 text-red-400 border border-red-500/30' },
+    PAUSED:    { text: 'HT',   className: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' },
+    POSTPONED: { text: 'PST',  className: 'bg-orange-500/20 text-orange-400' },
     CANCELLED: { text: 'CANC', className: 'bg-gray-700 text-gray-500' },
     SUSPENDED: { text: 'SUSP', className: 'bg-orange-500/20 text-orange-400' },
   };
+
+  if (status === 'FINISHED') {
+    // Show match duration suffix when the game went beyond 90 minutes.
+    const suffix =
+      duration === 'PENALTY_SHOOTOUT' ? ' (P)'
+      : duration === 'EXTRA_TIME'     ? ' AET'
+      : '';
+    return (
+      <span className="text-xs font-bold px-2 py-0.5 rounded bg-gray-700 text-gray-400">
+        FT{suffix}
+      </span>
+    );
+  }
 
   const config = map[status];
   if (!config) return null;
@@ -71,7 +89,7 @@ export default function MatchCard({ match }: { match: Match }) {
             {!showScore && (
               <span className="text-xs text-gray-400">{formatTime(match.utcDate)}</span>
             )}
-            <StatusBadge status={status} />
+            <StatusBadge status={status} duration={score.duration} />
           </div>
         </div>
         <div className="space-y-2">
