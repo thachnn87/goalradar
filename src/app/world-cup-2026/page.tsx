@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 
 import {
   getWCLiveMatches,
+  getWCKnockoutMatches,
   getUpcomingMatches,
   getRecentMatches,
   getStandings,
@@ -10,6 +11,7 @@ import {
 import type { Match, StandingEntry, StandingTable } from '@/lib/types';
 import MatchCard from '@/components/MatchCard';
 import Breadcrumb from '@/components/Breadcrumb';
+import WCBracket from '@/components/WCBracket';
 
 export const revalidate = 30;
 
@@ -314,12 +316,14 @@ function EmptyState({ message, sub }: { message: string; sub?: string }) {
 export default async function WorldCup2026Page() {
   const today = todayUTC();
 
-  const [liveResult, upcomingResult, recentResult, standingsResult] = await Promise.allSettled([
-    getWCLiveMatches(),
-    getUpcomingMatches('WC'),
-    getRecentMatches('WC'),
-    getStandings('WC'),
-  ]);
+  const [liveResult, upcomingResult, recentResult, standingsResult, knockoutResult] =
+    await Promise.allSettled([
+      getWCLiveMatches(),
+      getUpcomingMatches('WC'),
+      getRecentMatches('WC'),
+      getStandings('WC'),
+      getWCKnockoutMatches(),
+    ]);
 
   // 1. Live matches
   const liveMatches: Match[] =
@@ -350,7 +354,11 @@ export default async function WorldCup2026Page() {
           .slice(0, 10)
       : [];
 
-  // 4. Group standings
+  // 4. Knockout bracket matches
+  const knockoutMatches: Match[] =
+    knockoutResult.status === 'fulfilled' ? knockoutResult.value.matches : [];
+
+  // 5. Group standings
   const groupTables: StandingTable[] =
     standingsResult.status === 'fulfilled'
       ? standingsResult.value.standings.filter((s) => s.type === 'TOTAL')
@@ -458,7 +466,18 @@ export default async function WorldCup2026Page() {
           )}
         </section>
 
-        {/* ── 5. Recent Results ─────────────────────────────────────────── */}
+        {/* ── 5. Knockout Bracket ───────────────────────────────────────── */}
+        <section aria-labelledby="bracket-heading">
+          <SectionHeader title="Knockout Bracket" />
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 sm:p-6">
+            <WCBracket matches={knockoutMatches} />
+            <p className="text-xs text-gray-700 mt-4 text-center">
+              Bracket auto-updates as teams advance · Scroll horizontally on small screens
+            </p>
+          </div>
+        </section>
+
+        {/* ── 6. Recent Results ─────────────────────────────────────────── */}
         <section aria-labelledby="results-heading">
           <SectionHeader title="Recent Results" count={recentResults.length} />
           {recentResults.length > 0 ? (

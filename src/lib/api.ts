@@ -188,3 +188,12 @@ export async function getWCLiveMatches(): Promise<{
     30
   );
 }
+
+export async function getWCKnockoutMatches(): Promise<{
+  matches: Match[];
+}> {
+  return fetchAPI(
+    '/competitions/WC/matches?stage=LAST_16,QUARTER_FINALS,SEMI_FINALS,THIRD_PLACE,FINAL',
+    60
+  );
+}
