@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@vercel/kv": "^3.0.0",
     "fs-extra": "^11.3.5",
     "next": "^16.2.7",
     "react": "19.0.0",

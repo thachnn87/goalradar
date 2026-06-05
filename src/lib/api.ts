@@ -1,5 +1,6 @@
 import { Match, MatchDetail, HeadToHead, StandingTable, TeamDetail } from './types';
 import { withCache, TTL } from './cache';
+import { withKVCache, SWR } from './kv-cache';
 
 const BASE_URL = 'https://api.football-data.org/v4';
 
@@ -7,36 +8,20 @@ const BASE_URL = 'https://api.football-data.org/v4';
 // Error types
 // ---------------------------------------------------------------------------
 
-// Thrown when the resource genuinely does not exist (HTTP 404).
 export class NotFoundError extends Error {
-  constructor() {
-    super('Not found');
-    this.name = 'NotFoundError';
-  }
+  constructor() { super('Not found'); this.name = 'NotFoundError'; }
 }
 
-// Thrown for every other failure — never contains internal details.
 export class ApiUnavailableError extends Error {
-  constructor() {
-    super('Data temporarily unavailable');
-    this.name = 'ApiUnavailableError';
-  }
+  constructor() { super('Data temporarily unavailable'); this.name = 'ApiUnavailableError'; }
 }
 
 // ---------------------------------------------------------------------------
-// HTTP layer — handles auth, retry, timeout, and Next.js ISR
+// HTTP layer  (retry + timeout + Next.js ISR)
 // ---------------------------------------------------------------------------
 
-/**
- * Performs the actual HTTP request to football-data.org.
- * Called by fetchAPI only on a cache miss.
- *
- * Two layers of caching:
- *   1. In-memory (cache.ts) — sub-millisecond repeated reads, request dedup.
- *   2. Next.js fetch cache (next: { revalidate }) — CDN / ISR fallback.
- */
 async function fetchFromAPI<T>(endpoint: string, revalidate: number): Promise<T> {
-  const retries = 2; // one initial + one retry
+  const retries = 2;
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     const controller = new AbortController();
@@ -45,7 +30,7 @@ async function fetchFromAPI<T>(endpoint: string, revalidate: number): Promise<T>
     try {
       const res = await fetch(`${BASE_URL}${endpoint}`, {
         headers: { 'X-Auth-Token': process.env.FOOTBALL_API_KEY ?? '' },
-        next:    { revalidate }, // Next.js ISR / CDN cache
+        next:    { revalidate },
         signal:  controller.signal,
       });
 
@@ -65,8 +50,6 @@ async function fetchFromAPI<T>(endpoint: string, revalidate: number): Promise<T>
 
     } catch (err) {
       clearTimeout(timeoutId);
-
-      // NotFoundError is definitive — propagate immediately, no retry.
       if (err instanceof NotFoundError) throw err;
 
       const isTimeout = err instanceof DOMException && err.name === 'AbortError';
@@ -75,40 +58,62 @@ async function fetchFromAPI<T>(endpoint: string, revalidate: number): Promise<T>
         isTimeout ? 'timeout (10 s)' : (err instanceof Error ? err.message : String(err))
       );
 
-      if (attempt < retries) {
-        await new Promise((r) => setTimeout(r, 1_000));
-        continue;
-      }
-
+      if (attempt < retries) { await new Promise((r) => setTimeout(r, 1_000)); continue; }
       throw new ApiUnavailableError();
     }
   }
 
-  throw new ApiUnavailableError(); // TypeScript exhaustiveness
+  throw new ApiUnavailableError();
 }
 
 // ---------------------------------------------------------------------------
-// Cached fetch wrapper
+// Cache routing helpers
+//
+// Three-tier caching strategy:
+//   L1 (in-memory, cache.ts)  — sub-ms, per-process.
+//   L2 (Vercel KV, kv-cache.ts) — ~10 ms Redis, cross-instance SWR.
+//   L3 (Next.js fetch cache)  — CDN / ISR, via `next: { revalidate }`.
+//
+// fetchWithKV  — L1 → L2 (KV/SWR) → L3/network
+//   Used for: fixtures, standings, match details, head-to-head.
+//
+// fetchDirect  — L1 → L3/network (no KV — data too volatile for KV overhead)
+//   Used for: live matches, today's matches.
 // ---------------------------------------------------------------------------
 
 /**
- * Entry point for all API calls.
- * Routes through the in-memory cache (cache.ts) and falls through to
- * fetchFromAPI on a miss.
- *
- * The `cacheTtl` controls the in-memory TTL (use TTL.* constants).
- * The `revalidate` param controls Next.js ISR — defaults to cacheTtl so
- * both caches expire in sync.
+ * L1 in-memory → L2 KV SWR → L3 network.
+ * The in-memory layer deduplicates concurrent requests and avoids the ~10 ms
+ * KV round-trip on repeated hot reads within the same process.
  */
-function fetchAPI<T>(
-  endpoint:  string,
-  cacheTtl:  number,
-  revalidate = cacheTtl,
+function fetchWithKV<T>(
+  endpoint: string,
+  memTtl:  number,
+  swr:     { fresh: number; stale: number },
 ): Promise<T> {
   return withCache<T>(
     endpoint,
-    cacheTtl,
-    () => fetchFromAPI<T>(endpoint, revalidate)
+    memTtl,
+    () => withKVCache<T>(
+      endpoint,
+      swr,
+      () => fetchFromAPI<T>(endpoint, swr.fresh)
+    )
+  );
+}
+
+/**
+ * L1 in-memory → L3 network.  No KV — used for live/real-time data where
+ * KV latency and staleness would be counterproductive.
+ */
+function fetchDirect<T>(
+  endpoint: string,
+  memTtl:  number,
+): Promise<T> {
+  return withCache<T>(
+    endpoint,
+    memTtl,
+    () => fetchFromAPI<T>(endpoint, memTtl)
   );
 }
 
@@ -116,24 +121,30 @@ function fetchAPI<T>(
 // Public API functions
 // ---------------------------------------------------------------------------
 
+// ── NOT cached in KV (too volatile) ─────────────────────────────────────────
+
 export function getTodayMatches(): Promise<{ matches: Match[] }> {
   const today = new Date().toISOString().split('T')[0];
-  return fetchAPI(
-    `/matches?dateFrom=${today}&dateTo=${today}`,
-    TTL.MATCH  // 60 s — today's fixtures must stay fresh
-  );
+  return fetchDirect(`/matches?dateFrom=${today}&dateTo=${today}`, TTL.MATCH);
 }
 
 export function getLiveMatches(): Promise<{ matches: Match[] }> {
-  return fetchAPI('/matches?status=IN_PLAY,PAUSED', TTL.LIVE); // 30 s
+  return fetchDirect('/matches?status=IN_PLAY,PAUSED', TTL.LIVE);
 }
+
+export function getWCLiveMatches(): Promise<{ matches: Match[] }> {
+  return fetchDirect('/competitions/WC/matches?status=IN_PLAY,PAUSED', TTL.LIVE);
+}
+
+// ── KV-cached: Fixtures ──────────────────────────────────────────────────────
 
 export function getUpcomingMatches(
   competition: string
 ): Promise<{ matches: Match[]; resultSet: { count: number } }> {
-  return fetchAPI(
+  return fetchWithKV(
     `/competitions/${competition}/matches?status=SCHEDULED,TIMED`,
-    TTL.FIXTURES  // 600 s
+    TTL.FIXTURES,
+    SWR.FIXTURES
   );
 }
 
@@ -142,56 +153,56 @@ export function getRecentMatches(
 ): Promise<{ matches: Match[] }> {
   const today = new Date().toISOString().split('T')[0];
   const from  = new Date(Date.now() - 30 * 86_400_000).toISOString().split('T')[0];
-  return fetchAPI(
+  return fetchWithKV(
     `/competitions/${competition}/matches?dateFrom=${from}&dateTo=${today}`,
-    TTL.FIXTURES  // 600 s
+    TTL.FIXTURES,
+    SWR.FIXTURES
   );
 }
+
+export function getTeamMatches(id: string): Promise<{ matches: Match[] }> {
+  return fetchWithKV(
+    `/teams/${id}/matches?status=FINISHED&limit=10`,
+    TTL.FIXTURES,
+    SWR.FIXTURES
+  );
+}
+
+export function getWCKnockoutMatches(): Promise<{ matches: Match[] }> {
+  return fetchWithKV('/competitions/WC/matches', TTL.MATCH, SWR.MATCH);
+}
+
+export function getWCResults(): Promise<{ matches: Match[] }> {
+  return fetchWithKV(
+    '/competitions/WC/matches?status=FINISHED',
+    TTL.MATCH,
+    SWR.MATCH
+  );
+}
+
+// ── KV-cached: Standings ─────────────────────────────────────────────────────
 
 export function getStandings(competition: string): Promise<{
   standings:   StandingTable[];
   competition: { name: string; emblem: string };
 }> {
-  return fetchAPI(
+  return fetchWithKV(
     `/competitions/${competition}/standings`,
-    TTL.STANDINGS  // 1800 s
+    TTL.STANDINGS,
+    SWR.STANDINGS
   );
-}
-
-export function getMatchDetail(id: string): Promise<MatchDetail> {
-  return fetchAPI(`/matches/${id}`, TTL.MATCH); // 60 s
 }
 
 export function getTeam(id: string): Promise<TeamDetail> {
-  return fetchAPI(`/teams/${id}`, TTL.STANDINGS); // 1800 s
+  return fetchWithKV(`/teams/${id}`, TTL.STANDINGS, SWR.STANDINGS);
 }
 
-export function getTeamMatches(id: string): Promise<{ matches: Match[] }> {
-  return fetchAPI(
-    `/teams/${id}/matches?status=FINISHED&limit=10`,
-    TTL.FIXTURES  // 600 s
-  );
+// ── KV-cached: Match details ──────────────────────────────────────────────────
+
+export function getMatchDetail(id: string): Promise<MatchDetail> {
+  return fetchWithKV(`/matches/${id}`, TTL.MATCH, SWR.MATCH);
 }
 
 export function getHeadToHead(id: string): Promise<HeadToHead> {
-  return fetchAPI(`/matches/${id}/head2head`, TTL.MATCH); // 60 s
-}
-
-export function getWCLiveMatches(): Promise<{ matches: Match[] }> {
-  return fetchAPI(
-    '/competitions/WC/matches?status=IN_PLAY,PAUSED',
-    TTL.LIVE  // 30 s
-  );
-}
-
-export function getWCKnockoutMatches(): Promise<{ matches: Match[] }> {
-  // All WC matches — WCBracket filters to knockout stages in JS.
-  return fetchAPI('/competitions/WC/matches', TTL.MATCH); // 60 s
-}
-
-export function getWCResults(): Promise<{ matches: Match[] }> {
-  return fetchAPI(
-    '/competitions/WC/matches?status=FINISHED',
-    TTL.MATCH  // 60 s — results can update during/after matches
-  );
+  return fetchWithKV(`/matches/${id}/head2head`, TTL.MATCH, SWR.MATCH);
 }
