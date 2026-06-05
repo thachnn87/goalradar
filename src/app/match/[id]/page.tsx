@@ -25,15 +25,37 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { id } = await params;
   try {
     const match = await getMatchDetail(id);
-    const home = match.homeTeam.name;
-    const away = match.awayTeam.name;
-    const title = `${home} vs ${away} Live Score | GoalRadar`;
-    const description = `Follow ${home} vs ${away} live score, lineups, stats and match events.`;
+    const home = match.homeTeam.name ?? 'TBD';
+    const away = match.awayTeam.name ?? 'TBD';
+    const isWC = match.competition?.code === 'WC';
+
+    const title = isWC
+      ? `${home} vs ${away} Live Score | FIFA World Cup 2026`
+      : `${home} vs ${away} Live Score | GoalRadar`;
+
+    const description = isWC
+      ? `Follow ${home} vs ${away} live score, match results and World Cup 2026 updates.`
+      : `Follow ${home} vs ${away} live score, lineups, stats and match events.`;
+
+    const BASE_URL = 'https://goalradar.org';
+    const url = `${BASE_URL}/match/${id}`;
+
     return {
       title,
       description,
-      openGraph: { title, description, type: 'website' },
-      twitter: { card: 'summary_large_image', title, description },
+      openGraph: {
+        title,
+        description,
+        type: 'website',
+        url,
+        ...(isWC && { siteName: 'GoalRadar — FIFA World Cup 2026' }),
+      },
+      twitter: {
+        card: 'summary_large_image',
+        title,
+        description,
+        ...(isWC && { site: '@GoalRadar' }),
+      },
     };
   } catch {
     return {
