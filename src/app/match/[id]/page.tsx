@@ -284,107 +284,243 @@ function MatchSummary({ match }: { match: MatchDetail }) {
 // Match report (SEO article, server-rendered)
 // ---------------------------------------------------------------------------
 
-function generateReport(match: MatchDetail): string {
-  const home = match.homeTeam.name;
-  const away = match.awayTeam.name;
-  const homeShort = match.homeTeam.shortName || home;
-  const awayShort = match.awayTeam.shortName || away;
-  const comp = match.competition?.name ?? 'the league';
-  const { score, status, matchday } = match;
-  const ftHome = score.fullTime.home ?? 0;
-  const ftAway = score.fullTime.away ?? 0;
-  const htHome = score.halfTime.home;
-  const htAway = score.halfTime.away;
+// ---------------------------------------------------------------------------
+// Match report — structured article content
+// ---------------------------------------------------------------------------
+
+interface ReportSection {
+  heading: string;
+  paragraphs: string[];
+}
+
+function buildReportSections(match: MatchDetail): ReportSection[] {
+  const home     = match.homeTeam.name     ?? 'The home side';
+  const away     = match.awayTeam.name     ?? 'The away side';
+  const homeS    = match.homeTeam.shortName || home;
+  const awayS    = match.awayTeam.shortName || away;
+  const comp     = match.competition?.name ?? 'the competition';
+  const { score, status, matchday, stage } = match;
+  const ftH      = score.fullTime.home  ?? 0;
+  const ftA      = score.fullTime.away  ?? 0;
+  const htH      = score.halfTime.home;
+  const htA      = score.halfTime.away;
+  const totalGoals = ftH + ftA;
+  const isWC     = match.competition?.code === 'WC';
 
   const matchDate = new Date(match.utcDate).toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
   });
+  const mdLabel = matchday ? `Matchday ${matchday}` : stage ? stage.replace(/_/g, ' ') : '';
+  const mdInfix = mdLabel ? ` in ${mdLabel} of` : ' in';
+  const compFull = isWC ? 'FIFA World Cup 2026' : comp;
 
-  const matchdayText = matchday ? ` in Matchday ${matchday} of` : ' in';
-  const totalGoals = ftHome + ftAway;
+  // ── Introduction ──────────────────────────────────────────────────────────
 
-  // Opening paragraph — context
-  let opening = '';
+  let intro: string;
   if (status === 'FINISHED') {
     if (score.winner === 'HOME_TEAM') {
-      opening = `${home} claimed a ${ftHome}–${ftAway} victory over ${away}${matchdayText} the ${comp} on ${matchDate}. ` +
-        `The home side were dominant throughout, securing all three points in front of their supporters.`;
+      intro =
+        `${home} secured a ${ftH}–${ftA} victory over ${away}${mdInfix} the ${compFull} on ${matchDate}. ` +
+        `The home side delivered a confident performance, taking all three points in front of their supporters ` +
+        `and putting down a firm marker to the rest of the competition. ` +
+        `It was a result that underlined ${homeS}'s quality and their ability to perform under pressure.`;
     } else if (score.winner === 'AWAY_TEAM') {
-      opening = `${away} came away with an impressive ${ftHome}–${ftAway} win against ${home}${matchdayText} the ${comp} on ${matchDate}. ` +
-        `The visitors proved too strong, taking the points back on the road.`;
+      intro =
+        `${away} produced an impressive ${ftH}–${ftA} victory at ${home}${mdInfix} the ${compFull} on ${matchDate}. ` +
+        `The visitors were clinical throughout, travelling back with three valuable points from what is always a demanding fixture. ` +
+        `It was a display that highlighted ${awayS}'s strength and their credentials as genuine contenders this season.`;
     } else {
-      opening = `${home} and ${away} played out a ${ftHome}–${ftAway} draw${matchdayText} the ${comp} on ${matchDate}. ` +
-        `Both sides were unable to find a winner, sharing the spoils at the final whistle.`;
+      intro =
+        `${home} and ${away} shared the spoils in a ${ftH}–${ftA} draw${mdInfix} the ${compFull} on ${matchDate}. ` +
+        `In a closely fought contest, neither team could find the decisive moment that would have separated the sides, ` +
+        `and both will take a point from an encounter that ultimately reflected the balance between the two squads.`;
     }
   } else if (status === 'IN_PLAY' || status === 'PAUSED') {
-    opening = `${home} and ${away} are currently facing off${matchdayText} the ${comp} on ${matchDate}. ` +
-      `The match is underway and the score currently stands at ${ftHome}–${ftAway}.`;
+    intro =
+      `${home} are currently locked in a ${compFull} encounter against ${away} on ${matchDate}. ` +
+      `The match is live and the score currently stands at ${ftH}–${ftA}${status === 'PAUSED' ? ' at half-time' : ''}. ` +
+      `Both sides are competing hard for a result that could prove significant in the context of the season.`;
   } else {
-    opening = `${home} are set to host ${away}${matchdayText} the ${comp} on ${matchDate}. ` +
-      `Both teams will be looking to secure an important result in this fixture.`;
+    intro =
+      `${home} are set to host ${away}${mdInfix} the ${compFull} on ${matchDate}. ` +
+      `The fixture promises to be a compelling contest between two sides with plenty at stake. ` +
+      `Both managers will have prepared their squads meticulously, knowing that the points on offer could have a real bearing on their campaign.`;
   }
 
-  // Half-time paragraph
-  let halfTimePara = '';
-  if (htHome !== null && htAway !== null && status === 'FINISHED') {
-    if (htHome === ftHome && htAway === ftAway) {
-      halfTimePara = `The first half set the tone for the encounter, with the score at ${htHome}–${htAway} at the break — a lead that would prove decisive as the second half failed to produce any further goals.`;
-    } else if (htHome > htAway) {
-      halfTimePara = `${homeShort} went into the half-time interval leading ${htHome}–${htAway}, having carved out opportunities in the opening 45 minutes. ` +
-        `The second half saw further action, with the score moving from ${htHome}–${htAway} to the final tally of ${ftHome}–${ftAway}.`;
-    } else if (htAway > htHome) {
-      halfTimePara = `${awayShort} held a ${htHome}–${htAway} advantage at the break, demonstrating their quality in the first period. ` +
-        `The second half continued to produce goals, ending ${ftHome}–${ftAway} at full time.`;
+  // ── First Half ─────────────────────────────────────────────────────────────
+
+  let firstHalf: string;
+  if (htH !== null && htA !== null) {
+    if (htH > htA) {
+      firstHalf =
+        `${homeS} made a strong start to the match, taking the initiative in the opening exchanges ` +
+        `and translating their dominance into a ${htH}–${htA} lead at half-time. ` +
+        `Their pressing game and organisation in the final third made life difficult for the ${awayS} defence throughout the opening 45 minutes. ` +
+        `The hosts went into the break with confidence, having firmly established control of the encounter.`;
+    } else if (htA > htH) {
+      firstHalf =
+        `${awayS} were the brighter side in the opening period, working hard against a home side that struggled to impose themselves. ` +
+        `Clinical in front of goal, the visitors went into the half-time break with a ${htH}–${htA} advantage. ` +
+        `The first half showed ${awayS}'s composure and tactical discipline, as ${homeS} looked to find a way back into the game.`;
     } else {
-      halfTimePara = `Neither side could separate themselves before the break, with the half-time score locked at ${htHome}–${htAway}. ` +
-        `The second period proved more decisive, with the match ultimately finishing ${ftHome}–${ftAway}.`;
+      firstHalf =
+        `The opening 45 minutes produced an absorbing battle with neither side able to break the deadlock, ` +
+        `the teams heading into the interval level at ${htH}–${htA}. ` +
+        `Both sets of players were disciplined defensively, with moments of quality at both ends of the pitch. ` +
+        `The first half laid the foundation for what would be a tightly contested second period.`;
     }
+  } else if (status === 'SCHEDULED' || status === 'TIMED') {
+    firstHalf =
+      `The first half is expected to set the tone for the match, with both ${homeS} and ${awayS} likely to probe for early openings. ` +
+      `${homeS} will look to exploit their home advantage from the off, while ${awayS} will be disciplined and alert to counter-attacking opportunities. ` +
+      `The tactical shape and energy in the opening 45 minutes will be crucial in determining how the game unfolds.`;
+  } else {
+    firstHalf =
+      `The first half is currently in progress, with both teams fighting for possession and territory. ` +
+      `${homeS} will want to use their home crowd as a twelfth player, while ${awayS} look to stay compact and take their chances when they arrive.`;
   }
 
-  // Goals narrative
-  let goalsPara = '';
+  // ── Second Half ────────────────────────────────────────────────────────────
+
+  let secondHalf: string;
   if (status === 'FINISHED') {
-    if (totalGoals === 0) {
-      goalsPara = `It was a tight, disciplined contest with both defences keeping clean sheets — ${homeShort} and ${awayShort} cancelling each other out across 90 minutes.`;
-    } else if (totalGoals === 1) {
-      const scorer = score.winner === 'HOME_TEAM' ? homeShort : awayShort;
-      goalsPara = `A single goal proved the difference, with ${scorer} finding the net to separate the two sides in what was a closely contested encounter.`;
-    } else if (totalGoals <= 3) {
-      goalsPara = `The ${totalGoals} goals shared between the two teams made for an engaging contest, with moments of quality from both ${homeShort} and ${awayShort}.`;
+    const secondHalfGoals = (htH !== null && htA !== null)
+      ? (ftH - htH) + (ftA - htA)
+      : totalGoals;
+
+    if (htH !== null && htA !== null && htH === ftH && htA === ftA) {
+      secondHalf =
+        `The second half largely mirrored the first, with ${homeS} and ${awayS} continuing to test each other ` +
+        `without managing to alter the scoreline. ` +
+        `Despite both teams pushing for a goal that would have changed the match, the defences stood firm and the score remained ${ftH}–${ftA}. ` +
+        `Substitutions and tactical adjustments were made by both managers but ultimately could not unlock the deadlock.`;
+    } else if (secondHalfGoals === 0) {
+      secondHalf =
+        `After the break, both sides remained committed and organised at the back, denying each other any clear scoring chances. ` +
+        `The second period was a patient, tactical battle that neither team was willing to lose by taking unnecessary risks. ` +
+        `The final score of ${ftH}–${ftA} was a fair reflection of a match where defensive quality prevailed.`;
     } else {
-      goalsPara = `It was a high-scoring affair with ${totalGoals} goals in total, providing plenty of entertainment for spectators as ${homeShort} and ${awayShort} produced an open and attacking game.`;
+      const lead2ndH = htH !== null && htA !== null
+        ? `from ${htH}–${htA} ` : '';
+      secondHalf =
+        `The second half saw the match open up further, with ${secondHalfGoals} more goal${secondHalfGoals === 1 ? '' : 's'} added ${lead2ndH}to bring the final score to ${ftH}–${ftA}. ` +
+        `Both managers made tactical changes in an effort to influence the outcome, with substitutions and shifts in formation creating new dynamics on the pitch. ` +
+        `The closing stages were played at a high tempo, with both sides aware of what was at stake in the final minutes.`;
     }
+  } else if (status === 'SCHEDULED' || status === 'TIMED') {
+    secondHalf =
+      `The second half will be where the game's decisive moments are likely to be found, particularly if the match is finely poised at the interval. ` +
+      `Fitness, bench depth and managerial decisions will all play a key role as the game enters its latter stages. ` +
+      `With three points at stake, neither side is expected to sit back, and the second period should produce the defining moments of the encounter.`;
+  } else {
+    secondHalf =
+      `The second half will be crucial in determining the outcome of today's fixture. ` +
+      `Whoever can impose their game plan most effectively after the break is likely to emerge victorious. ` +
+      `Fans should expect further chances and tactical adjustments as both sides chase the decisive goal.`;
   }
 
-  // Closing paragraph — competition context
-  const closing = `This fixture was part of the ${comp} season. ` +
-    `Follow GoalRadar for live scores, results, and full coverage of ${comp} matches throughout the season.`;
+  // ── Result Impact ──────────────────────────────────────────────────────────
 
-  return [opening, halfTimePara, goalsPara, closing]
-    .filter(Boolean)
-    .join('\n\n');
+  let resultImpact: string;
+  if (status === 'FINISHED') {
+    if (score.winner === 'HOME_TEAM') {
+      resultImpact =
+        `The victory delivers three vital points to ${homeS}, boosting their position and strengthening confidence heading into their next fixture. ` +
+        `For ${awayS}, it is a result to put behind them quickly as they refocus on their next challenge. ` +
+        `Every point in ${compFull} carries weight, and this result shapes the outlook for both clubs as the season continues.`;
+    } else if (score.winner === 'AWAY_TEAM') {
+      resultImpact =
+        `Three points on the road is always a significant achievement, and ${awayS} will be delighted to collect maximum points from this trip. ` +
+        `${homeS} now face the task of responding in their next encounter, with this defeat a reminder of the unforgiving nature of top-level football. ` +
+        `The result will have an effect on the wider standings, adding further intrigue to the ${compFull} table.`;
+    } else {
+      resultImpact =
+        `A draw sees both teams share the spoils, a result that will generate mixed feelings depending on where each side is in their campaign. ` +
+        `For the team with higher ambitions, a point may feel like two dropped; for the other, it could represent a valuable addition to their tally. ` +
+        `The ${compFull} table remains finely balanced, and this result adds another layer to what promises to be an exciting remainder of the season.`;
+    }
+  } else if (status === 'IN_PLAY' || status === 'PAUSED') {
+    resultImpact =
+      `With the match still ongoing, the full impact of the result remains to be seen. ` +
+      `Every goal and tactical shift in the remaining minutes could prove decisive for both sides' seasons. ` +
+      `Fans following the action will know that the points awarded here carry real significance in the ${compFull}.`;
+  } else {
+    resultImpact =
+      `The three points on offer in this fixture will be crucial for both clubs' ambitions this season. ` +
+      `A win for either side could prove to be a pivotal moment in their campaign, while a draw would leave both looking over their shoulders at the congested table. ` +
+      `The importance of this match cannot be understated — every result in ${compFull} matters.`;
+  }
+
+  // ── Competition Context ─────────────────────────────────────────────────────
+
+  const compContext =
+    `${mdLabel ? `This match formed part of ${mdLabel} of the ${compFull}` : `This fixture was contested in the ${compFull}`}. ` +
+    `${isWC
+      ? `The FIFA World Cup 2026, hosted across the United States, Canada and Mexico, is the biggest football tournament on the planet, bringing together 48 nations in a 104-match competition spanning 11 June to 19 July 2026.`
+      : `${compFull} is one of the most prestigious and competitive football competitions in the world, featuring the best clubs and attracting global audiences match after match.`
+    } ` +
+    `Follow GoalRadar for live scores, in-depth match reports, group standings and full coverage of every ${compFull} fixture throughout the season.`;
+
+  return [
+    { heading: 'Introduction',        paragraphs: [intro] },
+    { heading: 'First Half',          paragraphs: [firstHalf] },
+    { heading: 'Second Half',         paragraphs: [secondHalf] },
+    { heading: 'Result Impact',       paragraphs: [resultImpact] },
+    { heading: 'Competition Context', paragraphs: [compContext] },
+  ];
 }
 
 function MatchReport({ match }: { match: MatchDetail }) {
-  const paragraphs = generateReport(match).split('\n\n');
+  const sections   = buildReportSections(match);
+  const home       = match.homeTeam.name ?? 'TBD';
+  const away       = match.awayTeam.name ?? 'TBD';
+  const comp       = match.competition?.name ?? 'Football';
+  const md         = match.matchday ? ` Matchday ${match.matchday}` : '';
+  const headline   = `Match Report: ${home} vs ${away} – ${comp}${md}`;
+  const datePublished = match.utcDate.split('T')[0];
+  const dateModified  = match.lastUpdated?.split('T')[0] ?? datePublished;
+
+  const articleSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline,
+    datePublished,
+    dateModified,
+    author: { '@type': 'Organization', name: 'GoalRadar', url: 'https://goalradar.org' },
+    publisher: {
+      '@type': 'Organization',
+      name: 'GoalRadar',
+      url: 'https://goalradar.org',
+      logo: { '@type': 'ImageObject', url: 'https://goalradar.org/favicon.ico' },
+    },
+    description: `${home} vs ${away} match report — ${comp}${md}. Covering the first half, second half, result and competition context.`,
+    mainEntityOfPage: { '@type': 'WebPage', '@id': `https://goalradar.org/match/${match.id}` },
+  };
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-      <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">
-        Match Report
-      </h2>
-      <div className="prose prose-invert prose-sm max-w-none space-y-3">
-        {paragraphs.map((para, i) => (
-          <p key={i} className="text-gray-300 text-sm leading-relaxed">
-            {para}
-          </p>
-        ))}
-      </div>
-    </div>
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }}
+      />
+      <article className="bg-gray-900 border border-gray-800 rounded-2xl p-5 sm:p-6">
+        <h2 className="text-base font-bold text-white mb-6">Match Report</h2>
+        <div className="space-y-6">
+          {sections.map((section) => (
+            <section key={section.heading}>
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">
+                {section.heading}
+              </h3>
+              {section.paragraphs.map((para, i) => (
+                <p key={i} className="text-gray-300 text-sm leading-relaxed">
+                  {para}
+                </p>
+              ))}
+            </section>
+          ))}
+        </div>
+      </article>
+    </>
   );
 }
 
