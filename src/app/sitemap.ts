@@ -2,6 +2,7 @@ import { MetadataRoute } from 'next';
 import { COMPETITIONS } from '@/lib/types';
 import { getRecentMatches, getUpcomingMatches } from '@/lib/api';
 import { matchPath } from '@/lib/url';
+import { WC_TEAM_SLUGS } from '@/lib/wc-teams';
 
 const BASE_URL = 'https://goalradar.org';
 
@@ -97,6 +98,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: new Date(),
       changeFrequency: 'hourly' as const,
       priority: 0.85,
+    })),
+    // World Cup team pages
+    ...WC_TEAM_SLUGS.map((slug) => ({
+      url: `${BASE_URL}/world-cup-2026/${slug}`,
+      lastModified: new Date(),
+      changeFrequency: 'hourly' as const,
+      priority: 0.88,
     })),
   ];
 
