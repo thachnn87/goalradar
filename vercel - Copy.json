@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/refresh/wc-fixtures",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/refresh/standings",
+      "schedule": "*/30 * * * *"
+    }
+  ]
+}
