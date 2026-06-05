@@ -58,6 +58,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'hourly',
       priority: 0.9,
     },
+    // World Cup evergreen SEO pages
+    {
+      url: `${BASE_URL}/world-cup-2026/watch-live`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.85,
+    },
+    {
+      url: `${BASE_URL}/world-cup-2026/tv-schedule`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.85,
+    },
+    {
+      url: `${BASE_URL}/world-cup-2026/streaming-guide`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.85,
+    },
     // World Cup group pages (A–L)
     ...WC_GROUPS.map((g) => ({
       url: `${BASE_URL}/world-cup-2026/group-${g}`,
