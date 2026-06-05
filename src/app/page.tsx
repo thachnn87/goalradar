@@ -62,8 +62,7 @@ export default async function HomePage() {
 
         {error && (
           <div className="bg-gray-900 border border-red-900/40 rounded-xl p-6 text-center text-gray-500">
-            Could not load matches — check your{' '}
-            <code className="text-red-400">FOOTBALL_API_KEY</code>.
+            Match data is temporarily unavailable. Please try again later.
           </div>
         )}
 

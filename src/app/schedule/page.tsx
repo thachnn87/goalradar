@@ -77,8 +77,8 @@ async function ScheduleContent({
     }
   } catch (error) {
     console.error(
-      '[Schedule] Upcoming API failed, falling back to recent matches',
-      error
+      '[Schedule] Upcoming fixtures unavailable, falling back to recent matches:',
+      error instanceof Error ? error.message : String(error)
     );
 
     try {
@@ -94,8 +94,8 @@ async function ScheduleContent({
       mode = 'recent';
     } catch (fallbackError) {
       console.error(
-        '[Schedule] Fallback API failed',
-        fallbackError
+        '[Schedule] Fallback also unavailable:',
+        fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
       );
 
       return (

@@ -2,63 +2,69 @@ import { Match, MatchDetail, HeadToHead, StandingTable, TeamDetail } from './typ
 
 const BASE_URL = 'https://api.football-data.org/v4';
 
+// Generic error surfaced to callers — never contains internal details.
+class ApiUnavailableError extends Error {
+  constructor() {
+    super('Data temporarily unavailable');
+    this.name = 'ApiUnavailableError';
+  }
+}
+
 async function fetchAPI<T>(
   endpoint: string,
   revalidate = 60,
-  retries = 3
+  // 2 = one initial attempt + one retry before failing
+  retries = 2
 ): Promise<T> {
-  let lastError: Error | null = null;
-
   for (let attempt = 1; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10_000);
+
     try {
-      const controller = new AbortController();
+      const res = await fetch(`${BASE_URL}${endpoint}`, {
+        headers: { 'X-Auth-Token': process.env.FOOTBALL_API_KEY ?? '' },
+        next: { revalidate },
+        signal: controller.signal,
+      });
 
-      const timeout = setTimeout(() => {
-        controller.abort();
-      }, 10000);
-
-      const res = await fetch(
-        `${BASE_URL}${endpoint}`,
-        {
-          headers: {
-            'X-Auth-Token':
-              process.env.FOOTBALL_API_KEY ?? '',
-          },
-          next: {
-            revalidate,
-          },
-          signal: controller.signal,
-        }
-      );
-
-      clearTimeout(timeout);
+      clearTimeout(timeoutId);
 
       if (!res.ok) {
-        const text = await res.text();
-
-        throw new Error(
-          `Football API ${res.status}: ${text}`
+        // Log status + sanitised body server-side only; never rethrow raw response.
+        const body = await res.text().catch(() => '');
+        console.error(
+          `[Football API] HTTP ${res.status} on ${endpoint} (attempt ${attempt}/${retries}):`,
+          body.slice(0, 200)
         );
+        throw new ApiUnavailableError();
       }
 
       return res.json() as Promise<T>;
-    } catch (error) {
-      lastError = error as Error;
+    } catch (err) {
+      clearTimeout(timeoutId);
 
+      const isTimeout =
+        err instanceof DOMException && err.name === 'AbortError';
+
+      // Server-side log with enough context to debug, nothing user-visible.
       console.error(
-        `[Football API] Attempt ${attempt}/${retries} failed`,
-        error
+        `[Football API] Attempt ${attempt}/${retries} failed on ${endpoint}:`,
+        isTimeout ? 'timeout (10 s)' : (err instanceof Error ? err.message : String(err))
       );
 
       if (attempt < retries) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, attempt * 1000)
-        );
+        // Brief back-off before the single retry.
+        await new Promise((r) => setTimeout(r, 1_000));
+        continue;
       }
+
+      // Throw a safe generic error after all attempts are exhausted.
+      throw new ApiUnavailableError();
     }
   }
 
-  throw lastError;
+  // TypeScript exhaustiveness — unreachable in practice.
+  throw new ApiUnavailableError();
 }
 
 export async function getTodayMatches(): Promise<{
