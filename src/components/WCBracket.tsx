@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Match } from '@/lib/types';
+import { matchPath } from '@/lib/url';
 
 // ---------------------------------------------------------------------------
 // Layout constants  (all in px, used for both HTML and inline SVG)
@@ -77,7 +78,7 @@ function BracketMatchCard({ match, isFinal = false }: { match: Match; isFinal?: 
 
   return (
     <Link
-      href={`/match/${match.id}`}
+      href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}
       style={{ width: CARD_W, height: CARD_H }}
       className={`
         flex flex-col justify-between rounded-lg border transition-all overflow-hidden

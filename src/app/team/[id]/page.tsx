@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
 import { getTeam, getTeamMatches, getStandings, NotFoundError } from '@/lib/api';
+import { matchPath } from '@/lib/url';
 import { COMPETITIONS } from '@/lib/types';
 import Breadcrumb from '@/components/Breadcrumb';
 import type { TeamDetail, Match, StandingEntry } from '@/lib/types';
@@ -71,7 +72,7 @@ function MatchResult({
 
   return (
     <Link
-      href={`/match/${match.id}`}
+      href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}
       className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-800/60 transition-colors"
     >
       {/* W/D/L badge */}

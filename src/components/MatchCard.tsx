@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Match } from '@/lib/types';
+import { matchPath } from '@/lib/url';
 
 function formatTime(utcDate: string) {
   return new Date(utcDate).toLocaleTimeString('en-GB', {
@@ -62,7 +63,7 @@ export default function MatchCard({ match }: { match: Match }) {
   const awayWins = score.winner === 'AWAY_TEAM';
 
   return (
-    <Link href={`/match/${match.id}`}>
+    <Link href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}>
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-700 hover:bg-gray-800/50 transition-all h-full">
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs text-gray-500 truncate mr-2">{match.competition.name}</span>

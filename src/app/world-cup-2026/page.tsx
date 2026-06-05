@@ -9,6 +9,7 @@ import {
   getStandings,
 } from '@/lib/api';
 import type { Match, StandingTable } from '@/lib/types';
+import { matchPath } from '@/lib/url';
 import MatchCard from '@/components/MatchCard';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCBracket from '@/components/WCBracket';
@@ -197,7 +198,7 @@ function ResultRow({ match }: { match: Match }) {
 
   return (
     <Link
-      href={`/match/${match.id}`}
+      href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}
       className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-800/60 transition-colors"
     >
       {/* Date */}

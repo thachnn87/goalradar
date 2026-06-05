@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 
 import { getWCKnockoutMatches } from '@/lib/api';
+import { matchPath } from '@/lib/url';
 import type { Match } from '@/lib/types';
 import MatchCard from '@/components/MatchCard';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -70,7 +71,7 @@ function JsonLd({ knockoutMatches }: { knockoutMatches: Match[] }) {
     name: `${m.homeTeam?.name ?? 'TBD'} vs ${m.awayTeam?.name ?? 'TBD'}`,
     sport: 'Football',
     startDate: m.utcDate,
-    url: `${BASE_URL}/match/${m.id}`,
+    url: `${BASE_URL}${matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name)}`,
     description: `${ROUND_ORDER.find((r) => r.stage === m.stage)?.label ?? m.stage} — FIFA World Cup 2026`,
     location: {
       '@type': 'Place',
@@ -168,7 +169,7 @@ function ThirdPlaceCard({ match }: { match: Match }) {
 
   return (
     <Link
-      href={`/match/${match.id}`}
+      href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}
       className="block bg-gradient-to-br from-amber-950/40 to-gray-900 border border-amber-700/30 rounded-2xl p-5 hover:border-amber-600/50 transition-all"
     >
       <div className="flex items-center gap-2 mb-4">
@@ -232,7 +233,7 @@ function FinalCard({ match }: { match: Match }) {
 
   return (
     <Link
-      href={`/match/${match.id}`}
+      href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}
       className="block bg-gradient-to-br from-yellow-950/60 via-gray-900 to-gray-900 border border-yellow-600/40 rounded-2xl p-6 hover:border-yellow-500/60 transition-all"
     >
       <div className="flex items-center gap-2 mb-5">
@@ -474,7 +475,7 @@ export default async function WCBracketPage() {
                       return (
                         <Link
                           key={m.id}
-                          href={`/match/${m.id}`}
+                          href={matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name)}
                           className="flex items-center justify-between px-4 py-3 hover:bg-gray-800/50 transition-colors"
                         >
                           <div className="flex items-center gap-3 flex-1 min-w-0">

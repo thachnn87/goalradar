@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
 import { getStandings, getUpcomingMatches, getRecentMatches } from '@/lib/api';
+import { matchPath } from '@/lib/url';
 import type { Match, StandingEntry } from '@/lib/types';
 import MatchCard from '@/components/MatchCard';
 import WCGroupTable from '@/components/WCGroupTable';
@@ -120,7 +121,7 @@ function JsonLd({
     name: `${m.homeTeam?.name ?? 'TBD'} vs ${m.awayTeam?.name ?? 'TBD'}`,
     sport: 'Football',
     startDate: m.utcDate,
-    url: `${BASE_URL}/match/${m.id}`,
+    url: `${BASE_URL}${matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name)}`,
     location: { '@type': 'Place', name: 'FIFA World Cup 2026' },
   }));
 

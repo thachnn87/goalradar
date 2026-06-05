@@ -1,10 +1,12 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 
 import { getMatchDetail, getHeadToHead, getUpcomingMatches, getRecentMatches, NotFoundError } from '@/lib/api';
 import Breadcrumb from '@/components/Breadcrumb';
 import MatchCard from '@/components/MatchCard';
 import type { BreadcrumbItem } from '@/components/Breadcrumb';
+import { matchPath, extractMatchId } from '@/lib/url';
 import type {
   Goal,
   Booking,
@@ -16,6 +18,8 @@ import type {
 
 export const revalidate = 60;
 
+// The [id] segment accepts both legacy numeric IDs ("537327") and slug URLs
+// ("537327-mexico-vs-south-africa"). We always extract the numeric portion.
 type Params = { params: Promise<{ id: string }> };
 
 // ---------------------------------------------------------------------------
@@ -23,9 +27,12 @@ type Params = { params: Promise<{ id: string }> };
 // ---------------------------------------------------------------------------
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
-  const { id } = await params;
+  const { id: slug } = await params;
+  const numericId = extractMatchId(slug);
+  if (!numericId) return { title: 'Match Details | GoalRadar' };
+
   try {
-    const match = await getMatchDetail(id);
+    const match = await getMatchDetail(numericId);
     const home = match.homeTeam.name ?? 'TBD';
     const away = match.awayTeam.name ?? 'TBD';
     const isWC = match.competition?.code === 'WC';
@@ -39,16 +46,17 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       : `Follow ${home} vs ${away} live score, lineups, stats and match events.`;
 
     const BASE_URL = 'https://goalradar.org';
-    const url = `${BASE_URL}/match/${id}`;
+    const canonical = `${BASE_URL}${matchPath(match.id, home, away)}`;
 
     return {
       title,
       description,
+      alternates: { canonical },
       openGraph: {
         title,
         description,
         type: 'website',
-        url,
+        url: canonical,
         ...(isWC && { siteName: 'GoalRadar — FIFA World Cup 2026' }),
       },
       twitter: {
@@ -496,7 +504,7 @@ function MatchReport({ match }: { match: MatchDetail }) {
       logo: { '@type': 'ImageObject', url: 'https://goalradar.org/favicon.ico' },
     },
     description: `${home} vs ${away} match report — ${comp}${md}. Covering the first half, second half, result and competition context.`,
-    mainEntityOfPage: { '@type': 'WebPage', '@id': `https://goalradar.org/match/${match.id}` },
+    mainEntityOfPage: { '@type': 'WebPage', '@id': `https://goalradar.org${matchPath(match.id, match.homeTeam.name, match.awayTeam.name)}` },
   };
 
   return (
@@ -1070,19 +1078,44 @@ function JsonLd({ match }: { match: MatchDetail }) {
 // ---------------------------------------------------------------------------
 
 export default async function MatchDetailPage({ params }: Params) {
-  const { id } = await params;
+  const { id: slug } = await params;
+
+  // Extract the numeric ID from either "537327" or "537327-mexico-vs-south-africa"
+  const numericId = extractMatchId(slug);
+  if (!numericId) {
+    // Completely non-numeric segment — treat as unavailable
+    console.error(`[MatchPage] Non-numeric slug: ${slug}`);
+    return (
+      <div className="max-w-2xl mx-auto space-y-4 pb-10">
+        <Breadcrumb items={[{ label: 'Home', href: '/' }, { label: 'Match' }]} />
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center space-y-3">
+          <div className="text-4xl">🔍</div>
+          <h1 className="text-white font-bold text-lg">Match Not Found</h1>
+          <p className="text-gray-400 text-sm">This match URL is invalid.</p>
+          <Link href="/schedule" className="text-sm text-green-400 hover:text-green-300 transition-colors">Browse schedule</Link>
+        </div>
+      </div>
+    );
+  }
 
   let match: MatchDetail | null = null;
   type MatchError = 'not_found' | 'unavailable' | null;
   let matchError: MatchError = null;
 
   try {
-    match = await getMatchDetail(id);
+    match = await getMatchDetail(numericId);
 
     if (!match) {
       // API returned success but null body — treat as unavailable
-      console.error(`[MatchPage] id=${id} API returned null body`);
+      console.error(`[MatchPage] id=${numericId} API returned null body`);
       matchError = 'unavailable';
+    } else {
+      // Redirect old numeric-only URLs to the canonical slug URL.
+      // e.g. /match/537327 → /match/537327-mexico-vs-south-africa
+      const canonical = matchPath(match.id, match.homeTeam.name, match.awayTeam.name);
+      if (slug === numericId) {
+        redirect(canonical);
+      }
     }
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
@@ -1090,11 +1123,11 @@ export default async function MatchDetailPage({ params }: Params) {
     if (err instanceof NotFoundError) {
       // Genuine 404 from football-data — match does not exist in their system.
       // Per product requirement: show graceful fallback, do NOT call notFound().
-      console.error(`[MatchPage] id=${id} not found in football-data API`);
+      console.error(`[MatchPage] id=${numericId} not found in football-data API`);
       matchError = 'not_found';
     } else {
       // Transient failure: timeout, 429 rate-limit, 403 plan restriction, network error.
-      console.error(`[MatchPage] id=${id} temporarily unavailable:`, errMsg);
+      console.error(`[MatchPage] id=${numericId} temporarily unavailable:`, errMsg);
       matchError = 'unavailable';
     }
   }
@@ -1135,7 +1168,7 @@ export default async function MatchDetailPage({ params }: Params) {
 
   // Fetch h2h + (for WC group matches) all group matches — in parallel
   const [h2hResult, wcUpcomingResult, wcRecentResult] = await Promise.allSettled([
-    getHeadToHead(id),
+    getHeadToHead(numericId),
     isWC && hasGroup ? getUpcomingMatches('WC') : Promise.resolve(null),
     isWC && hasGroup ? getRecentMatches('WC')   : Promise.resolve(null),
   ]);

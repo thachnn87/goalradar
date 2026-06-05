@@ -12,6 +12,7 @@ import type { Match, StandingTable } from '@/lib/types';
 import MatchCard from '@/components/MatchCard';
 import WCGroupTable from '@/components/WCGroupTable';
 import WCCountdown from '@/components/WCCountdown';
+import { matchPath } from '@/lib/url';
 
 export const revalidate = 30;
 
@@ -238,7 +239,7 @@ function BracketPreview({ matches }: { matches: Match[] }) {
             return (
               <Link
                 key={m.id}
-                href={`/match/${m.id}`}
+                href={matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name)}
                 className="flex items-center gap-3 px-5 py-3 hover:bg-gray-800/50 transition-colors"
               >
                 <span className="text-gray-700 text-xs w-8 shrink-0 font-mono">{roundLabel}</span>

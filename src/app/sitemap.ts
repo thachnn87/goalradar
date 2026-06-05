@@ -1,6 +1,7 @@
 import { MetadataRoute } from 'next';
 import { COMPETITIONS } from '@/lib/types';
 import { getRecentMatches, getUpcomingMatches } from '@/lib/api';
+import { matchPath } from '@/lib/url';
 
 const BASE_URL = 'https://goalradar.org';
 
@@ -82,7 +83,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     const isWC = match.competition?.code === 'WC';
     matchUrls.push({
-      url: `${BASE_URL}/match/${match.id}`,
+      url: `${BASE_URL}${matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}`,
       lastModified: new Date(match.lastUpdated),
       changeFrequency: isWC ? ('always' as const) : ('hourly' as const),
       priority: isWC ? 0.9 : 0.7,
