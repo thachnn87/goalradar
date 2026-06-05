@@ -11,33 +11,31 @@ import type { Match, StandingEntry, StandingTable } from '@/lib/types';
 import MatchCard from '@/components/MatchCard';
 import Breadcrumb from '@/components/Breadcrumb';
 
-// Live page revalidates fastest because live matches can start at any moment
 export const revalidate = 30;
 
+const BASE_URL = 'https://goalradar.org';
 const WC_START = '2026-06-11';
 const WC_END = '2026-07-19';
-const BASE_URL = 'https://goalradar.org';
-
-const GROUP_STAGES = new Set(['GROUP_STAGE', 'FIRST_STAGE']);
 
 // ---------------------------------------------------------------------------
 // Metadata
 // ---------------------------------------------------------------------------
 
 export const metadata: Metadata = {
-  title: 'FIFA World Cup 2026 – Live Scores, Groups & Fixtures | GoalRadar',
+  title: 'FIFA World Cup 2026 Live Scores, Fixtures, Results and Standings | GoalRadar',
   description:
-    'Follow FIFA World Cup 2026 live scores, group standings, match results and knockout fixtures on GoalRadar. USA · Canada · Mexico.',
+    'Follow FIFA World Cup 2026 live scores, today\'s fixtures, upcoming matches, group standings and recent results on GoalRadar. USA · Canada · Mexico.',
   openGraph: {
-    title: 'FIFA World Cup 2026 – Live Scores, Groups & Fixtures | GoalRadar',
+    title: 'FIFA World Cup 2026 Live Scores, Fixtures, Results and Standings | GoalRadar',
     description:
-      'FIFA World Cup 2026 live scores, group standings, results and knockout bracket — all in one place.',
+      'Live scores, today\'s matches, group standings, upcoming fixtures and recent results for FIFA World Cup 2026.',
     type: 'website',
+    url: `${BASE_URL}/world-cup-2026`,
   },
   twitter: {
     card: 'summary_large_image',
     title: 'FIFA World Cup 2026 | GoalRadar',
-    description: 'Live scores, group standings, and fixtures for the 2026 World Cup.',
+    description: 'Live scores, fixtures, results and group standings for World Cup 2026.',
   },
 };
 
@@ -54,13 +52,20 @@ function JsonLd() {
     startDate: WC_START,
     endDate: WC_END,
     url: `${BASE_URL}/world-cup-2026`,
+    description:
+      'The FIFA World Cup 2026 is hosted by the United States, Canada and Mexico, featuring 48 nations.',
     location: {
       '@type': 'Place',
       name: 'United States, Canada & Mexico',
       address: { '@type': 'PostalAddress', addressCountry: 'US' },
     },
-    organizer: { '@type': 'Organization', name: 'FIFA' },
+    organizer: {
+      '@type': 'Organization',
+      name: 'FIFA',
+      url: 'https://www.fifa.com',
+    },
     eventStatus: 'https://schema.org/EventScheduled',
+    eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
   };
 
   const breadcrumb = {
@@ -68,7 +73,7 @@ function JsonLd() {
     '@type': 'BreadcrumbList',
     itemListElement: [
       { '@type': 'ListItem', position: 1, name: 'Home', item: BASE_URL },
-      { '@type': 'ListItem', position: 2, name: 'World Cup 2026' },
+      { '@type': 'ListItem', position: 2, name: 'World Cup 2026', item: `${BASE_URL}/world-cup-2026` },
     ],
   };
 
@@ -84,31 +89,34 @@ function JsonLd() {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function sectionTitle(label: string) {
-  return (
-    <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">
-      {label}
-    </h2>
-  );
+function todayUTC() {
+  return new Date().toISOString().split('T')[0];
 }
 
-function groupLabel(raw: string | null) {
-  if (!raw) return '';
-  return raw.replace(/_/g, ' ').replace(/\bGroup\b/i, 'Group').replace(/GROUP /, 'Group ');
-}
-
-function formatKickoff(utcDate: string) {
-  return new Date(utcDate).toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'UTC',
+function formatDayHeading(isoDate: string) {
+  const d = new Date(isoDate + 'T00:00:00Z');
+  const today = todayUTC();
+  const tomorrow = new Date(Date.now() + 86_400_000).toISOString().split('T')[0];
+  if (isoDate === today) return 'Today';
+  if (isoDate === tomorrow) return 'Tomorrow';
+  return d.toLocaleDateString('en-GB', {
+    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC',
   });
 }
 
-function groupMatchesByDate(matches: Match[]): Record<string, Match[]> {
+function formatKickoff(utcDate: string) {
+  return new Date(utcDate).toLocaleTimeString('en-GB', {
+    hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
+  });
+}
+
+function formatResultDate(utcDate: string) {
+  return new Date(utcDate).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'short', timeZone: 'UTC',
+  });
+}
+
+function groupByDate(matches: Match[]): Record<string, Match[]> {
   return matches.reduce<Record<string, Match[]>>((acc, m) => {
     const d = m.utcDate.split('T')[0];
     (acc[d] ??= []).push(m);
@@ -116,38 +124,145 @@ function groupMatchesByDate(matches: Match[]): Record<string, Match[]> {
   }, {});
 }
 
+function groupLabel(raw: string | null) {
+  if (!raw) return 'Group';
+  return raw.replace(/_/g, ' ').replace(/^GROUP /, 'Group ');
+}
+
 // ---------------------------------------------------------------------------
-// Group table — compact, one group
+// Section header
+// ---------------------------------------------------------------------------
+
+function SectionHeader({
+  title,
+  live = false,
+  count,
+}: {
+  title: string;
+  live?: boolean;
+  count?: number;
+}) {
+  return (
+    <div className="flex items-center gap-2 mb-4">
+      {live && (
+        <span className="relative flex h-2.5 w-2.5 shrink-0">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+        </span>
+      )}
+      <h2 className={`text-xs font-semibold uppercase tracking-widest ${live ? 'text-red-400' : 'text-gray-400'}`}>
+        {title}
+      </h2>
+      {count !== undefined && count > 0 && (
+        <span className="text-xs text-gray-600 ml-auto">{count} matches</span>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Match grid — date-grouped
+// ---------------------------------------------------------------------------
+
+function MatchGrid({ matches, maxDays = 99 }: { matches: Match[]; maxDays?: number }) {
+  const byDate = groupByDate(matches);
+  const dates = Object.keys(byDate).sort().slice(0, maxDays);
+
+  if (!dates.length) return null;
+
+  return (
+    <div className="space-y-6">
+      {dates.map((date) => (
+        <div key={date}>
+          <p className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-3">
+            {formatDayHeading(date)}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {byDate[date].map((m) => <MatchCard key={m.id} match={m} />)}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Recent result row
+// ---------------------------------------------------------------------------
+
+function ResultRow({ match }: { match: Match }) {
+  const { score } = match;
+  const hn = match.homeTeam?.shortName || match.homeTeam?.name || 'TBD';
+  const an = match.awayTeam?.shortName || match.awayTeam?.name || 'TBD';
+
+  return (
+    <Link
+      href={`/match/${match.id}`}
+      className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-800/60 transition-colors"
+    >
+      {/* Date */}
+      <span className="text-xs text-gray-600 w-16 shrink-0">{formatResultDate(match.utcDate)}</span>
+
+      {/* Home crest + name */}
+      <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
+        <span className="text-white text-sm font-medium truncate text-right">{hn}</span>
+        {match.homeTeam?.crest && (
+          <img src={match.homeTeam.crest} alt="" width={18} height={18} className="object-contain shrink-0" />
+        )}
+      </div>
+
+      {/* Score */}
+      <div className="text-center shrink-0 w-16">
+        <span className="text-white font-black tabular-nums text-sm">
+          {score.fullTime.home ?? '–'} – {score.fullTime.away ?? '–'}
+        </span>
+        {score.winner === 'HOME_TEAM' || score.winner === 'AWAY_TEAM' || score.winner === 'DRAW' ? (
+          <p className="text-xs text-gray-600">FT</p>
+        ) : null}
+      </div>
+
+      {/* Away crest + name */}
+      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+        {match.awayTeam?.crest && (
+          <img src={match.awayTeam.crest} alt="" width={18} height={18} className="object-contain shrink-0" />
+        )}
+        <span className="text-white text-sm font-medium truncate">{an}</span>
+      </div>
+    </Link>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Group table
 // ---------------------------------------------------------------------------
 
 function GroupTable({ group, table }: { group: string; table: StandingEntry[] }) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-      <div className="bg-gray-800 px-4 py-2">
-        <h3 className="text-xs font-bold text-gray-300 uppercase tracking-wider">
+      <div className="bg-gray-800/80 px-4 py-2.5">
+        <h3 className="text-xs font-bold text-gray-200 uppercase tracking-wider">
           {groupLabel(group)}
         </h3>
       </div>
       <table className="w-full text-xs">
         <thead>
-          <tr className="text-gray-600 uppercase tracking-wider border-b border-gray-800">
+          <tr className="text-gray-600 border-b border-gray-800/60">
             <th className="px-3 py-1.5 text-left w-6">#</th>
             <th className="px-3 py-1.5 text-left">Team</th>
             <th className="px-2 py-1.5 text-center w-7">P</th>
             <th className="px-2 py-1.5 text-center w-7">W</th>
             <th className="px-2 py-1.5 text-center w-7">D</th>
             <th className="px-2 py-1.5 text-center w-7">L</th>
-            <th className="px-2 py-1.5 text-center w-8 text-white font-semibold">Pts</th>
+            <th className="px-2 py-1.5 text-center w-9 text-white font-semibold">Pts</th>
           </tr>
         </thead>
         <tbody>
           {table.map((entry, i) => {
-            // Top 2 advance from each group in WC 2026 (top 3 in 12-group format — check later)
-            const advances = i < 2;
+            const advances = i < 2; // top 2 advance per group
             return (
               <tr
                 key={entry.team.id}
-                className={`border-t border-gray-800/50 border-l-2 ${
+                className={`border-t border-gray-800/40 border-l-2 ${
                   advances ? 'border-l-green-500' : 'border-l-transparent'
                 } hover:bg-gray-800/40 transition-colors`}
               >
@@ -155,18 +270,12 @@ function GroupTable({ group, table }: { group: string; table: StandingEntry[] })
                 <td className="px-3 py-2">
                   <Link
                     href={`/team/${entry.team.id}`}
-                    className="flex items-center gap-1.5 hover:text-green-400 transition-colors group"
+                    className="flex items-center gap-1.5 group"
                   >
                     {entry.team.crest && (
-                      <img
-                        src={entry.team.crest}
-                        alt=""
-                        width={16}
-                        height={16}
-                        className="object-contain shrink-0"
-                      />
+                      <img src={entry.team.crest} alt="" width={14} height={14} className="object-contain shrink-0" />
                     )}
-                    <span className="text-white font-medium truncate group-hover:text-green-400 text-xs">
+                    <span className="text-white font-medium truncate group-hover:text-green-400 transition-colors">
                       {entry.team.shortName || entry.team.name}
                     </span>
                   </Link>
@@ -186,46 +295,15 @@ function GroupTable({ group, table }: { group: string; table: StandingEntry[] })
 }
 
 // ---------------------------------------------------------------------------
-// Knockout match row (compact)
+// Empty state
 // ---------------------------------------------------------------------------
 
-function KnockoutMatchRow({ match }: { match: Match }) {
-  const { score, status } = match;
-  const showScore = ['FINISHED', 'IN_PLAY', 'PAUSED'].includes(status);
-
+function EmptyState({ message, sub }: { message: string; sub?: string }) {
   return (
-    <Link
-      href={`/match/${match.id}`}
-      className="flex items-center justify-between bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 hover:border-gray-700 hover:bg-gray-800/50 transition-all"
-    >
-      <div className="flex items-center gap-2 flex-1 min-w-0">
-        {match.homeTeam?.crest && (
-          <img src={match.homeTeam.crest} alt="" width={20} height={20} className="object-contain shrink-0" />
-        )}
-        <span className="text-white text-sm font-medium truncate">
-          {match.homeTeam?.shortName || match.homeTeam?.name || 'TBD'}
-        </span>
-      </div>
-
-      <div className="mx-3 text-center shrink-0">
-        {showScore ? (
-          <span className="text-white font-black tabular-nums">
-            {score.fullTime.home ?? 0} – {score.fullTime.away ?? 0}
-          </span>
-        ) : (
-          <span className="text-gray-500 text-xs">{formatKickoff(match.utcDate)}</span>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
-        <span className="text-white text-sm font-medium truncate text-right">
-          {match.awayTeam?.shortName || match.awayTeam?.name || 'TBD'}
-        </span>
-        {match.awayTeam?.crest && (
-          <img src={match.awayTeam.crest} alt="" width={20} height={20} className="object-contain shrink-0" />
-        )}
-      </div>
-    </Link>
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+      <p className="text-gray-400 text-sm font-medium">{message}</p>
+      {sub && <p className="text-gray-600 text-xs mt-1">{sub}</p>}
+    </div>
   );
 }
 
@@ -234,6 +312,8 @@ function KnockoutMatchRow({ match }: { match: Match }) {
 // ---------------------------------------------------------------------------
 
 export default async function WorldCup2026Page() {
+  const today = todayUTC();
+
   const [liveResult, upcomingResult, recentResult, standingsResult] = await Promise.allSettled([
     getWCLiveMatches(),
     getUpcomingMatches('WC'),
@@ -241,37 +321,40 @@ export default async function WorldCup2026Page() {
     getStandings('WC'),
   ]);
 
-  // Live
+  // 1. Live matches
   const liveMatches: Match[] =
     liveResult.status === 'fulfilled' ? liveResult.value.matches : [];
 
-  // Upcoming — split group vs knockout
+  // 2. All upcoming (SCHEDULED / TIMED), sorted asc
   const allUpcoming: Match[] =
     upcomingResult.status === 'fulfilled'
       ? [...upcomingResult.value.matches].sort(
           (a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()
         )
       : [];
-  const upcomingGroup = allUpcoming.filter((m) => GROUP_STAGES.has(m.stage));
-  const upcomingKnockout = allUpcoming.filter((m) => !GROUP_STAGES.has(m.stage));
 
-  // Recent — split group vs knockout
-  const allRecent: Match[] =
+  // Today's matches (not yet kicked off — live ones are already in liveMatches)
+  const todayMatches = allUpcoming.filter((m) => m.utcDate.startsWith(today));
+
+  // Upcoming = everything after today, capped at next 3 days / 12 matches
+  const upcomingMatches = allUpcoming
+    .filter((m) => m.utcDate.split('T')[0] > today)
+    .slice(0, 12);
+
+  // 3. Recent results — FINISHED, sorted newest first
+  const recentResults: Match[] =
     recentResult.status === 'fulfilled'
       ? [...recentResult.value.matches]
           .filter((m) => m.status === 'FINISHED')
           .sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime())
+          .slice(0, 10)
       : [];
-  const recentKnockout = allRecent.filter((m) => !GROUP_STAGES.has(m.stage));
 
-  // Standings — all groups
+  // 4. Group standings
   const groupTables: StandingTable[] =
     standingsResult.status === 'fulfilled'
       ? standingsResult.value.standings.filter((s) => s.type === 'TOTAL')
       : [];
-
-  const hasKnockout = upcomingKnockout.length > 0 || recentKnockout.length > 0;
-  const upcomingGroupByDate = groupMatchesByDate(upcomingGroup.slice(0, 24));
 
   return (
     <>
@@ -279,92 +362,78 @@ export default async function WorldCup2026Page() {
 
       <div className="max-w-5xl mx-auto space-y-10 pb-12">
         <Breadcrumb
-          items={[
-            { label: 'Home', href: '/' },
-            { label: 'World Cup 2026' },
-          ]}
+          items={[{ label: 'Home', href: '/' }, { label: 'World Cup 2026' }]}
         />
 
-        {/* Hero */}
-        <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 border border-gray-800 rounded-2xl p-6 sm:p-8">
-          <div className="flex items-start gap-4">
-            <span className="text-5xl sm:text-6xl shrink-0">🏆</span>
-            <div>
+        {/* ── Hero ──────────────────────────────────────────────────────── */}
+        <div className="relative bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 border border-gray-800 rounded-2xl p-6 sm:p-8 overflow-hidden">
+          {/* Subtle gold glow */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(234,179,8,0.06)_0%,_transparent_60%)] pointer-events-none" />
+          <div className="relative flex flex-col sm:flex-row sm:items-center gap-5">
+            <span className="text-6xl shrink-0 leading-none">🏆</span>
+            <div className="flex-1 min-w-0">
               <h1 className="text-2xl sm:text-3xl font-black text-white leading-tight">
                 FIFA World Cup 2026
               </h1>
               <p className="text-gray-400 text-sm mt-1">
                 United States · Canada · Mexico
               </p>
-              <p className="text-gray-500 text-xs mt-1">
-                11 June – 19 July 2026 · 48 Teams · 104 Matches
+              <p className="text-gray-500 text-xs mt-0.5">
+                11 June – 19 July 2026 &nbsp;·&nbsp; 48 teams &nbsp;·&nbsp; 104 matches
               </p>
-              <div className="flex flex-wrap gap-2 mt-4">
-                <span className="bg-green-500/20 text-green-400 border border-green-500/30 px-3 py-1 rounded-full text-xs font-semibold">
-                  48 Nations
-                </span>
-                <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-3 py-1 rounded-full text-xs font-semibold">
-                  16 Cities
-                </span>
-                <span className="bg-orange-500/20 text-orange-400 border border-orange-500/30 px-3 py-1 rounded-full text-xs font-semibold">
-                  3 Countries
-                </span>
-              </div>
+            </div>
+            <div className="flex sm:flex-col gap-2 text-xs">
+              <span className="bg-green-500/15 text-green-400 border border-green-500/25 px-3 py-1 rounded-full font-semibold">
+                48 Nations
+              </span>
+              <span className="bg-blue-500/15 text-blue-400 border border-blue-500/25 px-3 py-1 rounded-full font-semibold">
+                3 Countries
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Live now */}
+        {/* ── 1. Live Matches ───────────────────────────────────────────── */}
         {liveMatches.length > 0 && (
-          <section>
-            <div className="flex items-center gap-2 mb-4">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
-              </span>
-              <h2 className="text-xs font-semibold text-red-400 uppercase tracking-widest">
-                Live Now
-              </h2>
-            </div>
+          <section aria-labelledby="live-heading">
+            <SectionHeader title="Live Matches" live count={liveMatches.length} />
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {liveMatches.map((m) => (
-                <MatchCard key={m.id} match={m} />
-              ))}
+              {liveMatches.map((m) => <MatchCard key={m.id} match={m} />)}
             </div>
           </section>
         )}
 
-        {/* Upcoming group stage */}
-        {upcomingGroup.length > 0 && (
-          <section>
-            {sectionTitle('Upcoming Group Stage Fixtures')}
-            <div className="space-y-8">
-              {Object.keys(upcomingGroupByDate)
-                .sort()
-                .map((date) => (
-                  <div key={date}>
-                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">
-                      {new Date(date).toLocaleDateString('en-GB', {
-                        weekday: 'long',
-                        day: 'numeric',
-                        month: 'long',
-                        timeZone: 'UTC',
-                      })}
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {upcomingGroupByDate[date].map((m) => (
-                        <MatchCard key={m.id} match={m} />
-                      ))}
-                    </div>
-                  </div>
-                ))}
+        {/* ── 2. Today's Matches ────────────────────────────────────────── */}
+        <section aria-labelledby="today-heading">
+          <SectionHeader title="Today's Matches" count={todayMatches.length + liveMatches.length} />
+          {todayMatches.length > 0 || liveMatches.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {todayMatches.map((m) => <MatchCard key={m.id} match={m} />)}
             </div>
-          </section>
-        )}
+          ) : (
+            <EmptyState
+              message="No matches scheduled for today"
+              sub="Check the upcoming fixtures below"
+            />
+          )}
+        </section>
 
-        {/* Group standings */}
-        <section>
-          {sectionTitle('Group Standings')}
+        {/* ── 3. Upcoming Matches ───────────────────────────────────────── */}
+        <section aria-labelledby="upcoming-heading">
+          <SectionHeader title="Upcoming Matches" count={upcomingMatches.length} />
+          {upcomingMatches.length > 0 ? (
+            <MatchGrid matches={upcomingMatches} />
+          ) : (
+            <EmptyState
+              message="No upcoming fixtures available"
+              sub="Upcoming matches will appear here once scheduled"
+            />
+          )}
+        </section>
+
+        {/* ── 4. Group Standings ────────────────────────────────────────── */}
+        <section aria-labelledby="standings-heading">
+          <SectionHeader title="Group Standings" />
           {groupTables.length > 0 ? (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -377,49 +446,40 @@ export default async function WorldCup2026Page() {
                 ))}
               </div>
               <p className="text-xs text-gray-600 mt-3 flex items-center gap-1.5">
-                <span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500" />
-                Advances to knockout stage
+                <span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500 shrink-0" />
+                Advances to knockout round of 32
               </p>
             </>
           ) : (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-              <p className="text-gray-400 text-sm font-medium">Group stage hasn't started yet</p>
-              <p className="text-gray-600 text-xs mt-1">Standings will appear once matches begin</p>
-            </div>
+            <EmptyState
+              message="Group stage hasn't started yet"
+              sub="Standings will appear once the tournament begins on 11 June 2026"
+            />
           )}
         </section>
 
-        {/* Knockout stage */}
-        <section>
-          {sectionTitle('Knockout Stage')}
-          {hasKnockout ? (
-            <div className="space-y-3">
-              {[...recentKnockout, ...upcomingKnockout].map((m) => (
-                <div key={m.id}>
-                  <p className="text-xs text-gray-600 mb-1.5 px-1 capitalize">
-                    {m.stage.replace(/_/g, ' ').toLowerCase()}
-                  </p>
-                  <KnockoutMatchRow match={m} />
-                </div>
-              ))}
+        {/* ── 5. Recent Results ─────────────────────────────────────────── */}
+        <section aria-labelledby="results-heading">
+          <SectionHeader title="Recent Results" count={recentResults.length} />
+          {recentResults.length > 0 ? (
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden divide-y divide-gray-800/50">
+              {recentResults.map((m) => <ResultRow key={m.id} match={m} />)}
             </div>
           ) : (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-              <p className="text-gray-400 text-sm font-medium">Knockout stage not yet available</p>
-              <p className="text-gray-600 text-xs mt-1">
-                The knockout bracket will appear once the group stage is complete
-              </p>
-            </div>
+            <EmptyState
+              message="No results yet"
+              sub="Match results will appear here once the group stage begins"
+            />
           )}
         </section>
 
-        {/* Footer link */}
-        <div className="text-center">
-          <Link
-            href="/competition/WC"
-            className="text-sm text-gray-500 hover:text-white transition-colors"
-          >
-            View full competition page →
+        {/* ── Footer ────────────────────────────────────────────────────── */}
+        <div className="flex justify-center gap-6 text-sm text-gray-600">
+          <Link href="/competition/WC" className="hover:text-white transition-colors">
+            Full competition page →
+          </Link>
+          <Link href="/live" className="hover:text-white transition-colors">
+            All live scores →
           </Link>
         </div>
       </div>
