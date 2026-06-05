@@ -7,7 +7,9 @@
       "Bash(curl -s --max-time 10 -H 'X-Auth-Token: c433a00ff0d444e6b7df081e8edafcb7' https://api.football-data.org/v4/competitions/PL/matches?status=SCHEDULED,TIMED)",
       "Bash(curl -s --max-time 10 -H 'X-Auth-Token: c433a00ff0d444e6b7df081e8edafcb7' https://api.football-data.org/v4/competitions/PL/matches)",
       "Bash(curl -s --max-time 10 -H 'X-Auth-Token: c433a00ff0d444e6b7df081e8edafcb7' https://api.football-data.org/v4/competitions/BL1/matches)",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
