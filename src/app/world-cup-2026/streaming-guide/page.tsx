@@ -19,6 +19,18 @@ export const metadata: Metadata = {
 
 const FAQ_ITEMS = [
   {
+    q: 'How to watch World Cup 2026 online?',
+    a: 'To watch FIFA World Cup 2026 online, use the official streaming app or website for your country. In the USA, stream on Fubo TV, Peacock, or the Fox Sports app. In the UK, use BBC iPlayer or ITVX for free. In Canada, TSN Direct and CTV offer streaming. In Australia, SBS On Demand streams every match for free. In Vietnam, FPT Play provides free online streaming. In Thailand, use the TrueID app. In Indonesia, Mola TV streams matches online. In China, use Migu Video or iQiyi. Always use official licensed sources for the best quality and legal access.',
+  },
+  {
+    q: 'Is World Cup 2026 free to watch?',
+    a: 'Yes, the FIFA World Cup 2026 is free to watch in many countries. In the United Kingdom, BBC iPlayer and ITVX both stream matches completely free. In Australia, SBS On Demand is free with a free account. In Canada, CTV broadcasts selected matches for free. In Vietnam, FPT Play and VTV provide free coverage. In Indonesia, RCTI and SCTV are free-to-air channels. In China, CCTV-5 broadcasts matches free to air. In the USA, some matches air free on Fox with an antenna, and Telemundo covers Spanish-language games for free over the air.',
+  },
+  {
+    q: 'Which channels broadcast World Cup 2026?',
+    a: 'FIFA World Cup 2026 is broadcast on the following official channels by country: USA — Fox, FS1, Telemundo, Universo. UK — BBC, ITV. Canada — TSN, CTV, RDS, TVA Sports. Australia — SBS. Thailand — TrueVisions / True Sport. Vietnam — FPT Play, VTV, K+. Indonesia — RCTI, SCTV, Mola TV. China — CCTV-5, Migu Video. Germany — ARD, ZDF. France — TF1. Brazil — Globo, SporTV. Mexico — Azteca, Canal 5. Check your local TV listings for confirmed schedules and match times.',
+  },
+  {
     q: 'What is the best streaming service for World Cup 2026?',
     a: 'The best streaming service depends on your country. In the USA, Fubo TV offers comprehensive coverage including Fox, FS1, Telemundo and more, making it the top choice for cord-cutters. In the UK, BBC iPlayer and ITVX are free and require no subscription. In Canada, TSN Direct is the premium option while CTV offers free matches. In Australia, SBS On Demand is free and covers all matches.',
   },
@@ -67,7 +79,13 @@ const PLATFORMS: StreamPlatform[] = [
   { name: 'TSN Direct',           region: '🇨🇦 Canada',   price: 'From $19.99/mo',   devices: 'Smart TV, Mobile, Browser, Apple TV, Chromecast', free: false, tag: 'tsn-stream' },
   { name: 'CTV',                  region: '🇨🇦 Canada',   price: 'Free',             devices: 'Smart TV, Mobile, Browser', free: true, tag: 'ctv-stream' },
   { name: 'SBS On Demand',        region: '🇦🇺 Australia', price: 'Free',            devices: 'Smart TV, Mobile, Browser, Chromecast', free: true, tag: 'sbs-stream' },
-  { name: 'JioTV / Sports18',     region: '🇮🇳 India',    price: 'Free/Subscription',devices: 'Mobile, Smart TV, Browser', free: true, tag: 'jio-stream' },
+  { name: 'JioTV / Sports18',     region: '🇮🇳 India',      price: 'Free/Subscription', devices: 'Mobile, Smart TV, Browser',                          free: true,  tag: 'jio-stream'      },
+  { name: 'TrueID (True Sport)',  region: '🇹🇭 Thailand',   price: 'Subscription',      devices: 'Mobile, Smart TV, Browser',                          free: false, tag: 'trueid-stream'   },
+  { name: 'FPT Play',            region: '🇻🇳 Vietnam',    price: 'Free',              devices: 'Mobile, Smart TV, Browser',                          free: true,  tag: 'fptplay-stream'  },
+  { name: 'RCTI / SCTV',         region: '🇮🇩 Indonesia',  price: 'Free (OTA)',        devices: 'Smart TV, Antenna, Mobile app',                      free: true,  tag: 'rcti-stream'     },
+  { name: 'Mola TV',             region: '🇮🇩 Indonesia',  price: 'Subscription',      devices: 'Mobile, Smart TV, Browser',                          free: false, tag: 'mola-stream'     },
+  { name: 'CCTV-5',              region: '🇨🇳 China',      price: 'Free',              devices: 'Smart TV, Antenna, CCTV app',                        free: true,  tag: 'cctv-stream'     },
+  { name: 'Migu Video',          region: '🇨🇳 China',      price: 'Subscription',      devices: 'Mobile, Smart TV, Browser (China Mobile)',           free: false, tag: 'migu-stream'     },
 ];
 
 function SectionTitle({ id, children }: { id: string; children: React.ReactNode }) {
@@ -192,7 +210,10 @@ export default function StreamingGuidePage() {
             { flag: '🇨🇦', region: 'Canada', service: 'CTV', detail: 'Selected matches broadcast free on CTV. Stream via the CTV app for free.', tag: 'ca-free' },
             { flag: '🇩🇪', region: 'Germany', service: 'ARD Mediathek + ZDF', detail: 'Both public broadcasters offer free online streams for their World Cup coverage.', tag: 'de-free' },
             { flag: '🇫🇷', region: 'France', service: 'MyTF1', detail: 'TF1 streams free to air matches online via the MyTF1 website and app.', tag: 'fr-free' },
-            { flag: '🇮🇳', region: 'India', service: 'JioTV / Sports18', detail: 'Jio subscribers get free access via JioTV. Sports18 also streams selected matches free.', tag: 'in-free' },
+            { flag: '🇮🇳', region: 'India',     service: 'JioTV / Sports18',  detail: 'Jio subscribers get free access via JioTV. Sports18 streams selected matches free.', tag: 'in-free'  },
+            { flag: '🇻🇳', region: 'Vietnam',   service: 'FPT Play + VTV',    detail: 'FPT Play app and website streams free. VTV national broadcaster airs selected matches.', tag: 'vn-free'  },
+            { flag: '🇮🇩', region: 'Indonesia', service: 'RCTI / SCTV',       detail: 'Free-to-air nationwide. RCTI+ app also streams matches online for free.',                tag: 'id-free'  },
+            { flag: '🇨🇳', region: 'China',     service: 'CCTV-5',            detail: 'National public broadcaster. Free to air and via the CCTV streaming app.',               tag: 'cn-free'  },
           ].map(({ flag, region, service, detail }) => (
             <div key={region} className="bg-gray-900 border border-green-800/30 rounded-xl p-4">
               <p className="text-white font-bold text-sm mb-1">{flag} {region}</p>
@@ -234,6 +255,34 @@ export default function StreamingGuidePage() {
         <Prose>
           <p>Canada is a co-host of World Cup 2026 and will see unprecedented national interest in the tournament. TSN and CTV hold English-language rights; RDS and TVA Sports hold French-language rights.</p>
           <p><strong className="text-white">TSN Direct</strong> offers a full streaming subscription from $4.99/day or $19.99/month, covering all TSN channels. CTV streams selected matches for free via the CTV app with no subscription required. For French speakers, the TVA Sports app offers streaming coverage.</p>
+        </Prose>
+
+        {/* Thailand Streaming */}
+        <SectionTitle id="thailand">Streaming World Cup 2026 in Thailand</SectionTitle>
+        <Prose>
+          <p>In Thailand, TrueVisions holds broadcast rights for the FIFA World Cup 2026. Subscribers can watch live via the <strong className="text-white">TrueID app</strong>, available on iOS, Android, Smart TV, and web browsers. TrueID provides on-demand replays alongside live coverage, making it easy to catch up if you miss a match. True Sport channels within the TrueVisions package offer dedicated sports coverage throughout the tournament.</p>
+          <p>Selected key matches may also be available on Thai public free-to-air television. Check local Thai TV listings for confirmed broadcast details. For viewers outside Thailand, a VPN connected to a Thai server may be required to access TrueID content.</p>
+        </Prose>
+
+        {/* Vietnam Streaming */}
+        <SectionTitle id="vietnam">Streaming World Cup 2026 in Vietnam</SectionTitle>
+        <Prose>
+          <p><strong className="text-white">FPT Play</strong> is the primary online streaming platform for World Cup 2026 in Vietnam, available via the FPT Play app on iOS, Android, and Smart TV, as well as the FPT Play website. FPT Play provides free access and is well-established as Vietnam's leading sports streaming platform, having covered previous major football tournaments.</p>
+          <p><strong className="text-white">VTV (Vietnam Television)</strong> is the national broadcaster and may air selected World Cup matches free to air. For satellite and cable subscribers, <strong className="text-white">K+ (K Plus)</strong> provides dedicated sports coverage and typically carries international football tournaments. Check the K+ app for streaming access.</p>
+        </Prose>
+
+        {/* Indonesia Streaming */}
+        <SectionTitle id="indonesia">Streaming World Cup 2026 in Indonesia</SectionTitle>
+        <Prose>
+          <p>Indonesian football fans have two main options for watching World Cup 2026. <strong className="text-white">RCTI and SCTV</strong> are nationwide free-to-air broadcasters that typically secure rights to major international tournaments including the FIFA World Cup. Their streaming apps (RCTI+ and Vidio) provide online access alongside the over-the-air broadcasts.</p>
+          <p><strong className="text-white">Mola TV</strong> is Indonesia's dedicated sports streaming platform, offering comprehensive football coverage through a subscription service accessible via mobile app, Smart TV, and web browser. Mola TV has previously held streaming rights for top European leagues and international competitions in Indonesia. Confirm the latest rights details on the Mola TV website ahead of the tournament.</p>
+        </Prose>
+
+        {/* China Streaming */}
+        <SectionTitle id="china">Streaming World Cup 2026 in China</SectionTitle>
+        <Prose>
+          <p>In China, <strong className="text-white">CCTV-5</strong> (China Central Television Sports) is the primary broadcaster for the FIFA World Cup 2026, as it has been for previous tournaments. CCTV-5 is available free to air and also streams via the CCTV app. This is the most reliable free option for Chinese viewers.</p>
+          <p>For online streaming, <strong className="text-white">Migu Video</strong> (China Mobile's sports platform) has previously held digital streaming rights for major football competitions in China. <strong className="text-white">iQiyi</strong> and <strong className="text-white">Youku</strong> are also established platforms that have carried international football rights. Confirm the official digital rights announcement from FIFA and Chinese broadcasters closer to the tournament start on 11 June 2026.</p>
         </Prose>
 
         {/* Devices */}
