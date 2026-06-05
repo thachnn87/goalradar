@@ -170,4 +170,5 @@ export const COMPETITIONS: { code: string; name: string; flag: string }[] = [
   { code: 'SA', name: 'Serie A', flag: '🇮🇹' },
   { code: 'FL1', name: 'Ligue 1', flag: '🇫🇷' },
   { code: 'CL', name: 'Champions League', flag: '🇪🇺' },
+  { code: 'WC', name: 'FIFA World Cup', flag: '🌍' },
 ];
