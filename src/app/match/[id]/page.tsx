@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
 import { getMatchDetail, getHeadToHead, NotFoundError } from '@/lib/api';
@@ -756,31 +755,51 @@ export default async function MatchDetailPage({ params }: Params) {
   const { id } = await params;
 
   let match: MatchDetail | null = null;
-  let unavailable = false;
+  type MatchError = 'not_found' | 'unavailable' | null;
+  let matchError: MatchError = null;
 
   try {
     match = await getMatchDetail(id);
-  } catch (err) {
-    if (err instanceof NotFoundError) {
-      notFound(); // genuine 404 — match does not exist
+
+    if (!match) {
+      // API returned success but null body — treat as unavailable
+      console.error(`[MatchPage] id=${id} API returned null body`);
+      matchError = 'unavailable';
     }
-    // Transient failure (timeout, rate-limit, 403 plan restriction, etc.)
-    // — show graceful fallback instead of 404.
-    console.error(`[MatchPage] Could not load match ${id}:`, err instanceof Error ? err.message : String(err));
-    unavailable = true;
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+
+    if (err instanceof NotFoundError) {
+      // Genuine 404 from football-data — match does not exist in their system.
+      // Per product requirement: show graceful fallback, do NOT call notFound().
+      console.error(`[MatchPage] id=${id} not found in football-data API`);
+      matchError = 'not_found';
+    } else {
+      // Transient failure: timeout, 429 rate-limit, 403 plan restriction, network error.
+      console.error(`[MatchPage] id=${id} temporarily unavailable:`, errMsg);
+      matchError = 'unavailable';
+    }
   }
 
-  if (unavailable || !match) {
+  if (matchError || !match) {
+    const isNotFound = matchError === 'not_found';
     return (
       <div className="max-w-2xl mx-auto space-y-4 pb-10">
         <Breadcrumb items={[{ label: 'Home', href: '/' }, { label: 'Match' }]} />
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center space-y-3">
-          <div className="text-4xl">⚽</div>
-          <h1 className="text-white font-bold text-lg">Match Details Unavailable</h1>
+          <div className="text-4xl">{isNotFound ? '🔍' : '⚽'}</div>
+          <h1 className="text-white font-bold text-lg">
+            {isNotFound ? 'Match Not Found' : 'Match Details Unavailable'}
+          </h1>
           <p className="text-gray-400 text-sm">
-            Match data is temporarily unavailable. Please try again in a few moments.
+            {isNotFound
+              ? 'This match could not be found. It may have been removed or the link may be incorrect.'
+              : 'Match data is temporarily unavailable. Please try again in a few moments.'}
           </p>
           <div className="flex justify-center gap-4 pt-2">
+            <Link href="/world-cup-2026" className="text-sm text-yellow-400 hover:text-yellow-300 transition-colors">
+              World Cup hub
+            </Link>
             <Link href="/schedule" className="text-sm text-green-400 hover:text-green-300 transition-colors">
               Browse schedule
             </Link>

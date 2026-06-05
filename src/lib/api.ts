@@ -53,6 +53,9 @@ async function fetchAPI<T>(
     } catch (err) {
       clearTimeout(timeoutId);
 
+      // NotFoundError is definitive — retrying a 404 is pointless; propagate immediately.
+      if (err instanceof NotFoundError) throw err;
+
       const isTimeout =
         err instanceof DOMException && err.name === 'AbortError';
 
@@ -192,8 +195,7 @@ export async function getWCLiveMatches(): Promise<{
 export async function getWCKnockoutMatches(): Promise<{
   matches: Match[];
 }> {
-  return fetchAPI(
-    '/competitions/WC/matches?stage=LAST_16,QUARTER_FINALS,SEMI_FINALS,THIRD_PLACE,FINAL',
-    60
-  );
+  // Fetch all WC matches (no stage filter — multi-value stage is not supported by
+  // football-data v4). The WCBracket component filters to knockout stages in JS.
+  return fetchAPI('/competitions/WC/matches', 60);
 }
