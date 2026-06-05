@@ -9,6 +9,7 @@ const links = [
   { href: '/live', label: 'Live' },
   { href: '/standings', label: 'Standings' },
   { href: '/competition/PL', label: 'Leagues' },
+  { href: '/world-cup-2026', label: 'World Cup 2026' },
 ];
 
 export default function Navbar() {
@@ -27,12 +28,17 @@ export default function Navbar() {
             {links.map(({ href, label }) => {
               const isActive =
                 href === '/' ? pathname === '/' : pathname.startsWith(href);
+              const isWC = href === '/world-cup-2026';
               return (
                 <Link
                   key={href}
                   href={href}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive
+                    isWC
+                      ? isActive
+                        ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
+                        : 'text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10 border border-transparent'
+                      : isActive
                       ? 'bg-green-500/20 text-green-400'
                       : 'text-gray-400 hover:text-white hover:bg-gray-800'
                   }`}
@@ -45,6 +51,8 @@ export default function Navbar() {
                       </span>
                       {label}
                     </span>
+                  ) : label === 'World Cup 2026' ? (
+                    <span>🏆 {label}</span>
                   ) : (
                     label
                   )}

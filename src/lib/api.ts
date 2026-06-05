@@ -163,3 +163,12 @@ export async function getHeadToHead(
     60
   );
 }
+
+export async function getWCLiveMatches(): Promise<{
+  matches: Match[];
+}> {
+  return fetchAPI(
+    '/competitions/WC/matches?status=IN_PLAY,PAUSED',
+    30
+  );
+}
