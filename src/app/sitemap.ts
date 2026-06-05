@@ -4,6 +4,8 @@ import { getRecentMatches, getUpcomingMatches } from '@/lib/api';
 import { matchPath } from '@/lib/url';
 import { WC_TEAM_SLUGS } from '@/lib/wc-teams';
 import { WC_WATCH_COUNTRY_SLUGS } from '@/lib/wc-watch-countries';
+import { WC_TV_COUNTRY_SLUGS } from '@/lib/wc-tv-countries';
+import { WC_VENUE_SLUGS } from '@/lib/wc-venues';
 
 const BASE_URL = 'https://goalradar.org';
 
@@ -113,6 +115,33 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: new Date(),
       changeFrequency: 'weekly' as const,
       priority: 0.82,
+    })),
+    // Matches today / tomorrow (high priority — real-time search demand)
+    {
+      url: `${BASE_URL}/world-cup-2026/matches-today`,
+      lastModified: new Date(),
+      changeFrequency: 'always' as const,
+      priority: 0.92,
+    },
+    {
+      url: `${BASE_URL}/world-cup-2026/matches-tomorrow`,
+      lastModified: new Date(),
+      changeFrequency: 'hourly' as const,
+      priority: 0.88,
+    },
+    // TV schedule country pages
+    ...WC_TV_COUNTRY_SLUGS.map((slug) => ({
+      url: `${BASE_URL}/world-cup-2026/tv-schedule/${slug}`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: 0.84,
+    })),
+    // Venue pages
+    ...WC_VENUE_SLUGS.map((slug) => ({
+      url: `${BASE_URL}/world-cup-2026/venues/${slug}`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: 0.80,
     })),
   ];
 
