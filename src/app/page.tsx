@@ -14,6 +14,7 @@ import WCGroupTable from '@/components/WCGroupTable';
 import WCCountdown from '@/components/WCCountdown';
 import { matchPath } from '@/lib/url';
 import AdSlot from '@/components/AdSlot';
+import WCCountdownBanner from '@/components/WCCountdownBanner';
 
 export const revalidate = 30;
 
@@ -436,13 +437,13 @@ export default async function HomePage() {
   return (
     <div className="space-y-10">
 
+      {/* ── Countdown banner — sits above everything, slim strip ─────────── */}
+      <WCCountdownBanner />
+
       {/* ── 1. Hero ─────────────────────────────────────────────────────── */}
       {wcActive
         ? <WCHero liveCount={wcLive.length} wcActive={wcActive} />
         : <StandardHero />}
-
-      {/* ── Countdown (shown before tournament starts, or live banner) ──── */}
-      <WCCountdown />
 
       {/* Ad: below hero — banner */}
       <AdSlot slotId="homepage-top" variant="banner" className="my-2" />
