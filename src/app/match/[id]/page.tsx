@@ -9,6 +9,7 @@ import MatchCard from '@/components/MatchCard';
 import type { BreadcrumbItem } from '@/components/Breadcrumb';
 import { matchPath, extractMatchId } from '@/lib/url';
 import AdSlot from '@/components/AdSlot';
+import AffiliateBlock from '@/components/AffiliateBlock';
 import type {
   Goal,
   Booking,
@@ -1398,6 +1399,17 @@ export default async function MatchDetailPage({ params }: Params) {
         {showStats && <MatchSummary match={match} />}
 
         <MatchReport match={match} />
+
+        {/* Affiliate: shown only on WC match pages. Replace url="#" to activate. */}
+        {isWC && (
+          <AffiliateBlock
+            title="Watch FIFA World Cup 2026 Live"
+            description="Stream every match live on your phone, TV or laptop. Official broadcasters — no illegal streams."
+            cta="Watch Live"
+            url="#"
+            tag={`match-detail-${match.id}`}
+          />
+        )}
 
         {showStats && hasEvents && <MatchStatistics match={match} />}
 

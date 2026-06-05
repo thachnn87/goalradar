@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import Breadcrumb from '@/components/Breadcrumb';
+import AffiliateBlock from '@/components/AffiliateBlock';
 
 export const revalidate = 86400;
 
@@ -355,24 +356,27 @@ export default function StreamingGuidePage() {
           <li><strong className="text-white">Avoid free VPNs:</strong> Free VPN services often throttle speeds and may log your data. Use a reputable paid service for live match streaming.</li>
         </ul>
 
-        {/* ── AFFILIATE: VPN ── */}
-        <div className="space-y-3 my-6">
-          {[
-            { name: 'ExpressVPN', desc: 'Industry-leading speed. Servers in 105 countries. 30-day refund policy.', tag: 'expressvpn-stream' },
-            { name: 'NordVPN', desc: '6,000+ servers. Streaming-optimized servers. Up to 6 devices.', tag: 'nordvpn-stream' },
-            { name: 'Surfshark', desc: 'Budget-friendly. Unlimited devices. Fast servers for streaming.', tag: 'surfshark-stream' },
-          ].map(({ name, desc, tag }) => (
-            <div key={name} className="flex items-center justify-between gap-4 bg-gray-800/50 border border-gray-700/50 rounded-xl px-4 py-3">
-              <div>
-                <p className="text-white font-semibold text-sm">{name}</p>
-                <p className="text-gray-500 text-xs mt-0.5">{desc}</p>
-              </div>
-              <a href="#" target="_blank" rel="noopener noreferrer sponsored" data-affiliate-tag={tag}
-                className="bg-yellow-500 hover:bg-yellow-400 text-black px-4 py-2 rounded-lg text-xs font-bold transition-colors shrink-0">Get Deal →</a>
-            </div>
-          ))}
-        </div>
-        <p className="text-gray-600 text-xs italic">Disclaimer: Affiliate links. GoalRadar earns a commission if you subscribe. Always verify that VPN use complies with your streaming service's terms.</p>
+        {/* ── Affiliate: VPN (replace url="#" with real affiliate link) ── */}
+        <AffiliateBlock
+          title="Best VPN for Streaming World Cup 2026"
+          description="Access your home broadcaster from anywhere. Fast speeds, 100+ countries, 30-day money-back guarantee."
+          cta="Get a VPN"
+          url="#"
+          tag="streaming-guide-vpn-cta"
+          variant="blue"
+          className="my-6"
+        />
+        <p className="text-gray-600 text-xs italic">Affiliate disclosure: GoalRadar may earn a commission if you purchase through partner links, at no extra cost to you.</p>
+
+        {/* ── Affiliate: Streaming service (replace url="#" with real link) ── */}
+        <AffiliateBlock
+          title="Stream Every World Cup 2026 Match"
+          description="Get access to all official broadcasters in one place. Start your free trial before the tournament kicks off on 11 June 2026."
+          cta="Start Free Trial"
+          url="#"
+          tag="streaming-guide-service-cta"
+          className="my-6"
+        />
 
         {/* FAQ */}
         <SectionTitle id="faq">Frequently Asked Questions</SectionTitle>

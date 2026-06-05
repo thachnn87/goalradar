@@ -6,6 +6,7 @@ import type { Match } from '@/lib/types';
 import { matchPath } from '@/lib/url';
 import Breadcrumb from '@/components/Breadcrumb';
 import MatchCard from '@/components/MatchCard';
+import AffiliateBlock from '@/components/AffiliateBlock';
 
 // Refresh every 60 s so live fixtures stay accurate
 export const revalidate = 60;
@@ -481,6 +482,28 @@ export default async function WatchLivePage() {
         <P>
           If you are travelling during the tournament and want to access your home country&apos;s official stream, a reputable VPN service allows you to connect through a server in your home country. For example, UK travellers can use a VPN to access BBC iPlayer or ITVX from anywhere in the world. Always verify that VPN use complies with the streaming service&apos;s terms and conditions. We recommend established, paid VPN services with fast streaming-optimised servers.
         </P>
+
+        {/* ── Affiliate: streaming service ─────────────────────────────────── */}
+        {/* Replace url="#" with your affiliate link to activate */}
+        <AffiliateBlock
+          title="Stream Every World Cup 2026 Match"
+          description="Don't miss a single kick-off. Set up your streaming service before the tournament starts on 11 June 2026."
+          cta="Start Streaming"
+          url="#"
+          tag="watch-live-streaming-cta"
+          className="my-8"
+        />
+
+        {/* ── Affiliate: VPN ────────────────────────────────────────────────── */}
+        <AffiliateBlock
+          title="Travelling During the World Cup?"
+          description="Access your home broadcaster from anywhere with a fast VPN. Servers in 100+ countries, 30-day money-back guarantee."
+          cta="Get a VPN"
+          url="#"
+          tag="watch-live-vpn-cta"
+          variant="blue"
+          className="mb-8"
+        />
 
         {/* ── FAQ ──────────────────────────────────────────────────────────── */}
         <SectionTitle id="faq">Frequently Asked Questions</SectionTitle>
