@@ -44,6 +44,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'always',
       priority: 0.95,
     },
+    // World Cup fixtures page
+    {
+      url: `${BASE_URL}/world-cup-2026/fixtures`,
+      lastModified: new Date(),
+      changeFrequency: 'hourly' as const,
+      priority: 0.9,
+    },
+    // World Cup groups page
+    {
+      url: `${BASE_URL}/world-cup-2026/groups`,
+      lastModified: new Date(),
+      changeFrequency: 'hourly' as const,
+      priority: 0.9,
+    },
     // World Cup bracket page
     {
       url: `${BASE_URL}/world-cup-2026/bracket`,

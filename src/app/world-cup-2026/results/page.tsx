@@ -7,6 +7,7 @@ import { matchPath } from '@/lib/url';
 import Breadcrumb from '@/components/Breadcrumb';
 import MatchCard from '@/components/MatchCard';
 import AdSlot from '@/components/AdSlot';
+import WCPageNav from '@/components/WCPageNav';
 
 export const revalidate = 60;
 
@@ -219,6 +220,9 @@ export default async function WCResultsPage() {
             ← WC Hub
           </Link>
         </div>
+
+        {/* Cross-page navigation */}
+        <WCPageNav />
 
         {/* Internal navigation */}
         <nav aria-label="World Cup navigation" className="flex flex-wrap gap-2">

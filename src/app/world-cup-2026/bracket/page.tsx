@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { getWCKnockoutMatches } from '@/lib/api';
 import { matchPath } from '@/lib/url';
 import AdSlot from '@/components/AdSlot';
+import WCPageNav from '@/components/WCPageNav';
 import type { Match } from '@/lib/types';
 import MatchCard from '@/components/MatchCard';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -359,6 +360,9 @@ export default async function WCBracketPage() {
             ← World Cup Hub
           </Link>
         </div>
+
+        {/* Cross-page navigation */}
+        <WCPageNav />
 
         {/* ── Round progress pills ───────────────────────────────────── */}
         <div className="flex flex-wrap gap-2">
