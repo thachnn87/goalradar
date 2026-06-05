@@ -342,6 +342,32 @@ export default async function WorldCup2026Page() {
         {/* ── Countdown ────────────────────────────────────────────────── */}
         <WCCountdown compact />
 
+        {/* ── Navigation shortcuts — sticky on mobile ───────────────────── */}
+        <nav
+          aria-label="World Cup sections"
+          className="sticky top-16 z-40 -mx-4 px-4 sm:mx-0 sm:px-0 sm:static sm:z-auto bg-gray-950/95 sm:bg-transparent backdrop-blur-md sm:backdrop-blur-none border-b border-gray-800/50 sm:border-0 pb-3 sm:pb-0"
+        >
+          <div className="flex items-center gap-1 overflow-x-auto scrollbar-none pt-3 sm:pt-0">
+            {[
+              { href: '#fixtures',  icon: '📅', label: 'Fixtures'  },
+              { href: '#results',   icon: '🏁', label: 'Results'   },
+              { href: '#groups',    icon: '📊', label: 'Groups'    },
+              { href: '/world-cup-2026/bracket', icon: '🔗', label: 'Bracket', external: true },
+              { href: '/world-cup-2026/group-a', icon: '🗂',  label: 'Group A', external: true },
+            ].map(({ href, icon, label, external }) => (
+              <Link
+                key={label}
+                href={href}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors bg-gray-800/80 hover:bg-yellow-500/15 text-gray-300 hover:text-yellow-400 border border-gray-700/50 hover:border-yellow-500/30 shrink-0"
+              >
+                <span className="text-base leading-none">{icon}</span>
+                {label}
+                {external && <span className="text-gray-600 text-xs">↗</span>}
+              </Link>
+            ))}
+          </div>
+        </nav>
+
         {/* ── 1. Live Matches ───────────────────────────────────────────── */}
         {liveMatches.length > 0 && (
           <section aria-labelledby="live-heading">
@@ -368,7 +394,7 @@ export default async function WorldCup2026Page() {
         </section>
 
         {/* ── 3. Upcoming Matches ───────────────────────────────────────── */}
-        <section aria-labelledby="upcoming-heading">
+        <section id="fixtures" aria-labelledby="upcoming-heading">
           <SectionHeader title="Upcoming Matches" count={upcomingMatches.length} />
           {upcomingMatches.length > 0 ? (
             <MatchGrid matches={upcomingMatches} />
@@ -381,7 +407,7 @@ export default async function WorldCup2026Page() {
         </section>
 
         {/* ── 4. Group Standings ────────────────────────────────────────── */}
-        <section aria-labelledby="standings-heading">
+        <section id="groups" aria-labelledby="standings-heading">
           <SectionHeader title="Group Standings" />
           {groupTables.length > 0 ? (
             <>
@@ -433,7 +459,7 @@ export default async function WorldCup2026Page() {
         </section>
 
         {/* ── 6. Recent Results ─────────────────────────────────────────── */}
-        <section aria-labelledby="results-heading">
+        <section id="results" aria-labelledby="results-heading">
           <SectionHeader title="Recent Results" count={recentResults.length} />
           {recentResults.length > 0 ? (
             <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden divide-y divide-gray-800/50">
