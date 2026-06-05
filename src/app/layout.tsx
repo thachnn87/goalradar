@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
+
+const ADSENSE_ID  = process.env.NEXT_PUBLIC_ADSENSE_ID  ?? '';
+const ADS_ENABLED = process.env.NEXT_PUBLIC_ADS_ENABLED === 'true' && ADSENSE_ID !== '';
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://goalradar.org"),
@@ -58,6 +62,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        {ADS_ENABLED && (
+          <Script
+            async
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_ID}`}
+            crossOrigin="anonymous"
+            strategy="afterInteractive"
+          />
+        )}
+      </head>
       <body className="font-sans bg-gray-950 text-white min-h-screen">
         <Navbar />
 

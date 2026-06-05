@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 
 import { getWCKnockoutMatches } from '@/lib/api';
 import { matchPath } from '@/lib/url';
+import AdSlot from '@/components/AdSlot';
 import type { Match } from '@/lib/types';
 import MatchCard from '@/components/MatchCard';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -403,6 +404,9 @@ export default async function WCBracketPage() {
           )}
         </section>
 
+        {/* Ad: between R32 and visual bracket */}
+        <AdSlot slotId="bracket-mid" variant="banner" />
+
         {/* ── Visual bracket: R16 → Final ────────────────────────────── */}
         <section aria-labelledby="bracket-heading">
           <div className="flex items-baseline gap-3 mb-4">
@@ -516,6 +520,9 @@ export default async function WCBracketPage() {
             })}
           </div>
         </section>
+
+        {/* Ad: page bottom */}
+        <AdSlot slotId="bracket-bottom" variant="banner" />
 
         {/* ── Internal navigation ─────────────────────────────────────── */}
         <div className="border-t border-gray-800 pt-8 flex flex-wrap justify-center gap-4 text-sm">

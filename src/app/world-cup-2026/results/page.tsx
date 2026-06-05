@@ -6,6 +6,7 @@ import type { Match } from '@/lib/types';
 import { matchPath } from '@/lib/url';
 import Breadcrumb from '@/components/Breadcrumb';
 import MatchCard from '@/components/MatchCard';
+import AdSlot from '@/components/AdSlot';
 
 export const revalidate = 60;
 
@@ -241,6 +242,9 @@ export default async function WCResultsPage() {
         {/* Stats summary */}
         {results.length > 0 && <StatsSummary results={results} />}
 
+        {/* Ad: below stats */}
+        <AdSlot slotId="results-top" variant="banner" />
+
         {/* Results grouped by date — MatchCard grid */}
         {results.length === 0 ? (
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-10 text-center">
@@ -300,6 +304,9 @@ export default async function WCResultsPage() {
             })}
           </div>
         )}
+
+        {/* Ad: bottom of results */}
+        <AdSlot slotId="results-bottom" variant="banner" />
 
         {/* Footer internal links */}
         <div className="border-t border-gray-800 pt-6 flex flex-wrap justify-center gap-4 text-sm text-gray-500">

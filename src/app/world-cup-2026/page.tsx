@@ -15,6 +15,7 @@ import Breadcrumb from '@/components/Breadcrumb';
 import WCBracket from '@/components/WCBracket';
 import WCGroupTable from '@/components/WCGroupTable';
 import WCCountdown from '@/components/WCCountdown';
+import AdSlot from '@/components/AdSlot';
 
 export const revalidate = 30;
 
@@ -343,6 +344,9 @@ export default async function WorldCup2026Page() {
         {/* ── Countdown ────────────────────────────────────────────────── */}
         <WCCountdown compact />
 
+        {/* Ad: below countdown, above nav */}
+        <AdSlot slotId="wc-top" variant="banner" />
+
         {/* ── Navigation shortcuts — sticky on mobile ───────────────────── */}
         <nav
           aria-label="World Cup sections"
@@ -439,6 +443,9 @@ export default async function WorldCup2026Page() {
             />
           )}
         </section>
+
+        {/* Ad: between standings and bracket */}
+        <AdSlot slotId="wc-mid" variant="rectangle" className="mx-auto" />
 
         {/* ── 5. Knockout Bracket ───────────────────────────────────────── */}
         <section aria-labelledby="bracket-heading">

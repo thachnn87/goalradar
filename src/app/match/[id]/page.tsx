@@ -8,6 +8,7 @@ import Breadcrumb from '@/components/Breadcrumb';
 import MatchCard from '@/components/MatchCard';
 import type { BreadcrumbItem } from '@/components/Breadcrumb';
 import { matchPath, extractMatchId } from '@/lib/url';
+import AdSlot from '@/components/AdSlot';
 import type {
   Goal,
   Booking,
@@ -1391,6 +1392,9 @@ export default async function MatchDetailPage({ params }: Params) {
 
         <ScoreHero match={match} />
 
+        {/* Ad: below score hero — high visibility placement */}
+        <AdSlot slotId="match-top" variant="banner" />
+
         {showStats && <MatchSummary match={match} />}
 
         <MatchReport match={match} />
@@ -1406,6 +1410,9 @@ export default async function MatchDetailPage({ params }: Params) {
         <LineupsSection />
 
         {h2h && <HeadToHeadSection h2h={h2h} match={match} />}
+
+        {/* Ad: mid-page — between H2H and group content */}
+        <AdSlot slotId="match-mid" variant="rectangle" className="mx-auto" />
 
         {/* Group standings preview (WC group stage only) */}
         {isWC && hasGroup && wcGroupTable && matchGroupSlug && matchGroupLabel && (

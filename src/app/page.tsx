@@ -13,6 +13,7 @@ import MatchCard from '@/components/MatchCard';
 import WCGroupTable from '@/components/WCGroupTable';
 import WCCountdown from '@/components/WCCountdown';
 import { matchPath } from '@/lib/url';
+import AdSlot from '@/components/AdSlot';
 
 export const revalidate = 30;
 
@@ -443,6 +444,9 @@ export default async function HomePage() {
       {/* ── Countdown (shown before tournament starts, or live banner) ──── */}
       <WCCountdown />
 
+      {/* Ad: below hero — banner */}
+      <AdSlot slotId="homepage-top" variant="banner" className="my-2" />
+
       {/* ── 2. Today's World Cup Matches ─────────────────────────────────── */}
       {wcActive && (
         <section aria-labelledby="wc-today-h">
@@ -547,6 +551,9 @@ export default async function HomePage() {
           <WCStats results={wcResults} upcomingCount={upcomingCount} />
         </section>
       )}
+
+      {/* Ad: between WC sections and other leagues — rectangle */}
+      <AdSlot slotId="homepage-mid" variant="rectangle" className="mx-auto" />
 
       {/* ── Other leagues divider ─────────────────────────────────────────── */}
       {wcActive && (
