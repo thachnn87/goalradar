@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
-import { getTeam, getTeamMatches, getStandings } from '@/lib/api';
+import { getTeam, getTeamMatches, getStandings, NotFoundError } from '@/lib/api';
 import { COMPETITIONS } from '@/lib/types';
 import Breadcrumb from '@/components/Breadcrumb';
 import type { TeamDetail, Match, StandingEntry } from '@/lib/types';
@@ -214,11 +214,31 @@ function JsonLd({ team, leagueName }: { team: TeamDetail; leagueName: string }) 
 export default async function TeamPage({ params }: Params) {
   const { id } = await params;
 
-  let team: TeamDetail;
+  let team: TeamDetail | null = null;
+
   try {
     team = await getTeam(id);
-  } catch {
-    notFound();
+  } catch (err) {
+    if (err instanceof NotFoundError) notFound();
+    console.error(`[TeamPage] Could not load team ${id}:`, err instanceof Error ? err.message : String(err));
+  }
+
+  if (!team) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-4 pb-10">
+        <Breadcrumb items={[{ label: 'Home', href: '/' }, { label: 'Standings', href: '/standings' }, { label: 'Team' }]} />
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center space-y-3">
+          <div className="text-4xl">🏟️</div>
+          <h1 className="text-white font-bold text-lg">Team Data Unavailable</h1>
+          <p className="text-gray-400 text-sm">
+            Team information is temporarily unavailable. Please try again in a few moments.
+          </p>
+          <Link href="/standings" className="inline-block text-sm text-green-400 hover:text-green-300 transition-colors pt-2">
+            ← Back to Standings
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   // Run recent matches + standings in parallel

@@ -75,14 +75,14 @@ export default function MatchCard({ match }: { match: Match }) {
         </div>
         <div className="space-y-2">
           <TeamRow
-            crest={match.homeTeam.crest}
-            name={match.homeTeam.shortName || match.homeTeam.name}
+            crest={match.homeTeam?.crest ?? ''}
+            name={match.homeTeam?.shortName || match.homeTeam?.name || 'TBD'}
             score={showScore ? score.fullTime.home : null}
             bold={status === 'FINISHED' ? homeWins : true}
           />
           <TeamRow
-            crest={match.awayTeam.crest}
-            name={match.awayTeam.shortName || match.awayTeam.name}
+            crest={match.awayTeam?.crest ?? ''}
+            name={match.awayTeam?.shortName || match.awayTeam?.name || 'TBD'}
             score={showScore ? score.fullTime.away : null}
             bold={status === 'FINISHED' ? awayWins : true}
           />

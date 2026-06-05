@@ -2,8 +2,16 @@ import { Match, MatchDetail, HeadToHead, StandingTable, TeamDetail } from './typ
 
 const BASE_URL = 'https://api.football-data.org/v4';
 
-// Generic error surfaced to callers — never contains internal details.
-class ApiUnavailableError extends Error {
+// Thrown when the resource genuinely does not exist (HTTP 404).
+export class NotFoundError extends Error {
+  constructor() {
+    super('Not found');
+    this.name = 'NotFoundError';
+  }
+}
+
+// Thrown for every other failure — never contains internal details.
+export class ApiUnavailableError extends Error {
   constructor() {
     super('Data temporarily unavailable');
     this.name = 'ApiUnavailableError';
@@ -36,6 +44,8 @@ async function fetchAPI<T>(
           `[Football API] HTTP ${res.status} on ${endpoint} (attempt ${attempt}/${retries}):`,
           body.slice(0, 200)
         );
+        // 404 is a definitive "does not exist" — no point retrying.
+        if (res.status === 404) throw new NotFoundError();
         throw new ApiUnavailableError();
       }
 

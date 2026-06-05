@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
-import { getMatchDetail, getHeadToHead } from '@/lib/api';
+import { getMatchDetail, getHeadToHead, NotFoundError } from '@/lib/api';
 import Breadcrumb from '@/components/Breadcrumb';
 import type {
   Goal,
@@ -733,11 +733,42 @@ function JsonLd({ match }: { match: MatchDetail }) {
 export default async function MatchDetailPage({ params }: Params) {
   const { id } = await params;
 
-  let match: MatchDetail;
+  let match: MatchDetail | null = null;
+  let unavailable = false;
+
   try {
     match = await getMatchDetail(id);
-  } catch {
-    notFound();
+  } catch (err) {
+    if (err instanceof NotFoundError) {
+      notFound(); // genuine 404 — match does not exist
+    }
+    // Transient failure (timeout, rate-limit, 403 plan restriction, etc.)
+    // — show graceful fallback instead of 404.
+    console.error(`[MatchPage] Could not load match ${id}:`, err instanceof Error ? err.message : String(err));
+    unavailable = true;
+  }
+
+  if (unavailable || !match) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-4 pb-10">
+        <Breadcrumb items={[{ label: 'Home', href: '/' }, { label: 'Match' }]} />
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center space-y-3">
+          <div className="text-4xl">⚽</div>
+          <h1 className="text-white font-bold text-lg">Match Details Unavailable</h1>
+          <p className="text-gray-400 text-sm">
+            Match data is temporarily unavailable. Please try again in a few moments.
+          </p>
+          <div className="flex justify-center gap-4 pt-2">
+            <Link href="/schedule" className="text-sm text-green-400 hover:text-green-300 transition-colors">
+              Browse schedule
+            </Link>
+            <Link href="/live" className="text-sm text-gray-400 hover:text-white transition-colors">
+              Live scores
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // Fetch h2h in parallel, silently ignore failure

@@ -199,11 +199,11 @@ function KnockoutMatchRow({ match }: { match: Match }) {
       className="flex items-center justify-between bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 hover:border-gray-700 hover:bg-gray-800/50 transition-all"
     >
       <div className="flex items-center gap-2 flex-1 min-w-0">
-        {match.homeTeam.crest && (
+        {match.homeTeam?.crest && (
           <img src={match.homeTeam.crest} alt="" width={20} height={20} className="object-contain shrink-0" />
         )}
         <span className="text-white text-sm font-medium truncate">
-          {match.homeTeam.shortName || match.homeTeam.name}
+          {match.homeTeam?.shortName || match.homeTeam?.name || 'TBD'}
         </span>
       </div>
 
@@ -219,9 +219,9 @@ function KnockoutMatchRow({ match }: { match: Match }) {
 
       <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
         <span className="text-white text-sm font-medium truncate text-right">
-          {match.awayTeam.shortName || match.awayTeam.name}
+          {match.awayTeam?.shortName || match.awayTeam?.name || 'TBD'}
         </span>
-        {match.awayTeam.crest && (
+        {match.awayTeam?.crest && (
           <img src={match.awayTeam.crest} alt="" width={20} height={20} className="object-contain shrink-0" />
         )}
       </div>
