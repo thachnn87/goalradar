@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { getStandings } from '@/lib/api';
 import StandingsTable from '@/components/StandingsTable';
 import CompetitionSelector from '@/components/CompetitionSelector';
+import Breadcrumb from '@/components/Breadcrumb';
 import { StandingTable } from '@/lib/types';
 
 export const revalidate = 3600;
@@ -70,6 +71,12 @@ export default async function StandingsPage({
 
   return (
     <div className="space-y-6">
+      <Breadcrumb
+        items={[
+          { label: 'Home', href: '/' },
+          { label: 'Standings' },
+        ]}
+      />
       <div>
         <h1 className="text-2xl font-bold text-white mb-1">Standings</h1>
         <p className="text-gray-400 text-sm">Current league tables</p>

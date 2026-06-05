@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { getUpcomingMatches, getRecentMatches } from '@/lib/api';
 import MatchCard from '@/components/MatchCard';
 import CompetitionSelector from '@/components/CompetitionSelector';
+import Breadcrumb from '@/components/Breadcrumb';
 import type { Metadata } from 'next';
 import { Match } from '@/lib/types';
 
@@ -195,6 +196,12 @@ export default async function SchedulePage({
 
   return (
     <div className="space-y-6">
+      <Breadcrumb
+        items={[
+          { label: 'Home', href: '/' },
+          { label: 'Schedule' },
+        ]}
+      />
       <div>
         <h1 className="text-2xl font-bold text-white mb-1">
           Match Schedule

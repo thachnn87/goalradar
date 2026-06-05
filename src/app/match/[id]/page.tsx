@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
 import { getMatchDetail, getHeadToHead } from '@/lib/api';
+import Breadcrumb from '@/components/Breadcrumb';
 import type {
   Goal,
   Booking,
@@ -567,8 +568,8 @@ function LineupsSection() {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
       {sectionTitle('Lineups')}
-      <p className="text-sm text-gray-500 text-center py-4">
-        Lineup data is not available on the current API plan.
+      <p className="text-sm text-gray-500 text-center py-6">
+        Detailed starting lineups are not available from the current data provider.
       </p>
     </div>
   );
@@ -759,12 +760,20 @@ export default async function MatchDetailPage({ params }: Params) {
       <JsonLd match={match} />
 
       <div className="max-w-2xl mx-auto space-y-4 pb-10">
-        <Link
-          href="/schedule"
-          className="text-gray-400 hover:text-white text-sm flex items-center gap-1 transition-colors w-fit"
-        >
-          ← Back to Schedule
-        </Link>
+        <Breadcrumb
+          items={[
+            { label: 'Home', href: '/' },
+            {
+              label: match.competition?.name ?? 'League',
+              href: match.competition?.code
+                ? `/competition/${match.competition.code}`
+                : '/standings',
+            },
+            {
+              label: `${match.homeTeam.shortName || match.homeTeam.name} vs ${match.awayTeam.shortName || match.awayTeam.name}`,
+            },
+          ]}
+        />
 
         <ScoreHero match={match} />
 

@@ -7,6 +7,7 @@ import { COMPETITIONS } from '@/lib/types';
 import type { Match } from '@/lib/types';
 import StandingsTable from '@/components/StandingsTable';
 import MatchCard from '@/components/MatchCard';
+import Breadcrumb from '@/components/Breadcrumb';
 
 export const revalidate = 300;
 
@@ -140,13 +141,13 @@ export default async function CompetitionPage({ params }: Params) {
       <JsonLd name={competitionName} code={code} emblem={competitionEmblem} />
 
       <div className="max-w-5xl mx-auto space-y-8 pb-10">
-        {/* Back */}
-        <Link
-          href="/standings"
-          className="text-gray-400 hover:text-white text-sm flex items-center gap-1 transition-colors w-fit"
-        >
-          ← Back to Standings
-        </Link>
+        <Breadcrumb
+          items={[
+            { label: 'Home', href: '/' },
+            { label: 'Leagues', href: '/standings' },
+            { label: competitionName },
+          ]}
+        />
 
         {/* Competition header */}
         <div className="flex items-center gap-4">

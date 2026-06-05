@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 
 import { getTeam, getTeamMatches, getStandings } from '@/lib/api';
 import { COMPETITIONS } from '@/lib/types';
+import Breadcrumb from '@/components/Breadcrumb';
 import type { TeamDetail, Match, StandingEntry } from '@/lib/types';
 
 export const revalidate = 300;
@@ -256,12 +257,18 @@ export default async function TeamPage({ params }: Params) {
       <JsonLd team={team} leagueName={leagueName} />
 
       <div className="max-w-2xl mx-auto space-y-4 pb-10">
-        <Link
-          href="/standings"
-          className="text-gray-400 hover:text-white text-sm flex items-center gap-1 transition-colors w-fit"
-        >
-          ← Back to Standings
-        </Link>
+        <Breadcrumb
+          items={[
+            { label: 'Home', href: '/' },
+            {
+              label: leagueName || 'Leagues',
+              href: leagueComp
+                ? `/competition/${leagueComp.code}`
+                : '/standings',
+            },
+            { label: team.name },
+          ]}
+        />
 
         {/* Team header */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 sm:p-8">

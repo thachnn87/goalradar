@@ -1,6 +1,7 @@
 import { getLiveMatches } from '@/lib/api';
 import MatchCard from '@/components/MatchCard';
 import LiveRefresher from '@/components/LiveRefresher';
+import Breadcrumb from '@/components/Breadcrumb';
 import { Match } from '@/lib/types';
 
 export const revalidate = 30;
@@ -18,6 +19,12 @@ export default async function LivePage() {
 
   return (
     <div className="space-y-6">
+      <Breadcrumb
+        items={[
+          { label: 'Home', href: '/' },
+          { label: 'Live Scores' },
+        ]}
+      />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
