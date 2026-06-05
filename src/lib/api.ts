@@ -1,6 +1,11 @@
 import { Match, MatchDetail, HeadToHead, StandingTable, TeamDetail } from './types';
+import { withCache, TTL } from './cache';
 
 const BASE_URL = 'https://api.football-data.org/v4';
+
+// ---------------------------------------------------------------------------
+// Error types
+// ---------------------------------------------------------------------------
 
 // Thrown when the resource genuinely does not exist (HTTP 404).
 export class NotFoundError extends Error {
@@ -18,191 +23,175 @@ export class ApiUnavailableError extends Error {
   }
 }
 
-async function fetchAPI<T>(
-  endpoint: string,
-  revalidate = 60,
-  // 2 = one initial attempt + one retry before failing
-  retries = 2
-): Promise<T> {
+// ---------------------------------------------------------------------------
+// HTTP layer — handles auth, retry, timeout, and Next.js ISR
+// ---------------------------------------------------------------------------
+
+/**
+ * Performs the actual HTTP request to football-data.org.
+ * Called by fetchAPI only on a cache miss.
+ *
+ * Two layers of caching:
+ *   1. In-memory (cache.ts) — sub-millisecond repeated reads, request dedup.
+ *   2. Next.js fetch cache (next: { revalidate }) — CDN / ISR fallback.
+ */
+async function fetchFromAPI<T>(endpoint: string, revalidate: number): Promise<T> {
+  const retries = 2; // one initial + one retry
+
   for (let attempt = 1; attempt <= retries; attempt++) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10_000);
+    const timeoutId  = setTimeout(() => controller.abort(), 10_000);
 
     try {
       const res = await fetch(`${BASE_URL}${endpoint}`, {
         headers: { 'X-Auth-Token': process.env.FOOTBALL_API_KEY ?? '' },
-        next: { revalidate },
-        signal: controller.signal,
+        next:    { revalidate }, // Next.js ISR / CDN cache
+        signal:  controller.signal,
       });
 
       clearTimeout(timeoutId);
 
       if (!res.ok) {
-        // Log status + sanitised body server-side only; never rethrow raw response.
         const body = await res.text().catch(() => '');
         console.error(
           `[Football API] HTTP ${res.status} on ${endpoint} (attempt ${attempt}/${retries}):`,
           body.slice(0, 200)
         );
-        // 404 is a definitive "does not exist" — no point retrying.
         if (res.status === 404) throw new NotFoundError();
         throw new ApiUnavailableError();
       }
 
       return res.json() as Promise<T>;
+
     } catch (err) {
       clearTimeout(timeoutId);
 
-      // NotFoundError is definitive — retrying a 404 is pointless; propagate immediately.
+      // NotFoundError is definitive — propagate immediately, no retry.
       if (err instanceof NotFoundError) throw err;
 
-      const isTimeout =
-        err instanceof DOMException && err.name === 'AbortError';
-
-      // Server-side log with enough context to debug, nothing user-visible.
+      const isTimeout = err instanceof DOMException && err.name === 'AbortError';
       console.error(
         `[Football API] Attempt ${attempt}/${retries} failed on ${endpoint}:`,
         isTimeout ? 'timeout (10 s)' : (err instanceof Error ? err.message : String(err))
       );
 
       if (attempt < retries) {
-        // Brief back-off before the single retry.
         await new Promise((r) => setTimeout(r, 1_000));
         continue;
       }
 
-      // Throw a safe generic error after all attempts are exhausted.
       throw new ApiUnavailableError();
     }
   }
 
-  // TypeScript exhaustiveness — unreachable in practice.
-  throw new ApiUnavailableError();
+  throw new ApiUnavailableError(); // TypeScript exhaustiveness
 }
 
-export async function getTodayMatches(): Promise<{
-  matches: Match[];
-}> {
-  const today = new Date()
-    .toISOString()
-    .split('T')[0];
+// ---------------------------------------------------------------------------
+// Cached fetch wrapper
+// ---------------------------------------------------------------------------
 
+/**
+ * Entry point for all API calls.
+ * Routes through the in-memory cache (cache.ts) and falls through to
+ * fetchFromAPI on a miss.
+ *
+ * The `cacheTtl` controls the in-memory TTL (use TTL.* constants).
+ * The `revalidate` param controls Next.js ISR — defaults to cacheTtl so
+ * both caches expire in sync.
+ */
+function fetchAPI<T>(
+  endpoint:  string,
+  cacheTtl:  number,
+  revalidate = cacheTtl,
+): Promise<T> {
+  return withCache<T>(
+    endpoint,
+    cacheTtl,
+    () => fetchFromAPI<T>(endpoint, revalidate)
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Public API functions
+// ---------------------------------------------------------------------------
+
+export function getTodayMatches(): Promise<{ matches: Match[] }> {
+  const today = new Date().toISOString().split('T')[0];
   return fetchAPI(
     `/matches?dateFrom=${today}&dateTo=${today}`,
-    60
+    TTL.MATCH  // 60 s — today's fixtures must stay fresh
   );
 }
 
-export async function getLiveMatches(): Promise<{
-  matches: Match[];
-}> {
-  return fetchAPI(
-    '/matches?status=IN_PLAY,PAUSED',
-    30
-  );
+export function getLiveMatches(): Promise<{ matches: Match[] }> {
+  return fetchAPI('/matches?status=IN_PLAY,PAUSED', TTL.LIVE); // 30 s
 }
 
-export async function getUpcomingMatches(
+export function getUpcomingMatches(
   competition: string
-): Promise<{
-  matches: Match[];
-  resultSet: {
-    count: number;
-  };
-}> {
+): Promise<{ matches: Match[]; resultSet: { count: number } }> {
   return fetchAPI(
     `/competitions/${competition}/matches?status=SCHEDULED,TIMED`,
-    300
+    TTL.FIXTURES  // 600 s
   );
 }
 
-export async function getRecentMatches(
+export function getRecentMatches(
   competition: string
-): Promise<{
-  matches: Match[];
-}> {
-  const today = new Date()
-    .toISOString()
-    .split('T')[0];
-
-  const from = new Date(
-    Date.now() - 30 * 86400000
-  )
-    .toISOString()
-    .split('T')[0];
-
+): Promise<{ matches: Match[] }> {
+  const today = new Date().toISOString().split('T')[0];
+  const from  = new Date(Date.now() - 30 * 86_400_000).toISOString().split('T')[0];
   return fetchAPI(
     `/competitions/${competition}/matches?dateFrom=${from}&dateTo=${today}`,
-    300
+    TTL.FIXTURES  // 600 s
   );
 }
 
-export async function getStandings(
-  competition: string
-): Promise<{
-  standings: StandingTable[];
-  competition: {
-    name: string;
-    emblem: string;
-  };
+export function getStandings(competition: string): Promise<{
+  standings:   StandingTable[];
+  competition: { name: string; emblem: string };
 }> {
   return fetchAPI(
     `/competitions/${competition}/standings`,
-    3600
+    TTL.STANDINGS  // 1800 s
   );
 }
 
-export async function getMatchDetail(
-  id: string
-): Promise<MatchDetail> {
-  return fetchAPI(
-    `/matches/${id}`,
-    60
-  );
+export function getMatchDetail(id: string): Promise<MatchDetail> {
+  return fetchAPI(`/matches/${id}`, TTL.MATCH); // 60 s
 }
 
-export async function getTeam(id: string): Promise<TeamDetail> {
-  return fetchAPI(`/teams/${id}`, 3600);
+export function getTeam(id: string): Promise<TeamDetail> {
+  return fetchAPI(`/teams/${id}`, TTL.STANDINGS); // 1800 s
 }
 
-export async function getTeamMatches(
-  id: string
-): Promise<{ matches: Match[] }> {
+export function getTeamMatches(id: string): Promise<{ matches: Match[] }> {
   return fetchAPI(
     `/teams/${id}/matches?status=FINISHED&limit=10`,
-    300
+    TTL.FIXTURES  // 600 s
   );
 }
 
-export async function getHeadToHead(
-  id: string
-): Promise<HeadToHead> {
-  return fetchAPI(
-    `/matches/${id}/head2head`,
-    60
-  );
+export function getHeadToHead(id: string): Promise<HeadToHead> {
+  return fetchAPI(`/matches/${id}/head2head`, TTL.MATCH); // 60 s
 }
 
-export async function getWCLiveMatches(): Promise<{
-  matches: Match[];
-}> {
+export function getWCLiveMatches(): Promise<{ matches: Match[] }> {
   return fetchAPI(
     '/competitions/WC/matches?status=IN_PLAY,PAUSED',
-    30
+    TTL.LIVE  // 30 s
   );
 }
 
-export async function getWCKnockoutMatches(): Promise<{
-  matches: Match[];
-}> {
-  // Fetch all WC matches (no stage filter — multi-value stage is not supported by
-  // football-data v4). The WCBracket component filters to knockout stages in JS.
-  return fetchAPI('/competitions/WC/matches', 60);
+export function getWCKnockoutMatches(): Promise<{ matches: Match[] }> {
+  // All WC matches — WCBracket filters to knockout stages in JS.
+  return fetchAPI('/competitions/WC/matches', TTL.MATCH); // 60 s
 }
 
-export async function getWCResults(): Promise<{
-  matches: Match[];
-}> {
-  // All finished WC matches — used by the dedicated results page.
-  return fetchAPI('/competitions/WC/matches?status=FINISHED', 60);
+export function getWCResults(): Promise<{ matches: Match[] }> {
+  return fetchAPI(
+    '/competitions/WC/matches?status=FINISHED',
+    TTL.MATCH  // 60 s — results can update during/after matches
+  );
 }
