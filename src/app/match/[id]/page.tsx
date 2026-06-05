@@ -1,8 +1,10 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
-import { getMatchDetail, getHeadToHead, NotFoundError } from '@/lib/api';
+import { getMatchDetail, getHeadToHead, getUpcomingMatches, getRecentMatches, NotFoundError } from '@/lib/api';
 import Breadcrumb from '@/components/Breadcrumb';
+import MatchCard from '@/components/MatchCard';
+import type { BreadcrumbItem } from '@/components/Breadcrumb';
 import type {
   Goal,
   Booking,
@@ -848,6 +850,186 @@ function HeadToHeadSection({
 }
 
 // ---------------------------------------------------------------------------
+// Breadcrumb builder — context-aware
+// ---------------------------------------------------------------------------
+
+function buildBreadcrumb(match: MatchDetail): BreadcrumbItem[] {
+  const isWC   = match.competition?.code === 'WC';
+  const hn     = match.homeTeam.shortName || match.homeTeam.name || 'TBD';
+  const an     = match.awayTeam.shortName || match.awayTeam.name || 'TBD';
+  const matchLabel = `${hn} vs ${an}`;
+
+  if (isWC) {
+    if (match.group) {
+      // GROUP_A → 'group-a' / 'Group A'
+      const slug  = match.group.toLowerCase().replace('_', '-');     // group-a
+      const label = match.group.replace('GROUP_', 'Group ');          // Group A
+      return [
+        { label: 'Home',           href: '/' },
+        { label: 'World Cup 2026', href: '/world-cup-2026' },
+        { label: label,            href: `/world-cup-2026/${slug}` },
+        { label: matchLabel },
+      ];
+    }
+    // Knockout (no group)
+    return [
+      { label: 'Home',           href: '/' },
+      { label: 'World Cup 2026', href: '/world-cup-2026' },
+      { label: 'Bracket',        href: '/world-cup-2026/bracket' },
+      { label: matchLabel },
+    ];
+  }
+
+  // Non-WC
+  return [
+    { label: 'Home',  href: '/' },
+    {
+      label: match.competition?.name ?? 'League',
+      href: match.competition?.code ? `/competition/${match.competition.code}` : '/standings',
+    },
+    { label: matchLabel },
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Other Group Matches
+// ---------------------------------------------------------------------------
+
+function OtherGroupMatches({
+  groupMatches,
+  currentId,
+}: {
+  groupMatches: Match[];
+  currentId: number;
+}) {
+  const others = groupMatches
+    .filter((m) => m.id !== currentId)
+    .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
+
+  if (!others.length) return null;
+
+  // Split into results (finished) and upcoming
+  const results  = others.filter((m) => m.status === 'FINISHED').reverse();
+  const upcoming = others.filter((m) => m.status !== 'FINISHED');
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+      <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">
+        Other Group Matches
+      </h2>
+      <div className="space-y-3">
+        {[...results, ...upcoming].slice(0, 5).map((m) => (
+          <MatchCard key={m.id} match={m} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Related Matches — broader competition context
+// ---------------------------------------------------------------------------
+
+function RelatedMatches({
+  homeTeamId,
+  awayTeamId,
+  competitionName,
+  matches,
+  currentId,
+}: {
+  homeTeamId: number;
+  awayTeamId: number;
+  competitionName: string;
+  matches: Match[];
+  currentId: number;
+}) {
+  // Find recent matches involving either team in the same competition
+  const related = matches
+    .filter((m) => m.id !== currentId)
+    .filter((m) => (
+      m.homeTeam.id === homeTeamId || m.awayTeam.id === homeTeamId ||
+      m.homeTeam.id === awayTeamId || m.awayTeam.id === awayTeamId
+    ))
+    .sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime())
+    .slice(0, 4);
+
+  if (!related.length) return null;
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+      <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">
+        Related Matches · {competitionName}
+      </h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {related.map((m) => (
+          <MatchCard key={m.id} match={m} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Competition Links — contextual internal navigation
+// ---------------------------------------------------------------------------
+
+function CompetitionLinks({ match }: { match: MatchDetail }) {
+  const isWC  = match.competition?.code === 'WC';
+  const group = match.group;
+  const groupSlug  = group ? group.toLowerCase().replace('_', '-') : null;
+  const groupLabel = group ? group.replace('GROUP_', 'Group ') : null;
+  const compCode   = match.competition?.code;
+  const compName   = match.competition?.name ?? 'Competition';
+
+  type LinkItem = { href: string; icon: string; label: string; desc: string };
+
+  const links: LinkItem[] = isWC
+    ? [
+        { href: '/world-cup-2026',         icon: '🏆', label: 'World Cup Hub',    desc: 'Scores, fixtures, standings' },
+        { href: '/world-cup-2026/bracket', icon: '🔗', label: 'Knockout Bracket', desc: 'Full tournament bracket' },
+        ...(groupSlug && groupLabel
+          ? [{ href: `/world-cup-2026/${groupSlug}`, icon: '📊', label: groupLabel, desc: 'Group standings & fixtures' }]
+          : []
+        ),
+        { href: '/world-cup-2026',         icon: '📅', label: 'All WC Fixtures',  desc: 'Upcoming matches' },
+        { href: '/standings',              icon: '🏅', label: 'Standings',         desc: 'League tables' },
+        { href: '/live',                   icon: '🔴', label: 'Live Scores',       desc: 'Matches in play' },
+      ]
+    : [
+        ...(compCode
+          ? [{ href: `/competition/${compCode}`, icon: '📊', label: compName,    desc: 'Standings & fixtures' }]
+          : []
+        ),
+        { href: '/standings',  icon: '🏅', label: 'All Standings', desc: 'League tables' },
+        { href: '/schedule',   icon: '📅', label: 'Schedule',      desc: 'Upcoming fixtures' },
+        { href: '/live',       icon: '🔴', label: 'Live Scores',   desc: 'Matches in play' },
+      ];
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+      <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">
+        Competition Links
+      </h2>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {links.map(({ href, icon, label, desc }) => (
+          <Link
+            key={href + label}
+            href={href}
+            className="flex flex-col gap-0.5 bg-gray-800/50 hover:bg-gray-800 border border-gray-700/50 hover:border-gray-600 rounded-xl p-3 transition-all group"
+          >
+            <span className="text-lg leading-none mb-1">{icon}</span>
+            <span className="text-white text-xs font-semibold group-hover:text-green-400 transition-colors leading-tight">
+              {label}
+            </span>
+            <span className="text-gray-600 text-[10px] leading-tight">{desc}</span>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // JSON-LD
 // ---------------------------------------------------------------------------
 
@@ -948,13 +1130,54 @@ export default async function MatchDetailPage({ params }: Params) {
     );
   }
 
-  // Fetch h2h in parallel, silently ignore failure
-  let h2h: HeadToHead | null = null;
-  try {
-    h2h = await getHeadToHead(id);
-  } catch {
-    // not critical
-  }
+  const isWC       = match.competition?.code === 'WC';
+  const hasGroup   = Boolean(match.group);
+
+  // Fetch h2h + (for WC group matches) all group matches — in parallel
+  const [h2hResult, wcUpcomingResult, wcRecentResult] = await Promise.allSettled([
+    getHeadToHead(id),
+    isWC && hasGroup ? getUpcomingMatches('WC') : Promise.resolve(null),
+    isWC && hasGroup ? getRecentMatches('WC')   : Promise.resolve(null),
+  ]);
+
+  const h2h: HeadToHead | null = h2hResult.status === 'fulfilled' ? h2hResult.value : null;
+
+  // All WC matches for this group (upcoming + recent), excluding current
+  const allWCGroupMatches: Match[] = (() => {
+    if (!isWC || !match.group) return [];
+    const upcoming: Match[] =
+      wcUpcomingResult.status === 'fulfilled' && wcUpcomingResult.value
+        ? wcUpcomingResult.value.matches.filter((m) => m.group === match.group)
+        : [];
+    const recent: Match[] =
+      wcRecentResult.status === 'fulfilled' && wcRecentResult.value
+        ? wcRecentResult.value.matches.filter((m) => m.group === match.group)
+        : [];
+    // Deduplicate by id
+    const seen = new Set<number>();
+    return [...upcoming, ...recent].filter((m) => {
+      if (seen.has(m.id)) return false;
+      seen.add(m.id);
+      return true;
+    });
+  })();
+
+  // All WC matches for related matches (any match involving either team)
+  const allWCMatches: Match[] = (() => {
+    if (!isWC) return [];
+    const upcoming: Match[] =
+      wcUpcomingResult.status === 'fulfilled' && wcUpcomingResult.value
+        ? wcUpcomingResult.value.matches : [];
+    const recent: Match[] =
+      wcRecentResult.status === 'fulfilled' && wcRecentResult.value
+        ? wcRecentResult.value.matches : [];
+    const seen = new Set<number>();
+    return [...upcoming, ...recent].filter((m) => {
+      if (seen.has(m.id)) return false;
+      seen.add(m.id);
+      return true;
+    });
+  })();
 
   const hasEvents =
     (match.goals?.length ?? 0) > 0 ||
@@ -968,20 +1191,8 @@ export default async function MatchDetailPage({ params }: Params) {
       <JsonLd match={match} />
 
       <div className="max-w-2xl mx-auto space-y-4 pb-10">
-        <Breadcrumb
-          items={[
-            { label: 'Home', href: '/' },
-            {
-              label: match.competition?.name ?? 'League',
-              href: match.competition?.code
-                ? `/competition/${match.competition.code}`
-                : '/standings',
-            },
-            {
-              label: `${match.homeTeam.shortName || match.homeTeam.name} vs ${match.awayTeam.shortName || match.awayTeam.name}`,
-            },
-          ]}
-        />
+        {/* Context-aware breadcrumb: Home > WC 2026 > Group A > Match */}
+        <Breadcrumb items={buildBreadcrumb(match)} />
 
         <ScoreHero match={match} />
 
@@ -1000,6 +1211,28 @@ export default async function MatchDetailPage({ params }: Params) {
         <LineupsSection />
 
         {h2h && <HeadToHeadSection h2h={h2h} match={match} />}
+
+        {/* Other matches in the same WC group */}
+        {isWC && hasGroup && (
+          <OtherGroupMatches
+            groupMatches={allWCGroupMatches}
+            currentId={match.id}
+          />
+        )}
+
+        {/* Related matches involving either team */}
+        {isWC && (
+          <RelatedMatches
+            homeTeamId={match.homeTeam.id}
+            awayTeamId={match.awayTeam.id}
+            competitionName={match.competition?.name ?? 'World Cup 2026'}
+            matches={allWCMatches}
+            currentId={match.id}
+          />
+        )}
+
+        {/* Contextual competition links */}
+        <CompetitionLinks match={match} />
       </div>
     </>
   );
