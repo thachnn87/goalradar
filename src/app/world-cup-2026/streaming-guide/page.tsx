@@ -68,25 +68,26 @@ type StreamPlatform = {
   devices: string;
   free: boolean;
   tag: string;
+  url: string;
 };
 
 const PLATFORMS: StreamPlatform[] = [
-  { name: 'Fubo TV',              region: '🇺🇸 USA',      price: 'From $79.99/mo',   devices: 'Smart TV, Mobile, Browser, Streaming Sticks', free: false, tag: 'fubo-stream' },
-  { name: 'Peacock Premium',      region: '🇺🇸 USA',      price: 'From $5.99/mo',    devices: 'Smart TV, Mobile, Browser, Apple TV, Chromecast', free: false, tag: 'peacock-stream' },
-  { name: 'Hulu + Live TV',       region: '🇺🇸 USA',      price: 'From $76.99/mo',   devices: 'Smart TV, Mobile, Browser, Streaming Sticks', free: false, tag: 'hulu-stream' },
-  { name: 'YouTube TV',           region: '🇺🇸 USA',      price: 'From $72.99/mo',   devices: 'Smart TV, Mobile, Browser, Chromecast, Roku', free: false, tag: 'ytv-stream' },
-  { name: 'BBC iPlayer',          region: '🇬🇧 UK',       price: 'Free',             devices: 'Smart TV, Mobile, Browser, Streaming Sticks', free: true, tag: 'bbc-stream' },
-  { name: 'ITVX',                 region: '🇬🇧 UK',       price: 'Free',             devices: 'Smart TV, Mobile, Browser, Streaming Sticks', free: true, tag: 'itvx-stream' },
-  { name: 'TSN Direct',           region: '🇨🇦 Canada',   price: 'From $19.99/mo',   devices: 'Smart TV, Mobile, Browser, Apple TV, Chromecast', free: false, tag: 'tsn-stream' },
-  { name: 'CTV',                  region: '🇨🇦 Canada',   price: 'Free',             devices: 'Smart TV, Mobile, Browser', free: true, tag: 'ctv-stream' },
-  { name: 'SBS On Demand',        region: '🇦🇺 Australia', price: 'Free',            devices: 'Smart TV, Mobile, Browser, Chromecast', free: true, tag: 'sbs-stream' },
-  { name: 'JioTV / Sports18',     region: '🇮🇳 India',      price: 'Free/Subscription', devices: 'Mobile, Smart TV, Browser',                          free: true,  tag: 'jio-stream'      },
-  { name: 'TrueID (True Sport)',  region: '🇹🇭 Thailand',   price: 'Subscription',      devices: 'Mobile, Smart TV, Browser',                          free: false, tag: 'trueid-stream'   },
-  { name: 'FPT Play',            region: '🇻🇳 Vietnam',    price: 'Free',              devices: 'Mobile, Smart TV, Browser',                          free: true,  tag: 'fptplay-stream'  },
-  { name: 'RCTI / SCTV',         region: '🇮🇩 Indonesia',  price: 'Free (OTA)',        devices: 'Smart TV, Antenna, Mobile app',                      free: true,  tag: 'rcti-stream'     },
-  { name: 'Mola TV',             region: '🇮🇩 Indonesia',  price: 'Subscription',      devices: 'Mobile, Smart TV, Browser',                          free: false, tag: 'mola-stream'     },
-  { name: 'CCTV-5',              region: '🇨🇳 China',      price: 'Free',              devices: 'Smart TV, Antenna, CCTV app',                        free: true,  tag: 'cctv-stream'     },
-  { name: 'Migu Video',          region: '🇨🇳 China',      price: 'Subscription',      devices: 'Mobile, Smart TV, Browser (China Mobile)',           free: false, tag: 'migu-stream'     },
+  { name: 'Fubo TV',              region: '🇺🇸 USA',       price: 'From $79.99/mo',    devices: 'Smart TV, Mobile, Browser, Streaming Sticks',        free: false, tag: 'fubo-stream',    url: 'https://www.fubo.tv' },
+  { name: 'Peacock Premium',      region: '🇺🇸 USA',       price: 'From $5.99/mo',     devices: 'Smart TV, Mobile, Browser, Apple TV, Chromecast',    free: false, tag: 'peacock-stream', url: 'https://www.peacocktv.com' },
+  { name: 'Hulu + Live TV',       region: '🇺🇸 USA',       price: 'From $76.99/mo',    devices: 'Smart TV, Mobile, Browser, Streaming Sticks',        free: false, tag: 'hulu-stream',    url: 'https://www.hulu.com/live-tv' },
+  { name: 'YouTube TV',           region: '🇺🇸 USA',       price: 'From $72.99/mo',    devices: 'Smart TV, Mobile, Browser, Chromecast, Roku',        free: false, tag: 'ytv-stream',     url: 'https://tv.youtube.com' },
+  { name: 'BBC iPlayer',          region: '🇬🇧 UK',        price: 'Free',              devices: 'Smart TV, Mobile, Browser, Streaming Sticks',        free: true,  tag: 'bbc-stream',     url: 'https://www.bbc.co.uk/iplayer' },
+  { name: 'ITVX',                 region: '🇬🇧 UK',        price: 'Free',              devices: 'Smart TV, Mobile, Browser, Streaming Sticks',        free: true,  tag: 'itvx-stream',    url: 'https://www.itv.com/watch' },
+  { name: 'TSN Direct',           region: '🇨🇦 Canada',    price: 'From $19.99/mo',    devices: 'Smart TV, Mobile, Browser, Apple TV, Chromecast',    free: false, tag: 'tsn-stream',     url: 'https://www.tsn.ca/tsndirect' },
+  { name: 'CTV',                  region: '🇨🇦 Canada',    price: 'Free',              devices: 'Smart TV, Mobile, Browser',                          free: true,  tag: 'ctv-stream',     url: 'https://www.ctv.ca' },
+  { name: 'SBS On Demand',        region: '🇦🇺 Australia', price: 'Free',              devices: 'Smart TV, Mobile, Browser, Chromecast',              free: true,  tag: 'sbs-stream',     url: 'https://www.sbs.com.au/ondemand' },
+  { name: 'JioTV / Sports18',     region: '🇮🇳 India',     price: 'Free/Subscription', devices: 'Mobile, Smart TV, Browser',                          free: true,  tag: 'jio-stream',     url: 'https://www.jio.com/jiotv' },
+  { name: 'TrueID (True Sport)',  region: '🇹🇭 Thailand',  price: 'Subscription',      devices: 'Mobile, Smart TV, Browser',                          free: false, tag: 'trueid-stream',  url: 'https://www.trueid.net' },
+  { name: 'FPT Play',             region: '🇻🇳 Vietnam',   price: 'Free',              devices: 'Mobile, Smart TV, Browser',                          free: true,  tag: 'fptplay-stream', url: 'https://fptplay.vn' },
+  { name: 'RCTI / SCTV',          region: '🇮🇩 Indonesia', price: 'Free (OTA)',         devices: 'Smart TV, Antenna, Mobile app',                      free: true,  tag: 'rcti-stream',    url: 'https://www.rctiplus.com' },
+  { name: 'Mola TV',              region: '🇮🇩 Indonesia', price: 'Subscription',      devices: 'Mobile, Smart TV, Browser',                          free: false, tag: 'mola-stream',    url: 'https://mola.tv' },
+  { name: 'CCTV-5',               region: '🇨🇳 China',     price: 'Free',              devices: 'Smart TV, Antenna, CCTV app',                        free: true,  tag: 'cctv-stream',    url: 'https://tv.cctv.com/cctv5' },
+  { name: 'Migu Video',           region: '🇨🇳 China',     price: 'Subscription',      devices: 'Mobile, Smart TV, Browser (China Mobile)',           free: false, tag: 'migu-stream',    url: 'https://www.miguvideo.com' },
 ];
 
 function SectionTitle({ id, children }: { id: string; children: React.ReactNode }) {
@@ -189,8 +190,7 @@ export default function StreamingGuidePage() {
               </div>
               <div className="text-right shrink-0">
                 <p className="text-white font-semibold text-sm">{p.price}</p>
-                {/* ── replace href="#" with affiliate link ── */}
-                <a href="#" target="_blank" rel="noopener noreferrer sponsored" data-affiliate-tag={p.tag}
+                <a href={p.url} target="_blank" rel="noopener noreferrer sponsored" data-affiliate-tag={p.tag}
                   className="text-yellow-500 hover:text-yellow-300 text-xs transition-colors">Watch →</a>
               </div>
             </div>

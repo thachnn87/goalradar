@@ -320,7 +320,7 @@ export default function TVSchedulePage() {
           <p className="text-white font-bold text-base mb-1">Don't miss a World Cup 2026 kick-off</p>
           <p className="text-gray-400 text-sm mb-4">Set up your streaming service before the tournament starts. Check availability in your region.</p>
           <div className="flex flex-wrap gap-3">
-            <a href="#" target="_blank" rel="noopener noreferrer sponsored" data-affiliate-tag="fubo-tvschedule"
+            <a href="https://www.fubo.tv" target="_blank" rel="noopener noreferrer sponsored" data-affiliate-tag="fubo-tvschedule"
               className="bg-yellow-500 hover:bg-yellow-400 text-black px-5 py-2.5 rounded-xl text-sm font-bold transition-colors">Fubo TV — Free Trial →</a>
             <Link href="/world-cup-2026/streaming-guide"
               className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors border border-gray-700">Streaming Guide →</Link>

@@ -208,7 +208,7 @@ export default function WC2026LiveStreamPage() {
                 </div>
               ))}
             </div>
-            <a href="#" rel="noopener noreferrer sponsored"
+            <a href="https://nordvpn.com" target="_blank" rel="noopener noreferrer sponsored"
               className="inline-block bg-yellow-500 hover:bg-yellow-400 text-black text-sm font-bold px-5 py-2.5 rounded-xl transition-colors">
               Best VPN for World Cup 2026 →
             </a>

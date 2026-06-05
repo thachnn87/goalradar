@@ -325,7 +325,7 @@ export default async function TVScheduleCountryPage({
             A VPN lets you watch your home broadcaster while travelling outside {country.name}.
             Also useful for expats who want {country.name} commentary and analysis.
           </p>
-          <a href="#" rel="noopener noreferrer sponsored" data-affiliate-tag={`vpn-tvsch-${slug}`}
+          <a href="https://nordvpn.com" target="_blank" rel="noopener noreferrer sponsored" data-affiliate-tag={`vpn-tvsch-${slug}`}
             className="inline-flex items-center gap-2 bg-blue-500 hover:bg-blue-400 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-colors">
             Get a VPN →
           </a>

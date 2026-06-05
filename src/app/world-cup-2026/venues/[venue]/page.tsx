@@ -223,7 +223,7 @@ export default async function VenuePage({
               className="bg-yellow-500 hover:bg-yellow-400 text-black px-4 py-2 rounded-xl text-sm font-bold transition-colors">
               FIFA Official Tickets →
             </a>
-            <a href="#" rel="noopener noreferrer sponsored" data-affiliate-tag={`hotel-venue-${slug}`}
+            <a href="https://www.booking.com/searchresults.html" target="_blank" rel="noopener noreferrer sponsored" data-affiliate-tag={`hotel-venue-${slug}`}
               className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-xl text-sm font-semibold border border-gray-700 transition-colors">
               Hotels Near Venue
             </a>
