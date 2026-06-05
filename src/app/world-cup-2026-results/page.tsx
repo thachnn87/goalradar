@@ -11,6 +11,8 @@ import { getRecentMatches, getWCLiveMatches } from '@/lib/api';
 import type { Match } from '@/lib/types';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
+import WCPageNav from '@/components/WCPageNav';
+import WCRelatedLinks from '@/components/WCRelatedLinks';
 import { matchPath } from '@/lib/url';
 
 export const revalidate = 60;
@@ -132,6 +134,7 @@ export default async function WC2026ResultsPage() {
           { label: 'Home', href: '/' },
           { label: 'World Cup 2026 Results' },
         ]} />
+        <div className="mt-3 mb-6"><WCPageNav /></div>
 
         {/* Hero */}
         <div className="mt-6 mb-8">
@@ -257,25 +260,16 @@ export default async function WC2026ResultsPage() {
 
         <AdSlot slotId="wc-results-bottom" variant="banner" />
 
-        {/* Internal links */}
-        <div className="border-t border-gray-800 pt-8">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">More World Cup 2026</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {[
-              { href: '/world-cup-2026',              label: '🏆 WC Hub' },
-              { href: '/world-cup-2026/results',      label: '📊 Full Results' },
-              { href: '/world-cup-2026/fixtures',     label: '📅 Fixtures' },
-              { href: '/world-cup-2026/groups',       label: '🗂️ Group Standings' },
-              { href: '/world-cup-2026/bracket',      label: '🔗 Bracket' },
-              { href: '/world-cup-2026/watch-live',   label: '📺 Watch Live' },
-            ].map(({ href, label }) => (
-              <Link key={href} href={href}
-                className="bg-gray-900 hover:bg-gray-800 border border-gray-800 rounded-xl p-3 text-sm text-gray-300 hover:text-white transition-colors text-center">
-                {label}
-              </Link>
-            ))}
-          </div>
-        </div>
+        <WCRelatedLinks links={[
+          { href: '/world-cup-2026/results',        icon: '🏁', label: 'Live Results (API)',    desc: 'Real-time score updates with match cards' },
+          { href: '/world-cup-2026-schedule',       icon: '📅', label: 'WC 2026 Schedule',      desc: 'All 104 matches with timezone converter' },
+          { href: '/world-cup-2026-standings',      icon: '📊', label: 'Group Standings',       desc: 'Points tables updated after every result' },
+          { href: '/world-cup-2026-groups',         icon: '🗂️', label: 'Group Stage',           desc: 'All 12 group draws and qualification rules' },
+          { href: '/world-cup-2026-bracket',        icon: '🔗', label: 'Knockout Bracket',      desc: 'Follow the path from R32 to the Final' },
+          { href: '/world-cup-2026-live-stream',    icon: '📡', label: 'Watch Live',            desc: 'Stream every match free or cheaply online' },
+          { href: '/world-cup-2026-tv-guide',       icon: '📺', label: 'TV Channel Guide',      desc: 'What channel is World Cup 2026 on near you?' },
+          { href: '/world-cup-2026/teams/argentina',icon: '👥', label: 'All 48 Teams',          desc: 'Squads, form and stats for every WC nation' },
+        ]} />
       </div>
     </>
   );

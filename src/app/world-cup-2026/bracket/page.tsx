@@ -5,6 +5,7 @@ import { getWCKnockoutMatches } from '@/lib/api';
 import { matchPath } from '@/lib/url';
 import AdSlot from '@/components/AdSlot';
 import WCPageNav from '@/components/WCPageNav';
+import WCRelatedLinks from '@/components/WCRelatedLinks';
 import type { Match } from '@/lib/types';
 import MatchCard from '@/components/MatchCard';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -528,13 +529,14 @@ export default async function WCBracketPage() {
         {/* Ad: page bottom */}
         <AdSlot slotId="bracket-bottom" variant="banner" />
 
-        {/* ── Internal navigation ─────────────────────────────────────── */}
-        <div className="border-t border-gray-800 pt-8 flex flex-wrap justify-center gap-4 text-sm">
-          <Link href="/world-cup-2026"        className="text-yellow-500 hover:text-yellow-300 transition-colors font-medium">🏆 Tournament Hub</Link>
-          <Link href="/world-cup-2026/group-a" className="text-gray-400 hover:text-white transition-colors">Group Standings</Link>
-          <Link href="/live"                   className="text-gray-400 hover:text-white transition-colors">Live Scores</Link>
-          <Link href="/schedule"               className="text-gray-400 hover:text-white transition-colors">All Fixtures</Link>
-        </div>
+        <WCRelatedLinks links={[
+          { href: '/world-cup-2026-bracket',    icon: '🔗', label: 'Bracket (Editorial)',  desc: 'Round narrative guide with key dates' },
+          { href: '/world-cup-2026-results',    icon: '🏁', label: 'WC 2026 Results',     desc: 'Live and full-time scores for every match' },
+          { href: '/world-cup-2026-standings',  icon: '📊', label: 'Group Standings',     desc: 'Live tables for all 12 groups' },
+          { href: '/world-cup-2026-schedule',   icon: '📅', label: 'Match Schedule',      desc: 'All 104 fixtures with kickoff times' },
+          { href: '/world-cup-2026-groups',     icon: '🗂️', label: 'Group Stage Guide',   desc: 'All 12 draws and qualification rules' },
+          { href: '/world-cup-2026-live-stream',icon: '📡', label: 'Watch Live',          desc: 'Stream every match free or cheaply online' },
+        ]} />
       </div>
     </>
   );

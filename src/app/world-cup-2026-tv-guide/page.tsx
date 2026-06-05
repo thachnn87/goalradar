@@ -9,6 +9,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
+import WCPageNav from '@/components/WCPageNav';
+import WCRelatedLinks from '@/components/WCRelatedLinks';
 
 export const revalidate = 86400;
 
@@ -148,6 +150,7 @@ export default function WC2026TVGuidePage() {
           { label: 'Home', href: '/' },
           { label: 'World Cup 2026 TV Guide' },
         ]} />
+        <div className="mt-3 mb-6"><WCPageNav /></div>
 
         {/* Hero */}
         <div className="mt-6 mb-8">
@@ -243,24 +246,14 @@ export default function WC2026TVGuidePage() {
 
         <AdSlot slotId="wc-tvguide-bottom" variant="banner" />
 
-        <div className="border-t border-gray-800 pt-8">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">More World Cup 2026</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {[
-              { href: '/world-cup-2026',                  label: '🏆 WC Hub' },
-              { href: '/world-cup-2026/tv-schedule',      label: '🗓️ TV Schedule' },
-              { href: '/world-cup-2026/watch-live',       label: '📺 Watch Live' },
-              { href: '/world-cup-2026/streaming-guide',  label: '🌐 Streaming Guide' },
-              { href: '/world-cup-2026/fixtures',         label: '📅 Fixtures' },
-              { href: '/world-cup-2026-live-stream',      label: '🔴 Live Stream Guide' },
-            ].map(({ href, label }) => (
-              <Link key={href} href={href}
-                className="bg-gray-900 hover:bg-gray-800 border border-gray-800 rounded-xl p-3 text-sm text-gray-300 hover:text-white transition-colors text-center">
-                {label}
-              </Link>
-            ))}
-          </div>
-        </div>
+        <WCRelatedLinks links={[
+          { href: '/world-cup-2026/tv-schedule',      icon: '🗓️', label: 'Full TV Schedule',      desc: 'Match-by-match broadcast times by country' },
+          { href: '/world-cup-2026-live-stream',      icon: '📡', label: 'Live Stream Guide',     desc: 'Stream every match free or legally online' },
+          { href: '/world-cup-2026/streaming-guide',  icon: '💻', label: 'Streaming Platforms',   desc: 'All 16 platforms compared — free and paid' },
+          { href: '/world-cup-2026/watch-live',       icon: '📺', label: 'Country Watch Guide',   desc: 'Deep-dive streaming guide by country' },
+          { href: '/world-cup-2026-schedule',         icon: '📅', label: 'Match Schedule',        desc: 'All 104 fixtures with kickoff times' },
+          { href: '/world-cup-2026-results',          icon: '🏁', label: 'Live Results',          desc: 'Real-time scores during every WC match' },
+        ]} />
       </div>
     </>
   );

@@ -8,6 +8,7 @@ import Breadcrumb from '@/components/Breadcrumb';
 import MatchCard from '@/components/MatchCard';
 import AdSlot from '@/components/AdSlot';
 import WCPageNav from '@/components/WCPageNav';
+import WCRelatedLinks from '@/components/WCRelatedLinks';
 
 export const revalidate = 60;
 
@@ -314,14 +315,14 @@ export default async function WCResultsPage() {
         {/* Ad: bottom of results */}
         <AdSlot slotId="results-bottom" variant="banner" />
 
-        {/* Footer internal links */}
-        <div className="border-t border-gray-800 pt-6 flex flex-wrap justify-center gap-4 text-sm text-gray-500">
-          <Link href="/world-cup-2026"           className="hover:text-white transition-colors">🏆 Tournament Hub</Link>
-          <Link href="/world-cup-2026/bracket"   className="hover:text-white transition-colors">🔗 Knockout Bracket</Link>
-          <Link href="/schedule?competition=WC"  className="hover:text-white transition-colors">📅 Upcoming Fixtures</Link>
-          <Link href="/world-cup-2026/group-a"   className="hover:text-white transition-colors">📊 Group Standings</Link>
-          <Link href="/live"                     className="hover:text-white transition-colors">🔴 Live Scores</Link>
-        </div>
+        <WCRelatedLinks links={[
+          { href: '/world-cup-2026-results',    icon: '🏁', label: 'Results (Editorial)',  desc: 'Live stats strip and deduped results feed' },
+          { href: '/world-cup-2026-schedule',   icon: '📅', label: 'WC 2026 Schedule',    desc: 'All 104 fixtures with kickoff times' },
+          { href: '/world-cup-2026-standings',  icon: '📊', label: 'Group Standings',     desc: 'Live points tables for all 12 groups' },
+          { href: '/world-cup-2026-bracket',    icon: '🔗', label: 'Knockout Bracket',    desc: 'Round of 32 path to the Final at MetLife' },
+          { href: '/world-cup-2026-live-stream',icon: '📡', label: 'Watch Live',          desc: 'Free streaming options for every country' },
+          { href: '/world-cup-2026-tv-guide',   icon: '📺', label: 'TV Channel Guide',    desc: 'What channel is World Cup 2026 on near you?' },
+        ]} />
       </div>
     </>
   );

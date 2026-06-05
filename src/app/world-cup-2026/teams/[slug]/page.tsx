@@ -14,6 +14,8 @@ import { getUpcomingMatches, getRecentMatches, getStandings } from '@/lib/api';
 import type { Match, StandingTable, StandingEntry } from '@/lib/types';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
+import WCPageNav from '@/components/WCPageNav';
+import WCRelatedLinks from '@/components/WCRelatedLinks';
 import { matchPath } from '@/lib/url';
 
 export const revalidate = 3600;
@@ -229,6 +231,7 @@ export default async function WCTeamPage({
           { label: 'World Cup 2026', href: '/world-cup-2026' },
           { label: team.displayName },
         ]} />
+        <div className="mt-3 mb-6"><WCPageNav /></div>
 
         {/* Hero */}
         <div className="mt-6 mb-8">
@@ -425,25 +428,14 @@ export default async function WCTeamPage({
 
         <AdSlot slotId={`team-${slug}-bottom`} variant="banner" />
 
-        {/* Internal links */}
-        <div className="border-t border-gray-800 pt-8">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">More World Cup 2026</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {[
-              { href: '/world-cup-2026',              label: '🏆 WC Hub' },
-              groupSlug ? { href: `/world-cup-2026/${groupSlug}`, label: `🗂️ Group ${team.group}` } : null,
-              { href: '/world-cup-2026/fixtures',     label: '📅 Fixtures' },
-              { href: '/world-cup-2026/results',      label: '📊 Results' },
-              { href: '/world-cup-2026/watch-live',   label: '📺 Watch Live' },
-              { href: '/world-cup-2026-schedule',     label: '🗓️ Full Schedule' },
-            ].filter((item): item is { href: string; label: string } => Boolean(item)).map(({ href, label }) => (
-              <Link key={href} href={href}
-                className="bg-gray-900 hover:bg-gray-800 border border-gray-800 rounded-xl p-3 text-sm text-gray-300 hover:text-white transition-colors text-center">
-                {label}
-              </Link>
-            ))}
-          </div>
-        </div>
+        <WCRelatedLinks links={[
+          ...(groupSlug ? [{ href: `/world-cup-2026/${groupSlug}`, icon: '🗂️', label: `Group ${team.group} Standings`, desc: `Table, fixtures and results for Group ${team.group}` }] : []),
+          { href: '/world-cup-2026-schedule',       icon: '📅', label: 'WC 2026 Schedule',    desc: 'All 104 fixtures with kickoff times and dates' },
+          { href: '/world-cup-2026-results',        icon: '🏁', label: 'WC 2026 Results',     desc: 'Live and full-time scores for every match' },
+          { href: '/world-cup-2026-standings',      icon: '📊', label: 'Group Standings',     desc: 'Points tables for all 12 groups' },
+          { href: '/world-cup-2026-live-stream',    icon: '📡', label: 'Watch Live',          desc: 'Free streaming options for every country' },
+          { href: '/world-cup-2026/teams/argentina',icon: '👥', label: 'All 48 Teams',        desc: 'Browse squads for all WC 2026 nations' },
+        ]} />
       </div>
     </>
   );

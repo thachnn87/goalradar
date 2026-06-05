@@ -6,6 +6,7 @@ import type { StandingTable } from '@/lib/types';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCGroupTable from '@/components/WCGroupTable';
 import WCPageNav from '@/components/WCPageNav';
+import WCRelatedLinks from '@/components/WCRelatedLinks';
 
 export const revalidate = 60;
 
@@ -178,14 +179,14 @@ export default async function WCGroupsPage() {
           </div>
         </section>
 
-        {/* Footer nav */}
-        <div className="border-t border-gray-800 pt-6 flex flex-wrap justify-center gap-4 text-sm text-gray-500">
-          <Link href="/world-cup-2026"          className="hover:text-white transition-colors">🏆 Hub</Link>
-          <Link href="/world-cup-2026/fixtures" className="hover:text-white transition-colors">📅 Fixtures</Link>
-          <Link href="/world-cup-2026/results"  className="hover:text-white transition-colors">🏁 Results</Link>
-          <Link href="/world-cup-2026/bracket"  className="hover:text-white transition-colors">🔗 Bracket</Link>
-          <Link href="/live"                    className="hover:text-white transition-colors">🔴 Live</Link>
-        </div>
+        <WCRelatedLinks links={[
+          { href: '/world-cup-2026-groups',     icon: '🗂️', label: 'Group Stage Guide',   desc: 'All 12 draws with tiebreaker rules explained' },
+          { href: '/world-cup-2026-standings',  icon: '📊', label: 'Live Standings',      desc: 'Points and goal difference per group' },
+          { href: '/world-cup-2026-results',    icon: '🏁', label: 'WC 2026 Results',     desc: 'Full-time and live scores for every match' },
+          { href: '/world-cup-2026-bracket',    icon: '🔗', label: 'Knockout Bracket',    desc: 'Round of 32 path to the Final at MetLife' },
+          { href: '/world-cup-2026-schedule',   icon: '📅', label: 'Match Schedule',      desc: 'All 104 fixtures with timezone converter' },
+          { href: '/world-cup-2026/teams/argentina', icon: '👥', label: 'All 48 Teams',   desc: 'Squads and stats for every WC nation' },
+        ]} />
       </div>
     </>
   );

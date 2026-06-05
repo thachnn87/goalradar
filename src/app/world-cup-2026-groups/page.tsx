@@ -11,6 +11,8 @@ import { getStandings } from '@/lib/api';
 import type { StandingTable } from '@/lib/types';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
+import WCPageNav from '@/components/WCPageNav';
+import WCRelatedLinks from '@/components/WCRelatedLinks';
 
 export const revalidate = 300;
 
@@ -101,6 +103,7 @@ export default async function WC2026GroupsPage() {
           { label: 'Home', href: '/' },
           { label: 'World Cup 2026 Groups' },
         ]} />
+        <div className="mt-3 mb-6"><WCPageNav /></div>
 
         {/* Hero */}
         <div className="mt-6 mb-8">
@@ -251,24 +254,14 @@ export default async function WC2026GroupsPage() {
 
         <AdSlot slotId="wc-groups-bottom" variant="banner" />
 
-        <div className="border-t border-gray-800 pt-8">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">More World Cup 2026</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {[
-              { href: '/world-cup-2026',                  label: '🏆 WC Hub' },
-              { href: '/world-cup-2026/groups',           label: '🗂️ Groups Overview' },
-              { href: '/world-cup-2026/fixtures',         label: '📅 Fixtures' },
-              { href: '/world-cup-2026/results',          label: '📊 Results' },
-              { href: '/world-cup-2026-standings',        label: '📈 Standings' },
-              { href: '/world-cup-2026/watch-live',       label: '📺 Watch Live' },
-            ].map(({ href, label }) => (
-              <Link key={href} href={href}
-                className="bg-gray-900 hover:bg-gray-800 border border-gray-800 rounded-xl p-3 text-sm text-gray-300 hover:text-white transition-colors text-center">
-                {label}
-              </Link>
-            ))}
-          </div>
-        </div>
+        <WCRelatedLinks links={[
+          { href: '/world-cup-2026/groups',         icon: '🗂️', label: 'Groups Overview',        desc: 'API-driven live standings for all 12 groups' },
+          { href: '/world-cup-2026-standings',      icon: '📊', label: 'Live Standings',          desc: 'Points, GD and qualification status per group' },
+          { href: '/world-cup-2026-results',        icon: '🏁', label: 'WC 2026 Results',         desc: 'All full-time scores and live match updates' },
+          { href: '/world-cup-2026-schedule',       icon: '📅', label: 'WC 2026 Schedule',        desc: 'All 104 matches with timezone converter' },
+          { href: '/world-cup-2026-bracket',        icon: '🔗', label: 'Knockout Bracket',        desc: 'Round of 32 through to the Final at MetLife' },
+          { href: '/world-cup-2026/teams/argentina',icon: '👥', label: 'All 48 Teams',            desc: 'Squads, group and form for every WC nation' },
+        ]} />
       </div>
     </>
   );

@@ -15,6 +15,8 @@ import Breadcrumb from '@/components/Breadcrumb';
 import WCBracket from '@/components/WCBracket';
 import WCGroupTable from '@/components/WCGroupTable';
 import WCCountdown from '@/components/WCCountdown';
+import WCPageNav from '@/components/WCPageNav';
+import WCRelatedLinks from '@/components/WCRelatedLinks';
 import AdSlot from '@/components/AdSlot';
 import NewsletterSignup from '@/components/NewsletterSignup';
 
@@ -313,6 +315,7 @@ export default async function WorldCup2026Page() {
         <Breadcrumb
           items={[{ label: 'Home', href: '/' }, { label: 'World Cup 2026' }]}
         />
+        <div className="mt-3 mb-6"><WCPageNav /></div>
 
         {/* ── Hero ──────────────────────────────────────────────────────── */}
         <div className="relative bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 border border-gray-800 rounded-2xl p-6 sm:p-8 overflow-hidden">
@@ -486,7 +489,7 @@ export default async function WorldCup2026Page() {
         <NewsletterSignup source="world-cup-hub" />
 
         {/* ── Footer ────────────────────────────────────────────────────── */}
-        <div className="flex justify-center gap-6 text-sm text-gray-600">
+        <div className="flex justify-center gap-6 text-sm text-gray-600 mb-4">
           <Link href="/competition/WC" className="hover:text-white transition-colors">
             Full competition page →
           </Link>
@@ -494,6 +497,17 @@ export default async function WorldCup2026Page() {
             All live scores →
           </Link>
         </div>
+        <WCRelatedLinks links={[
+          { href: '/world-cup-2026-schedule',       icon: '📅', label: 'WC 2026 Schedule',      desc: 'All 104 matches with timezone converter' },
+          { href: '/world-cup-2026-results',        icon: '🏁', label: 'WC 2026 Results',       desc: 'Live and full-time scores for every match' },
+          { href: '/world-cup-2026-standings',      icon: '📊', label: 'Group Standings',       desc: 'Live tables for all 12 groups A–L' },
+          { href: '/world-cup-2026-groups',         icon: '🗂️', label: 'Group Stage Guide',     desc: 'All 12 draws, fixtures and tiebreaker rules' },
+          { href: '/world-cup-2026-bracket',        icon: '🔗', label: 'Knockout Bracket',      desc: 'Round of 32 path to the Final at MetLife' },
+          { href: '/world-cup-2026-live-stream',    icon: '📡', label: 'Live Stream Guide',     desc: 'Free streaming options for every country' },
+          { href: '/world-cup-2026-tv-guide',       icon: '📺', label: 'TV Channel Guide',      desc: 'What channel is World Cup 2026 on near you?' },
+          { href: '/world-cup-2026/teams/argentina',icon: '👥', label: 'All 48 Teams',          desc: 'Squads, form and group info for every nation' },
+          { href: '/world-cup-2026/venues/metlife-stadium', icon: '🏟️', label: 'WC Venues', desc: '16 stadiums across USA, Canada and Mexico' },
+        ]} />
       </div>
     </>
   );
