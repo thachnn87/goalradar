@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 
-import { getMatchDetail, getHeadToHead, getUpcomingMatches, getRecentMatches, NotFoundError } from '@/lib/api';
+import { getMatchDetail, getHeadToHead, getUpcomingMatches, getRecentMatches, getStandings, NotFoundError } from '@/lib/api';
+import WCGroupTable from '@/components/WCGroupTable';
 import Breadcrumb from '@/components/Breadcrumb';
 import MatchCard from '@/components/MatchCard';
 import type { BreadcrumbItem } from '@/components/Breadcrumb';
@@ -1038,6 +1039,151 @@ function CompetitionLinks({ match }: { match: MatchDetail }) {
 }
 
 // ---------------------------------------------------------------------------
+// Group standings preview (WC only)
+// ---------------------------------------------------------------------------
+
+function GroupStandingsPreview({
+  table,
+  apiGroup,
+  groupSlug,
+  groupLabel,
+}: {
+  table: import('@/lib/types').StandingEntry[];
+  apiGroup: string;
+  groupSlug: string;
+  groupLabel: string;
+}) {
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
+          {groupLabel} Standings
+        </h2>
+        <Link
+          href={`/world-cup-2026/${groupSlug}`}
+          className="text-xs text-yellow-500 hover:text-yellow-300 transition-colors font-medium"
+        >
+          Full group →
+        </Link>
+      </div>
+      <WCGroupTable
+        group={apiGroup}
+        table={table}
+        href={`/world-cup-2026/${groupSlug}`}
+      />
+      <p className="text-xs text-gray-700 mt-2 flex items-center gap-1.5">
+        <span className="inline-block w-2 h-2 rounded-sm bg-green-500 shrink-0" />
+        Top 2 advance to knockout stage
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// WC Navigation box
+// ---------------------------------------------------------------------------
+
+function WCNavBox({
+  groupSlug,
+  groupLabel,
+}: {
+  groupSlug: string | null;
+  groupLabel: string | null;
+}) {
+  const navLinks = [
+    { href: '/schedule?competition=WC',   icon: '📅', label: 'WC Fixtures', desc: 'Upcoming matches'         },
+    { href: '/world-cup-2026/results',    icon: '🏁', label: 'Results',     desc: 'All scores & reports'     },
+    { href: '/world-cup-2026/bracket',    icon: '🔗', label: 'Bracket',     desc: 'Knockout tournament tree'  },
+    ...(groupSlug && groupLabel
+      ? [{ href: `/world-cup-2026/${groupSlug}`, icon: '📊', label: groupLabel, desc: 'Group standings & fixtures' }]
+      : [{ href: '/world-cup-2026',              icon: '📊', label: 'Groups',    desc: 'All group standings'        }]
+    ),
+    { href: '/world-cup-2026',            icon: '🏆', label: 'WC Hub',      desc: 'Tournament overview'       },
+    { href: '/live',                      icon: '🔴', label: 'Live Scores', desc: 'Matches in play'           },
+  ];
+
+  return (
+    <div className="bg-gradient-to-br from-yellow-950/30 to-gray-900 border border-yellow-800/30 rounded-2xl p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-lg">🏆</span>
+        <h2 className="text-xs font-semibold text-yellow-400/80 uppercase tracking-widest">
+          FIFA World Cup 2026
+        </h2>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {navLinks.map(({ href, icon, label, desc }) => (
+          <Link
+            key={href + label}
+            href={href}
+            className="flex flex-col gap-0.5 bg-gray-800/60 hover:bg-gray-800 border border-gray-700/40 hover:border-yellow-700/40 rounded-xl p-3 transition-all group"
+          >
+            <span className="text-base leading-none mb-1">{icon}</span>
+            <span className="text-white text-xs font-semibold group-hover:text-yellow-400 transition-colors leading-tight">
+              {label}
+            </span>
+            <span className="text-gray-600 text-[10px] leading-tight">{desc}</span>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Next / Previous match navigation
+// ---------------------------------------------------------------------------
+
+function NextPrevNav({
+  allGroupMatches,
+  currentId,
+}: {
+  allGroupMatches: Match[];
+  currentId: number;
+}) {
+  const sorted = [...allGroupMatches].sort(
+    (a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()
+  );
+  const idx  = sorted.findIndex((m) => m.id === currentId);
+  const prev = idx > 0               ? sorted[idx - 1] : null;
+  const next = idx < sorted.length-1 ? sorted[idx + 1] : null;
+
+  if (!prev && !next) return null;
+
+  function MatchPill({ m, direction }: { m: Match; direction: 'prev' | 'next' }) {
+    const hn = m.homeTeam?.shortName || m.homeTeam?.name || 'TBD';
+    const an = m.awayTeam?.shortName || m.awayTeam?.name || 'TBD';
+    const date = new Date(m.utcDate).toLocaleDateString('en-GB', {
+      day: 'numeric', month: 'short', timeZone: 'UTC',
+    });
+    const showScore = m.status === 'FINISHED';
+
+    return (
+      <Link
+        href={matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name)}
+        className="flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-gray-600 rounded-xl p-3 transition-all flex-1 min-w-0"
+      >
+        <span className="text-gray-600 text-[10px] uppercase tracking-wider">
+          {direction === 'prev' ? '← Previous' : 'Next →'}
+        </span>
+        <span className="text-gray-300 text-xs truncate font-medium">{hn} vs {an}</span>
+        <span className="text-gray-500 text-[10px]">
+          {showScore
+            ? `${m.score.fullTime.home ?? '–'} – ${m.score.fullTime.away ?? '–'} · FT`
+            : date}
+        </span>
+      </Link>
+    );
+  }
+
+  return (
+    <div className="flex gap-3">
+      {prev ? <MatchPill m={prev} direction="prev" /> : <div className="flex-1" />}
+      {next ? <MatchPill m={next} direction="next" /> : <div className="flex-1" />}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // JSON-LD
 // ---------------------------------------------------------------------------
 
@@ -1166,12 +1312,14 @@ export default async function MatchDetailPage({ params }: Params) {
   const isWC       = match.competition?.code === 'WC';
   const hasGroup   = Boolean(match.group);
 
-  // Fetch h2h + (for WC group matches) all group matches — in parallel
-  const [h2hResult, wcUpcomingResult, wcRecentResult] = await Promise.allSettled([
-    getHeadToHead(numericId),
-    isWC && hasGroup ? getUpcomingMatches('WC') : Promise.resolve(null),
-    isWC && hasGroup ? getRecentMatches('WC')   : Promise.resolve(null),
-  ]);
+  // Fetch h2h + (for WC group matches) upcoming, recent and standings — in parallel
+  const [h2hResult, wcUpcomingResult, wcRecentResult, wcStandingsResult] =
+    await Promise.allSettled([
+      getHeadToHead(numericId),
+      isWC && hasGroup ? getUpcomingMatches('WC') : Promise.resolve(null),
+      isWC && hasGroup ? getRecentMatches('WC')   : Promise.resolve(null),
+      isWC && hasGroup ? getStandings('WC')        : Promise.resolve(null),
+    ]);
 
   const h2h: HeadToHead | null = h2hResult.status === 'fulfilled' ? h2hResult.value : null;
 
@@ -1212,6 +1360,20 @@ export default async function MatchDetailPage({ params }: Params) {
     });
   })();
 
+  // WC group standings for this match's group
+  const wcGroupTable: import('@/lib/types').StandingEntry[] | null = (() => {
+    if (!isWC || !match.group) return null;
+    if (wcStandingsResult.status !== 'fulfilled' || !wcStandingsResult.value) return null;
+    const table = wcStandingsResult.value.standings.find(
+      (s) => s.type === 'TOTAL' && s.group === match.group
+    );
+    return table?.table ?? null;
+  })();
+
+  // Group slug/label for nav links
+  const matchGroupSlug  = match.group ? match.group.toLowerCase().replace('_', '-') : null;
+  const matchGroupLabel = match.group ? match.group.replace('GROUP_', 'Group ') : null;
+
   const hasEvents =
     (match.goals?.length ?? 0) > 0 ||
     (match.bookings?.length ?? 0) > 0 ||
@@ -1224,7 +1386,7 @@ export default async function MatchDetailPage({ params }: Params) {
       <JsonLd match={match} />
 
       <div className="max-w-2xl mx-auto space-y-4 pb-10">
-        {/* Context-aware breadcrumb: Home > WC 2026 > Group A > Match */}
+        {/* Breadcrumb: Home > WC 2026 > Group A > Match */}
         <Breadcrumb items={buildBreadcrumb(match)} />
 
         <ScoreHero match={match} />
@@ -1245,6 +1407,16 @@ export default async function MatchDetailPage({ params }: Params) {
 
         {h2h && <HeadToHeadSection h2h={h2h} match={match} />}
 
+        {/* Group standings preview (WC group stage only) */}
+        {isWC && hasGroup && wcGroupTable && matchGroupSlug && matchGroupLabel && (
+          <GroupStandingsPreview
+            table={wcGroupTable}
+            apiGroup={match.group!}
+            groupSlug={matchGroupSlug}
+            groupLabel={matchGroupLabel}
+          />
+        )}
+
         {/* Other matches in the same WC group */}
         {isWC && hasGroup && (
           <OtherGroupMatches
@@ -1253,7 +1425,7 @@ export default async function MatchDetailPage({ params }: Params) {
           />
         )}
 
-        {/* Related matches involving either team */}
+        {/* Related WC matches involving either team */}
         {isWC && (
           <RelatedMatches
             homeTeamId={match.homeTeam.id}
@@ -1264,8 +1436,19 @@ export default async function MatchDetailPage({ params }: Params) {
           />
         )}
 
-        {/* Contextual competition links */}
-        <CompetitionLinks match={match} />
+        {/* Next / Previous group match navigation */}
+        {isWC && hasGroup && (
+          <NextPrevNav
+            allGroupMatches={allWCGroupMatches}
+            currentId={match.id}
+          />
+        )}
+
+        {/* WC navigation box (replaces generic CompetitionLinks for WC matches) */}
+        {isWC
+          ? <WCNavBox groupSlug={matchGroupSlug} groupLabel={matchGroupLabel} />
+          : <CompetitionLinks match={match} />
+        }
       </div>
     </>
   );
