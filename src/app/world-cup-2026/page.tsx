@@ -16,6 +16,7 @@ import WCBracket from '@/components/WCBracket';
 import WCGroupTable from '@/components/WCGroupTable';
 import WCCountdown from '@/components/WCCountdown';
 import AdSlot from '@/components/AdSlot';
+import NewsletterSignup from '@/components/NewsletterSignup';
 
 export const revalidate = 30;
 
@@ -480,6 +481,9 @@ export default async function WorldCup2026Page() {
             />
           )}
         </section>
+
+        {/* ── Newsletter ────────────────────────────────────────────────── */}
+        <NewsletterSignup source="world-cup-hub" />
 
         {/* ── Footer ────────────────────────────────────────────────────── */}
         <div className="flex justify-center gap-6 text-sm text-gray-600">

@@ -10,6 +10,7 @@ import type { BreadcrumbItem } from '@/components/Breadcrumb';
 import { matchPath, extractMatchId } from '@/lib/url';
 import AdSlot from '@/components/AdSlot';
 import AffiliateBlock from '@/components/AffiliateBlock';
+import NewsletterSignup from '@/components/NewsletterSignup';
 import type {
   Goal,
   Booking,
@@ -1468,6 +1469,17 @@ export default async function MatchDetailPage({ params }: Params) {
           ? <WCNavBox groupSlug={matchGroupSlug} groupLabel={matchGroupLabel} />
           : <CompetitionLinks match={match} />
         }
+
+        {/* Newsletter — contextual copy for WC vs non-WC matches */}
+        <NewsletterSignup
+          source="match-page"
+          variant="inline"
+          heading={
+            isWC
+              ? 'Get World Cup 2026 alerts'
+              : `Get ${match.competition?.name ?? 'football'} updates`
+          }
+        />
       </div>
     </>
   );

@@ -7,6 +7,7 @@ import { matchPath } from '@/lib/url';
 import Breadcrumb from '@/components/Breadcrumb';
 import MatchCard from '@/components/MatchCard';
 import AffiliateBlock from '@/components/AffiliateBlock';
+import NewsletterSignup from '@/components/NewsletterSignup';
 
 // Refresh every 60 s so live fixtures stay accurate
 export const revalidate = 60;
@@ -503,6 +504,13 @@ export default async function WatchLivePage() {
           tag="watch-live-vpn-cta"
           variant="blue"
           className="mb-8"
+        />
+
+        {/* ── Newsletter ───────────────────────────────────────────────────── */}
+        <NewsletterSignup
+          source="watch-live"
+          heading="Get match alerts in your inbox"
+          description="Never miss a kick-off. Get World Cup 2026 fixture reminders, live score roundups and results — free."
         />
 
         {/* ── FAQ ──────────────────────────────────────────────────────────── */}
