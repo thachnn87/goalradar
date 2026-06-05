@@ -351,7 +351,7 @@ export default async function WorldCup2026Page() {
           <div className="flex items-center gap-1 overflow-x-auto scrollbar-none pt-3 sm:pt-0">
             {[
               { href: '#fixtures',  icon: '📅', label: 'Fixtures'  },
-              { href: '#results',   icon: '🏁', label: 'Results'   },
+              { href: '/world-cup-2026/results', icon: '🏁', label: 'Results', external: true },
               { href: '#groups',    icon: '📊', label: 'Groups'    },
               { href: '/world-cup-2026/bracket', icon: '🔗', label: 'Bracket', external: true },
               { href: '/world-cup-2026/group-a', icon: '🗂',  label: 'Group A', external: true },

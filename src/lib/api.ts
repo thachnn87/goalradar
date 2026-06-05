@@ -199,3 +199,10 @@ export async function getWCKnockoutMatches(): Promise<{
   // football-data v4). The WCBracket component filters to knockout stages in JS.
   return fetchAPI('/competitions/WC/matches', 60);
 }
+
+export async function getWCResults(): Promise<{
+  matches: Match[];
+}> {
+  // All finished WC matches — used by the dedicated results page.
+  return fetchAPI('/competitions/WC/matches?status=FINISHED', 60);
+}
