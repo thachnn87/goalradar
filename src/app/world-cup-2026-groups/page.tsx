@@ -14,7 +14,7 @@ import Breadcrumb from '@/components/Breadcrumb';
 import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
 
-export const revalidate = 300;
+export const revalidate = 3600; // align with STANDINGS TTL (1 hour)
 
 const BASE_URL = 'https://goalradar.org';
 const CANONICAL = `${BASE_URL}/world-cup-2026-groups`;

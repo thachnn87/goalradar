@@ -3,12 +3,13 @@ import type { Metadata } from 'next';
 
 import { getStandings } from '@/lib/api';
 import type { StandingTable } from '@/lib/types';
+import { getStaticWCGroupTables } from '@/lib/wc-static-groups';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCGroupTable from '@/components/WCGroupTable';
 import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
 
-export const revalidate = 60;
+export const revalidate = 3600; // align with STANDINGS TTL (1 hour)
 
 const BASE_URL = 'https://goalradar.org';
 const PAGE_URL = `${BASE_URL}/world-cup-2026/groups`;
@@ -73,10 +74,15 @@ function JsonLd({ groupTables }: { groupTables: StandingTable[] }) {
 
 export default async function WCGroupsPage() {
   let groupTables: StandingTable[] = [];
+  let apiError = false;
   try {
     const data = await getStandings('WC');
     groupTables = data.standings.filter(s => s.type === 'TOTAL');
-  } catch { /* graceful degradation */ }
+  } catch {
+    apiError = true;
+    // Serve static group structure so the page is never empty.
+    groupTables = getStaticWCGroupTables();
+  }
 
   const matchesPlayed = groupTables.some(t => t.table.some(e => e.playedGames > 0));
 
@@ -118,7 +124,12 @@ export default async function WCGroupsPage() {
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-sm bg-yellow-500 shrink-0" /> Possible best third-place
           </span>
-          {!matchesPlayed && (
+          {apiError && (
+            <span className="text-orange-500 ml-auto">
+              Live standings temporarily unavailable — showing pre-tournament groups
+            </span>
+          )}
+          {!apiError && !matchesPlayed && (
             <span className="text-yellow-600 ml-auto">
               Tournament begins 11 June 2026 — standings update once matches are played
             </span>

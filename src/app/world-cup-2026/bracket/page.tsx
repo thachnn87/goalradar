@@ -11,7 +11,7 @@ import MatchCard from '@/components/MatchCard';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCBracket from '@/components/WCBracket';
 
-export const revalidate = 60;
+export const revalidate = 21600; // align with WC TTL (6 hours) — bracket changes only when knockout results land
 
 const BASE_URL = 'https://goalradar.org';
 const PAGE_URL = `${BASE_URL}/world-cup-2026/bracket`;

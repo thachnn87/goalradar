@@ -13,17 +13,35 @@ export class NotFoundError extends Error {
 }
 
 export class ApiUnavailableError extends Error {
-  constructor() { super('Data temporarily unavailable'); this.name = 'ApiUnavailableError'; }
+  constructor(public readonly reason: 'http' | 'timeout' | 'rate_limit' | 'unknown' = 'unknown') {
+    super('Data temporarily unavailable');
+    this.name = 'ApiUnavailableError';
+  }
 }
 
 // ---------------------------------------------------------------------------
-// HTTP layer  (retry + timeout + Next.js ISR)
+// HTTP layer  (retry + timeout + 429 back-off + Next.js ISR)
 // ---------------------------------------------------------------------------
 
-async function fetchFromAPI<T>(endpoint: string, revalidate: number): Promise<T> {
-  const retries = 2;
+/** Parse the `Retry-After` response header.
+ *  Returns seconds to wait, capped at 60 s so we never block a response
+ *  for more than a minute.  Returns 0 if the header is absent or invalid. */
+function parseRetryAfter(headers: Headers): number {
+  const raw = headers.get('retry-after');
+  if (!raw) return 0;
+  // Numeric form: "Retry-After: 30"
+  const seconds = parseInt(raw, 10);
+  if (!isNaN(seconds)) return Math.min(seconds, 60);
+  // HTTP-date form: "Retry-After: Wed, 21 Oct 2015 07:28:00 GMT"
+  const date = Date.parse(raw);
+  if (!isNaN(date)) return Math.min(Math.ceil((date - Date.now()) / 1000), 60);
+  return 0;
+}
 
-  for (let attempt = 1; attempt <= retries; attempt++) {
+async function fetchFromAPI<T>(endpoint: string, revalidate: number): Promise<T> {
+  const MAX_RETRIES = 3;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     const controller = new AbortController();
     const timeoutId  = setTimeout(() => controller.abort(), 10_000);
 
@@ -36,30 +54,65 @@ async function fetchFromAPI<T>(endpoint: string, revalidate: number): Promise<T>
 
       clearTimeout(timeoutId);
 
-      if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        console.error(
-          `[Football API] HTTP ${res.status} on ${endpoint} (attempt ${attempt}/${retries}):`,
-          body.slice(0, 200)
-        );
-        if (res.status === 404) throw new NotFoundError();
-        throw new ApiUnavailableError();
+      if (res.ok) return res.json() as Promise<T>;
+
+      // ── Error responses ────────────────────────────────────────────────
+      const body = await res.text().catch(() => '');
+
+      if (res.status === 404) {
+        console.warn(`[API] 404 ${endpoint}`);
+        throw new NotFoundError();
       }
 
-      return res.json() as Promise<T>;
+      if (res.status === 429) {
+        // Rate-limited. Back off according to Retry-After before retrying.
+        const backoff = (parseRetryAfter(res.headers) || (attempt * 5)) * 1_000;
+        console.warn(
+          `[API] 429 RATE_LIMIT ${endpoint} | attempt ${attempt}/${MAX_RETRIES} | backoff ${backoff}ms | ${body.slice(0, 120)}`,
+        );
+        if (attempt < MAX_RETRIES) {
+          await new Promise((r) => setTimeout(r, backoff));
+          continue;
+        }
+        throw new ApiUnavailableError('rate_limit');
+      }
+
+      if (res.status >= 500) {
+        console.error(
+          `[API] ${res.status} SERVER_ERROR ${endpoint} (attempt ${attempt}/${MAX_RETRIES}): ${body.slice(0, 200)}`,
+        );
+        if (attempt < MAX_RETRIES) {
+          await new Promise((r) => setTimeout(r, attempt * 1_000));
+          continue;
+        }
+        throw new ApiUnavailableError('http');
+      }
+
+      // 4xx other than 404/429
+      console.error(`[API] ${res.status} ${endpoint}: ${body.slice(0, 200)}`);
+      throw new ApiUnavailableError('http');
 
     } catch (err) {
       clearTimeout(timeoutId);
+
+      // Re-throw typed errors immediately — no further retries.
       if (err instanceof NotFoundError) throw err;
+      if (err instanceof ApiUnavailableError) {
+        // Only re-throw on final attempt or non-retryable reasons.
+        if (attempt >= MAX_RETRIES || err.reason === 'rate_limit') throw err;
+        await new Promise((r) => setTimeout(r, attempt * 1_000));
+        continue;
+      }
 
       const isTimeout = err instanceof DOMException && err.name === 'AbortError';
       console.error(
-        `[Football API] Attempt ${attempt}/${retries} failed on ${endpoint}:`,
-        isTimeout ? 'timeout (10 s)' : (err instanceof Error ? err.message : String(err))
+        `[API] ${isTimeout ? 'TIMEOUT' : 'FETCH_ERROR'} ${endpoint} (attempt ${attempt}/${MAX_RETRIES}): ${isTimeout ? '10s exceeded' : (err instanceof Error ? err.message : String(err))}`,
       );
-
-      if (attempt < retries) { await new Promise((r) => setTimeout(r, 1_000)); continue; }
-      throw new ApiUnavailableError();
+      if (attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, attempt * 1_000));
+        continue;
+      }
+      throw new ApiUnavailableError(isTimeout ? 'timeout' : 'unknown');
     }
   }
 
@@ -70,26 +123,22 @@ async function fetchFromAPI<T>(endpoint: string, revalidate: number): Promise<T>
 // Cache routing helpers
 //
 // Three-tier caching strategy:
-//   L1 (in-memory, cache.ts)  — sub-ms, per-process.
-//   L2 (Vercel KV, kv-cache.ts) — ~10 ms Redis, cross-instance SWR.
-//   L3 (Next.js fetch cache)  — CDN / ISR, via `next: { revalidate }`.
+//   L1 (in-memory, cache.ts)   — sub-ms, per-process, stale-on-error fallback.
+//   L2 (Vercel KV, kv-cache.ts) — ~10 ms Redis, cross-instance SWR,
+//                                  disaster-recovery key (7-day TTL).
+//   L3 (Next.js fetch cache)   — CDN / ISR, via `next: { revalidate }`.
 //
 // fetchWithKV  — L1 → L2 (KV/SWR) → L3/network
-//   Used for: fixtures, standings, match details, head-to-head.
+//   Used for: fixtures, standings, match details, WC structural data.
 //
 // fetchDirect  — L1 → L3/network (no KV — data too volatile for KV overhead)
 //   Used for: live matches, today's matches.
 // ---------------------------------------------------------------------------
 
-/**
- * L1 in-memory → L2 KV SWR → L3 network.
- * The in-memory layer deduplicates concurrent requests and avoids the ~10 ms
- * KV round-trip on repeated hot reads within the same process.
- */
 function fetchWithKV<T>(
   endpoint: string,
-  memTtl:  number,
-  swr:     { fresh: number; stale: number },
+  memTtl:   number,
+  swr:      { fresh: number; stale: number },
 ): Promise<T> {
   return withCache<T>(
     endpoint,
@@ -97,23 +146,16 @@ function fetchWithKV<T>(
     () => withKVCache<T>(
       endpoint,
       swr,
-      () => fetchFromAPI<T>(endpoint, swr.fresh)
-    )
+      () => fetchFromAPI<T>(endpoint, swr.fresh),
+    ),
   );
 }
 
-/**
- * L1 in-memory → L3 network.  No KV — used for live/real-time data where
- * KV latency and staleness would be counterproductive.
- */
-function fetchDirect<T>(
-  endpoint: string,
-  memTtl:  number,
-): Promise<T> {
+function fetchDirect<T>(endpoint: string, memTtl: number): Promise<T> {
   return withCache<T>(
     endpoint,
     memTtl,
-    () => fetchFromAPI<T>(endpoint, memTtl)
+    () => fetchFromAPI<T>(endpoint, memTtl),
   );
 }
 
@@ -121,7 +163,7 @@ function fetchDirect<T>(
 // Public API functions
 // ---------------------------------------------------------------------------
 
-// ── NOT cached in KV (too volatile) ─────────────────────────────────────────
+// ── NOT cached in KV (too volatile for KV overhead) ─────────────────────────
 
 export function getTodayMatches(): Promise<{ matches: Match[] }> {
   const today = new Date().toISOString().split('T')[0];
@@ -136,27 +178,27 @@ export function getWCLiveMatches(): Promise<{ matches: Match[] }> {
   return fetchDirect('/competitions/WC/matches?status=IN_PLAY,PAUSED', TTL.LIVE);
 }
 
-// ── KV-cached: Fixtures ──────────────────────────────────────────────────────
+// ── KV-cached: Fixtures (15 min) ─────────────────────────────────────────────
 
 export function getUpcomingMatches(
-  competition: string
+  competition: string,
 ): Promise<{ matches: Match[]; resultSet: { count: number } }> {
   return fetchWithKV(
     `/competitions/${competition}/matches?status=SCHEDULED,TIMED`,
     TTL.FIXTURES,
-    SWR.FIXTURES
+    SWR.FIXTURES,
   );
 }
 
 export function getRecentMatches(
-  competition: string
+  competition: string,
 ): Promise<{ matches: Match[] }> {
   const today = new Date().toISOString().split('T')[0];
   const from  = new Date(Date.now() - 30 * 86_400_000).toISOString().split('T')[0];
   return fetchWithKV(
     `/competitions/${competition}/matches?dateFrom=${from}&dateTo=${today}`,
     TTL.FIXTURES,
-    SWR.FIXTURES
+    SWR.FIXTURES,
   );
 }
 
@@ -164,23 +206,29 @@ export function getTeamMatches(id: string): Promise<{ matches: Match[] }> {
   return fetchWithKV(
     `/teams/${id}/matches?status=FINISHED&limit=10`,
     TTL.FIXTURES,
-    SWR.FIXTURES
+    SWR.FIXTURES,
   );
-}
-
-export function getWCKnockoutMatches(): Promise<{ matches: Match[] }> {
-  return fetchWithKV('/competitions/WC/matches', TTL.MATCH, SWR.MATCH);
 }
 
 export function getWCResults(): Promise<{ matches: Match[] }> {
+  // Finished WC matches — changes 2-3 times a day during group stage.
+  // 15-min cache is sufficient and avoids hammering the API.
   return fetchWithKV(
     '/competitions/WC/matches?status=FINISHED',
-    TTL.MATCH,
-    SWR.MATCH
+    TTL.FIXTURES,
+    SWR.FIXTURES,
   );
 }
 
-// ── KV-cached: Standings ─────────────────────────────────────────────────────
+// ── KV-cached: WC structural data (6 hours) ──────────────────────────────────
+
+export function getWCKnockoutMatches(): Promise<{ matches: Match[] }> {
+  // Returns all 104 WC matches.  Knockout results change at most a few times
+  // per day — 6-hour cache eliminates ~99 % of these expensive API calls.
+  return fetchWithKV('/competitions/WC/matches', TTL.WC, SWR.WC);
+}
+
+// ── KV-cached: Standings (1 hour) ────────────────────────────────────────────
 
 export function getStandings(competition: string): Promise<{
   standings:   StandingTable[];
@@ -189,7 +237,7 @@ export function getStandings(competition: string): Promise<{
   return fetchWithKV(
     `/competitions/${competition}/standings`,
     TTL.STANDINGS,
-    SWR.STANDINGS
+    SWR.STANDINGS,
   );
 }
 
@@ -197,7 +245,7 @@ export function getTeam(id: string): Promise<TeamDetail> {
   return fetchWithKV(`/teams/${id}`, TTL.STANDINGS, SWR.STANDINGS);
 }
 
-// ── KV-cached: Match details ──────────────────────────────────────────────────
+// ── KV-cached: Match details (1 min) ─────────────────────────────────────────
 
 export function getMatchDetail(id: string): Promise<MatchDetail> {
   return fetchWithKV(`/matches/${id}`, TTL.MATCH, SWR.MATCH);

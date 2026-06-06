@@ -10,7 +10,7 @@ import AdSlot from '@/components/AdSlot';
 import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
 
-export const revalidate = 60;
+export const revalidate = 900; // align with FIXTURES TTL (15 min)
 
 const BASE_URL = 'https://goalradar.org';
 const PAGE_URL = `${BASE_URL}/world-cup-2026/results`;

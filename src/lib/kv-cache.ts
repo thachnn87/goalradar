@@ -7,14 +7,17 @@
  *                               shared across all instances in a deployment.
  *
  * Stale-while-revalidate (SWR) behaviour:
- *   ┌─────────────────────────────────────────────────────────────┐
- *   │  0 ──── freshTtl ──── staleTtl ──── (KV auto-expires)      │
- *   │  [   fresh   ]  [ stale + bg-revalidate ]  [ miss ]        │
- *   └─────────────────────────────────────────────────────────────┘
- *   - FRESH : return stored data immediately, no revalidation.
- *   - STALE : return stored data immediately AND trigger a background
- *             fetch to repopulate KV for the next request.
- *   - MISS  : await fresh fetch, store, return.
+ *   ┌────────────────────────────────────────────────────────────────────────┐
+ *   │  0 ──── freshTtl ──── staleTtl ──── (auto-expires) ──── disasterTtl  │
+ *   │  [  fresh  ]  [ stale + bg-revalidate ]  [ miss ] [  emergency only ] │
+ *   └────────────────────────────────────────────────────────────────────────┘
+ *   - FRESH    : return stored data immediately, no revalidation.
+ *   - STALE    : return stored data immediately AND trigger a background
+ *                fetch to repopulate KV for the next request.
+ *   - MISS     : await fresh fetch, store, return.
+ *   - DISASTER : if MISS fetch also fails, read the separate emergency key
+ *                (TTL 7 days) and serve very stale data rather than an
+ *                empty/broken page.
  *
  * KV requires these env vars (auto-provisioned by Vercel KV dashboard):
  *   KV_REST_API_URL
@@ -37,7 +40,7 @@ const KV_ENABLED =
   process.env.KV_REST_API_TOKEN !== '';
 
 // ---------------------------------------------------------------------------
-// SWR TTL presets
+// SWR TTL presets  (seconds)
 // ---------------------------------------------------------------------------
 
 export const SWR = {
@@ -47,12 +50,25 @@ export const SWR = {
   /** Match detail / H2H — stale up to 2 min. */
   MATCH: { fresh: 60, stale: 120 } as const,
 
-  /** Fixtures / recent matches — stale up to 20 min. */
-  FIXTURES: { fresh: 600, stale: 1200 } as const,
+  /** Fixtures / results — fresh 15 min, stale 30 min.
+   *  Aligns with TTL.FIXTURES = 900 s. */
+  FIXTURES: { fresh: 900, stale: 1_800 } as const,
 
-  /** Standings / team info — stale up to 1 hour. */
-  STANDINGS: { fresh: 1800, stale: 3600 } as const,
+  /** Standings / team info — fresh 1 hour, stale 2 hours.
+   *  Aligns with TTL.STANDINGS = 3 600 s. */
+  STANDINGS: { fresh: 3_600, stale: 7_200 } as const,
+
+  /** World Cup structural data (all-matches, bracket payload) —
+   *  fresh 6 hours, stale 12 hours.  The 104-match response changes only
+   *  when knockout scores land; caching for 6 h saves the most API quota.
+   *  Aligns with TTL.WC = 21 600 s. */
+  WC: { fresh: 21_600, stale: 43_200 } as const,
 };
+
+/** Redis TTL for the emergency "disaster recovery" key — 7 days.
+ *  Written alongside the main entry whenever we get fresh data.
+ *  Read only when a blocking fetch fails with no other cache available. */
+const DISASTER_TTL_SECONDS = 7 * 24 * 3_600; // 604 800 s
 
 // ---------------------------------------------------------------------------
 // KV entry schema
@@ -68,14 +84,15 @@ interface KVEntry<T> {
 // Hit/miss counters (per-process, resets on cold start)
 // ---------------------------------------------------------------------------
 
-let _hits   = 0;
-let _stale  = 0;
-let _misses = 0;
+let _hits      = 0;
+let _stale     = 0;
+let _misses    = 0;
+let _disasters = 0;
 
 function logRatio() {
   const total = _hits + _stale + _misses;
   if (total === 0) return 'n/a';
-  const effective = _hits + _stale; // stale still saves a blocking fetch
+  const effective = _hits + _stale;
   return `${Math.round((effective / total) * 100)}%`;
 }
 
@@ -96,20 +113,19 @@ export async function withKVCache<T>(
   fetcher: () => Promise<T>,
 ): Promise<T> {
   if (!KV_ENABLED) {
-    // KV not configured — fall through to direct fetch (dev / CI).
     console.log(`[KV] SKIP ${key} — KV not configured, fetching directly`);
     return fetcher();
   }
 
-  const now      = Date.now();
-  const kvKey    = `goalradar:${key}`;
+  const now         = Date.now();
+  const kvKey       = `goalradar:${key}`;
+  const disasterKey = `goalradar:dr:${key}`;
   let   entry: KVEntry<T> | null = null;
 
   // ── 1. Try reading from KV ──────────────────────────────────────────────
   try {
     entry = await kv.get<KVEntry<T>>(kvKey);
   } catch (err) {
-    // KV read failure — degrade gracefully, don't surface to user.
     console.error(`[KV] READ error on ${key}:`, err instanceof Error ? err.message : String(err));
   }
 
@@ -117,67 +133,121 @@ export async function withKVCache<T>(
   if (entry && now < entry.freshUntil) {
     _hits++;
     const remaining = Math.ceil((entry.freshUntil - now) / 1000);
-    console.log(`[KV] HIT   ${key} | fresh for ${remaining}s more | ratio ${logRatio()} (${_hits}+${_stale}/${_hits + _stale + _misses})`);
+    console.log(
+      `[KV] HIT   ${key} | fresh ${remaining}s more | ratio ${logRatio()} (${_hits}+${_stale}/${_hits + _stale + _misses})`,
+    );
     return entry.data;
   }
 
-  // ── 3. STALE hit — serve stale, revalidate in background ────────────────
+  // ── 3. STALE hit — serve immediately, revalidate in background ──────────
   if (entry) {
     _stale++;
-    console.log(`[KV] STALE ${key} | serving stale, triggering bg-revalidate | ratio ${logRatio()}`);
-    // Fire-and-forget background revalidation.
-    // Best-effort in serverless — if the process is killed before the
-    // revalidation completes the next request will also be stale,
-    // triggering another background fetch until it eventually succeeds.
-    revalidate(kvKey, key, swr, fetcher).catch((err) =>
-      console.error(`[KV] BG-REVALIDATE failed on ${key}:`, err instanceof Error ? err.message : String(err))
+    const staleAge = Math.ceil((now - entry.freshUntil) / 1000);
+    console.log(
+      `[KV] STALE ${key} | ${staleAge}s past fresh | serving stale, triggering bg-revalidate | ratio ${logRatio()}`,
     );
+    revalidateInBackground(kvKey, disasterKey, key, swr, fetcher);
     return entry.data;
   }
 
   // ── 4. MISS — blocking fetch ─────────────────────────────────────────────
   _misses++;
-  console.log(`[KV] MISS  ${key} | ratio ${logRatio()} (${_hits + _stale}/${_hits + _stale + _misses})`);
-
-  const data = await fetcher();
-  await storeInKV<T>(kvKey, key, data, swr).catch((err) =>
-    console.error(`[KV] WRITE error on ${key}:`, err instanceof Error ? err.message : String(err))
+  console.log(
+    `[KV] MISS  ${key} | ratio ${logRatio()} (${_hits + _stale}/${_hits + _stale + _misses})`,
   );
-  return data;
+
+  try {
+    const data = await fetcher();
+    // Write both normal and disaster-recovery keys.
+    await Promise.all([
+      storeInKV<T>(kvKey, key, data, swr),
+      storeDisasterKey<T>(disasterKey, key, data),
+    ]).catch((err) =>
+      console.error(`[KV] WRITE error on ${key}:`, err instanceof Error ? err.message : String(err)),
+    );
+    return data;
+  } catch (fetchErr) {
+    // ── 5. DISASTER recovery — try the long-lived emergency key ──────────
+    console.error(
+      `[KV] MISS fetch failed on ${key}:`,
+      fetchErr instanceof Error ? fetchErr.message : String(fetchErr),
+    );
+    try {
+      const dr = await kv.get<KVEntry<T>>(disasterKey);
+      if (dr) {
+        _disasters++;
+        const ageSeconds = Math.ceil((now - dr.fetchedAt) / 1000);
+        console.warn(
+          `[KV] DISASTER ${key} | serving ${ageSeconds}s old data | disasters=${_disasters}`,
+        );
+        return dr.data;
+      }
+    } catch (drErr) {
+      console.error(`[KV] DISASTER read failed on ${key}:`, drErr instanceof Error ? drErr.message : String(drErr));
+    }
+    throw fetchErr;
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Fetch fresh data and write it back to KV. */
-async function revalidate<T>(
-  kvKey:   string,
-  logKey:  string,
-  swr:     { fresh: number; stale: number },
-  fetcher: () => Promise<T>,
-): Promise<void> {
-  const data = await fetcher();
-  await storeInKV<T>(kvKey, logKey, data, swr);
-  console.log(`[KV] REVALIDATED ${logKey}`);
+/** Fire-and-forget background revalidation. */
+function revalidateInBackground<T>(
+  kvKey:       string,
+  disasterKey: string,
+  logKey:      string,
+  swr:         { fresh: number; stale: number },
+  fetcher:     () => Promise<T>,
+): void {
+  Promise.resolve()
+    .then(() => fetcher())
+    .then((data) =>
+      Promise.all([
+        storeInKV<T>(kvKey, logKey, data, swr),
+        storeDisasterKey<T>(disasterKey, logKey, data),
+      ]),
+    )
+    .then(() => console.log(`[KV] REVALIDATED ${logKey}`))
+    .catch((err) =>
+      console.error(
+        `[KV] BG-REVALIDATE failed on ${logKey}:`,
+        err instanceof Error ? err.message : String(err),
+      ),
+    );
 }
 
-/** Write a KV entry with the correct TTL and metadata. */
+/** Write a KV entry with the correct SWR TTL. */
 async function storeInKV<T>(
   kvKey:  string,
   logKey: string,
   data:   T,
   swr:    { fresh: number; stale: number },
 ): Promise<void> {
-  const now   = Date.now();
   const entry: KVEntry<T> = {
     data,
-    fetchedAt:  now,
-    freshUntil: now + swr.fresh * 1000,
+    fetchedAt:  Date.now(),
+    freshUntil: Date.now() + swr.fresh * 1000,
   };
-  // The KV TTL (ex) is the *stale* period — Redis auto-purges after that.
   await kv.set(kvKey, entry, { ex: swr.stale });
   console.log(`[KV] SET   ${logKey} | fresh ${swr.fresh}s / stale ${swr.stale}s`);
+}
+
+/** Write a long-lived disaster-recovery key (7 days). Overwrites on every
+ *  successful fresh fetch so it always holds the most recent known-good data. */
+async function storeDisasterKey<T>(
+  disasterKey: string,
+  logKey:      string,
+  data:        T,
+): Promise<void> {
+  const entry: KVEntry<T> = {
+    data,
+    fetchedAt:  Date.now(),
+    freshUntil: 0, // always "stale" — only used as last resort
+  };
+  await kv.set(disasterKey, entry, { ex: DISASTER_TTL_SECONDS });
+  console.log(`[KV] DR    ${logKey} | disaster key written (7d TTL)`);
 }
 
 // ---------------------------------------------------------------------------
@@ -188,18 +258,22 @@ export function getKVCacheStats() {
   const total     = _hits + _stale + _misses;
   const effective = _hits + _stale;
   return {
-    hits:          _hits,
-    stale:         _stale,
-    misses:        _misses,
+    hits:           _hits,
+    stale:          _stale,
+    misses:         _misses,
+    disasters:      _disasters,
     total,
-    effectiveHits: effective,
-    hitRatio:      total > 0 ? Math.round((effective / total) * 100) : 0,
-    kvEnabled:     KV_ENABLED,
+    effectiveHits:  effective,
+    hitRatio:       total > 0 ? Math.round((effective / total) * 100) : 0,
+    kvEnabled:      KV_ENABLED,
   };
 }
 
 /** Manually invalidate a KV entry (e.g. after a write). */
 export async function kvInvalidate(key: string): Promise<void> {
   if (!KV_ENABLED) return;
-  await kv.del(`goalradar:${key}`).catch(() => undefined);
+  await Promise.all([
+    kv.del(`goalradar:${key}`),
+    kv.del(`goalradar:dr:${key}`),
+  ]).catch(() => undefined);
 }

@@ -15,7 +15,7 @@ import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
 import { matchPath } from '@/lib/url';
 
-export const revalidate = 300;
+export const revalidate = 21600; // align with WC TTL (6 hours)
 
 const BASE_URL = 'https://goalradar.org';
 const CANONICAL = `${BASE_URL}/world-cup-2026-bracket`;
