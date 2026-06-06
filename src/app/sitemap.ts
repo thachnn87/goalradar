@@ -47,10 +47,11 @@ export async function generateSitemaps() {
 }
 
 export default async function sitemap({
-  id,
+  id: idParam,
 }: {
-  id: number;
+  id: number | Promise<string | undefined>;
 }): Promise<MetadataRoute.Sitemap> {
+  const id = Number(await idParam);
   switch (id) {
     case 0:
       return coreStaticSitemap();
