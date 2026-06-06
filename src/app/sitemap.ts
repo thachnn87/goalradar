@@ -344,32 +344,16 @@ function competitionSitemap(): MetadataRoute.Sitemap {
 // ---------------------------------------------------------------------------
 
 async function matchSitemap(): Promise<MetadataRoute.Sitemap> {
-  // TEMP LOGGING — remove after production diagnosis
-  console.log('[sitemap/4] FOOTBALL_API_KEY exists:', !!process.env.FOOTBALL_API_KEY);
-  console.log('[sitemap/4] competitions count:', COMPETITIONS.length);
-
   const [recentResults, upcomingResults] = await Promise.all([
     Promise.allSettled(COMPETITIONS.map((c) => getRecentMatches(c.code))),
     Promise.allSettled(COMPETITIONS.map((c) => getUpcomingMatches(c.code))),
   ]);
 
   // TEMP LOGGING — remove after production diagnosis
-  const recentFulfilled  = recentResults.filter((r) => r.status === 'fulfilled').length;
-  const recentRejected   = recentResults.filter((r) => r.status === 'rejected').length;
-  const upcomingFulfilled = upcomingResults.filter((r) => r.status === 'fulfilled').length;
-  const upcomingRejected  = upcomingResults.filter((r) => r.status === 'rejected').length;
-  console.log('[sitemap/4] recent  — fulfilled:', recentFulfilled,  '| rejected:', recentRejected);
-  console.log('[sitemap/4] upcoming — fulfilled:', upcomingFulfilled, '| rejected:', upcomingRejected);
-  if (recentRejected > 0) {
-    recentResults
-      .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
-      .forEach((r, i) => console.log(`[sitemap/4] recent[${i}] rejection reason:`, String(r.reason)));
-  }
-  if (upcomingRejected > 0) {
-    upcomingResults
-      .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
-      .forEach((r, i) => console.log(`[sitemap/4] upcoming[${i}] rejection reason:`, String(r.reason)));
-  }
+  console.log('[sitemap/4] recentResults  fulfilled:', recentResults.filter((r) => r.status === 'fulfilled').length);
+  console.log('[sitemap/4] recentResults  rejected:', recentResults.filter((r) => r.status === 'rejected').length);
+  console.log('[sitemap/4] upcomingResults fulfilled:', upcomingResults.filter((r) => r.status === 'fulfilled').length);
+  console.log('[sitemap/4] upcomingResults rejected:', upcomingResults.filter((r) => r.status === 'rejected').length);
 
   const allMatches = [
     ...recentResults.flatMap((r) =>
@@ -380,8 +364,7 @@ async function matchSitemap(): Promise<MetadataRoute.Sitemap> {
     ),
   ];
 
-  // TEMP LOGGING — remove after production diagnosis
-  console.log('[sitemap/4] allMatches (pre-dedup):', allMatches.length);
+  console.log('[sitemap/4] allMatches.length:', allMatches.length);
 
   // Deduplicate by match id
   const seen = new Set<number>();
@@ -422,7 +405,8 @@ async function matchSitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   // TEMP LOGGING — remove after production diagnosis
-  console.log('[sitemap/4] entries (post-dedup, match+predict):', entries.length);
+  console.log('[sitemap/4] dedupedMatches.length:', seen.size);
+  console.log('[sitemap/4] entries.length:', entries.length);
 
   return entries;
 }
@@ -436,31 +420,23 @@ async function teamSitemap(): Promise<MetadataRoute.Sitemap> {
   // Safe to fail per-competition — standings for other comps still included.
   const leagueComps = COMPETITIONS.filter((c) => c.code !== 'WC');
 
-  // TEMP LOGGING — remove after production diagnosis
-  console.log('[sitemap/5] FOOTBALL_API_KEY exists:', !!process.env.FOOTBALL_API_KEY);
-  console.log('[sitemap/5] leagueComps count:', leagueComps.length);
-
-  const results     = await Promise.allSettled(
+  const results = await Promise.allSettled(
     leagueComps.map((c) => getStandings(c.code)),
   );
 
   // TEMP LOGGING — remove after production diagnosis
-  const fulfilled = results.filter((r) => r.status === 'fulfilled').length;
-  const rejected  = results.filter((r) => r.status === 'rejected').length;
-  console.log('[sitemap/5] standings — fulfilled:', fulfilled, '| rejected:', rejected);
-  if (rejected > 0) {
-    results
-      .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
-      .forEach((r, i) => console.log(`[sitemap/5] standings[${i}] rejection reason:`, String(r.reason)));
-  }
+  console.log('[sitemap/5] standings fulfilled:', results.filter((r) => r.status === 'fulfilled').length);
+  console.log('[sitemap/5] standings rejected:', results.filter((r) => r.status === 'rejected').length);
 
   const seenTeamIds = new Set<number>();
   const entries:     MetadataRoute.Sitemap = [];
+  let totalTablesFound = 0;
 
   for (const result of results) {
     if (result.status !== 'fulfilled') continue;
     const totalTable = result.value.standings.find((s) => s.type === 'TOTAL');
     if (!totalTable) continue;
+    totalTablesFound++;
 
     for (const row of totalTable.table) {
       if (seenTeamIds.has(row.team.id)) continue;
@@ -476,7 +452,8 @@ async function teamSitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   // TEMP LOGGING — remove after production diagnosis
-  console.log('[sitemap/5] team entries:', entries.length);
+  console.log('[sitemap/5] total tables found:', totalTablesFound);
+  console.log('[sitemap/5] entries.length:', entries.length);
 
   return entries;
 }
