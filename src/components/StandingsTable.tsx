@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { StandingEntry } from '@/lib/types';
+import { teamPath } from '@/lib/url';
 
 export default function StandingsTable({ table }: { table: StandingEntry[] }) {
   const total = table.length;
@@ -39,7 +40,7 @@ export default function StandingsTable({ table }: { table: StandingEntry[] }) {
                   <td className="px-4 py-3 text-gray-400 text-center">{entry.position}</td>
                   <td className="px-4 py-3">
                     <Link
-                      href={`/team/${entry.team.id}`}
+                      href={teamPath(entry.team.id, entry.team.name)}
                       className="flex items-center gap-2 hover:text-green-400 transition-colors group w-fit"
                     >
                       {entry.team.crest && (

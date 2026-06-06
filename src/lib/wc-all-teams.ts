@@ -661,7 +661,22 @@ export const WC_ALL_TEAMS: WCTeamEntry[] = [
     metaDesc: 'New Zealand World Cup 2026 fixtures, results and group standing. All Whites World Cup schedule and match updates.',
     intro: 'New Zealand\'s All Whites qualified for the FIFA World Cup 2026 through the OFC pathway. The New Zealanders, whose success has been built around A-League and European-based players, are determined to make the most of their chance on the global stage.',
   },
-  // ── Interconfederal / Playoff (2) ────────────────────────────────────────
+  // ── Interconfederal / Playoff (2) ─── + missing Group L slot ─────────────
+  {
+    slug: 'bolivia',
+    displayName: 'Bolivia',
+    shortName: 'Bolivia',
+    apiName: 'Bolivia',
+    flag: '🇧🇴',
+    group: 'L',
+    fifaRanking: 79,
+    confederation: 'CONMEBOL',
+    qualified: true,
+    metaTitle: 'Bolivia at FIFA World Cup 2026 — Fixtures & Results | GoalRadar',
+    metaDesc: 'Bolivia World Cup 2026 fixtures, results and group standing. La Verde World Cup schedule and match updates.',
+    intro: 'Bolivia qualified for the FIFA World Cup 2026 via the inter-confederation playoff, ending a long wait to return to the global stage. La Verde, playing from one of the world\'s highest capital cities in La Paz, bring physical resilience and determination to North America.',
+  },
+  // ── Interconfederal / Playoff ────────────────────────────────────────────
   {
     slug: 'peru',
     displayName: 'Peru',

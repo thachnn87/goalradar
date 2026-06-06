@@ -8,6 +8,7 @@ import type { Match } from '@/lib/types';
 import StandingsTable from '@/components/StandingsTable';
 import MatchCard from '@/components/MatchCard';
 import Breadcrumb from '@/components/Breadcrumb';
+import AnalyticsTracker from '@/components/AnalyticsTracker';
 
 export const revalidate = 300;
 
@@ -22,18 +23,23 @@ export function generateStaticParams() {
 // Metadata
 // ---------------------------------------------------------------------------
 
+const BASE_URL = 'https://goalradar.org';
+
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { code } = await params;
-  const comp = COMPETITIONS.find((c) => c.code === code.toUpperCase());
+  const normCode = code.toUpperCase();
+  const comp = COMPETITIONS.find((c) => c.code === normCode);
   if (!comp) return { title: 'Competition | GoalRadar' };
 
-  const title = `${comp.name} Standings, Fixtures & Results | GoalRadar`;
+  const title       = `${comp.name} Standings, Fixtures & Results | GoalRadar`;
   const description = `Follow the ${comp.name} with live scores, results, upcoming fixtures and the full league table on GoalRadar.`;
+  const canonical   = `${BASE_URL}/competition/${normCode}`;
 
   return {
     title,
     description,
-    openGraph: { title, description, type: 'website' },
+    alternates: { canonical },
+    openGraph: { title, description, type: 'website', url: canonical },
     twitter: { card: 'summary_large_image', title, description },
   };
 }
@@ -139,6 +145,12 @@ export default async function CompetitionPage({ params }: Params) {
   return (
     <>
       <JsonLd name={competitionName} code={code} emblem={competitionEmblem} />
+      <AnalyticsTracker event={{
+        type:            'competition_view',
+        competitionCode: code,
+        competitionName: competitionName,
+        context:         'overview',
+      }} />
 
       <div className="max-w-5xl mx-auto space-y-8 pb-10">
         <Breadcrumb

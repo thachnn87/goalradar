@@ -4,8 +4,10 @@ import MatchCard from '@/components/MatchCard';
 import CompetitionSelector from '@/components/CompetitionSelector';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCCountdown from '@/components/WCCountdown';
+import AnalyticsTracker from '@/components/AnalyticsTracker';
+import AdSlot from '@/components/ads/AdSlot';
 import type { Metadata } from 'next';
-import { Match } from '@/lib/types';
+import { Match, COMPETITIONS } from '@/lib/types';
 import { WC_ALL_FIXTURES, type WCGroupFixture } from '@/lib/wc-fixtures';
 
 export const revalidate = 300;
@@ -15,6 +17,14 @@ export async function generateMetadata(): Promise<Metadata> {
     title: 'Football Schedule | GoalRadar',
     description:
       'Live football fixtures, match schedules and recent results from Europe top leagues.',
+    alternates: { canonical: 'https://goalradar.org/schedule' },
+    openGraph: {
+      title: 'Football Schedule | GoalRadar',
+      description:
+        'Live football fixtures, match schedules and recent results from Europe top leagues.',
+      type: 'website',
+      url: 'https://goalradar.org/schedule',
+    },
   };
 }
 
@@ -249,8 +259,17 @@ export default async function SchedulePage({
     competition = 'WC', // World Cup is the default competition
   } = await searchParams;
 
+  const competitionMeta = COMPETITIONS.find((c) => c.code === competition);
+  const competitionName = competitionMeta?.name ?? competition;
+
   return (
     <div className="space-y-6">
+      <AnalyticsTracker event={{
+        type:            'competition_view',
+        competitionCode: competition,
+        competitionName: competitionName,
+        context:         'schedule',
+      }} />
       <Breadcrumb
         items={[
           { label: 'Home', href: '/' },
@@ -271,6 +290,9 @@ export default async function SchedulePage({
       {/* Show compact countdown only when WC tab is selected */}
       {competition === 'WC' && <WCCountdown compact />}
 
+      {/* Above-fold banner — height reserved to prevent CLS */}
+      <AdSlot slotId="schedule-top" variant="banner" />
+
       <Suspense fallback={null}>
         <CompetitionSelector
           selected={competition}
@@ -282,6 +304,12 @@ export default async function SchedulePage({
           competition={competition}
         />
       </Suspense>
+
+      {/* Mid-page rectangle — desktop 300×250, centered */}
+      <AdSlot slotId="schedule-mid" variant="rectangle" className="mx-auto" />
+
+      {/* Below-fold banner */}
+      <AdSlot slotId="schedule-bottom" variant="banner" />
     </div>
   );
 }

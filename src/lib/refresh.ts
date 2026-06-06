@@ -97,13 +97,20 @@ export async function refreshEndpoint(
  * Returns true if the request carries a valid CRON_SECRET.
  * Vercel automatically injects `Authorization: Bearer <CRON_SECRET>`
  * on scheduled cron invocations when the secret is set in the project.
+ *
+ * Fails CLOSED: if CRON_SECRET is not configured the function returns false
+ * and the caller responds 401. An absent secret must never be treated as
+ * "allow all" — both refresh routes trigger real football-data.org API calls
+ * and anonymous access would allow rate-limit exhaustion attacks.
+ *
+ * To test refresh routes locally, add CRON_SECRET to .env.local and pass
+ * the header: curl -H "Authorization: Bearer <secret>" http://localhost:3000/api/refresh/standings
  */
 export function isAuthorizedCronRequest(authHeader: string | null): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) {
-    // If CRON_SECRET is not set, allow the request (dev / open deployments).
-    // Set CRON_SECRET in production to lock down the endpoints.
-    return true;
+    console.error('[Auth] CRON_SECRET is not set — refresh endpoint denied. Set CRON_SECRET in Vercel environment variables.');
+    return false;
   }
   return authHeader === `Bearer ${secret}`;
 }

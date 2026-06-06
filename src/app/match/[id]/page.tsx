@@ -3,11 +3,12 @@ import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 
 import { getMatchDetail, getHeadToHead, getUpcomingMatches, getRecentMatches, getStandings, NotFoundError } from '@/lib/api';
+import AnalyticsTracker from '@/components/AnalyticsTracker';
 import WCGroupTable from '@/components/WCGroupTable';
 import Breadcrumb from '@/components/Breadcrumb';
 import MatchCard from '@/components/MatchCard';
 import type { BreadcrumbItem } from '@/components/Breadcrumb';
-import { matchPath, extractMatchId } from '@/lib/url';
+import { matchPath, extractMatchId, teamPath } from '@/lib/url';
 import AdSlot from '@/components/AdSlot';
 import AffiliateBlock from '@/components/AffiliateBlock';
 import NewsletterSignup from '@/components/NewsletterSignup';
@@ -38,17 +39,61 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
   try {
     const match = await getMatchDetail(numericId);
-    const home = match.homeTeam.name ?? 'TBD';
-    const away = match.awayTeam.name ?? 'TBD';
-    const isWC = match.competition?.code === 'WC';
+    const home  = match.homeTeam.name ?? 'TBD';
+    const away  = match.awayTeam.name ?? 'TBD';
+    const comp  = match.competition?.name ?? 'Football';
+    const isWC  = match.competition?.code === 'WC';
+    const compSuffix = isWC ? 'FIFA World Cup 2026' : comp;
 
-    const title = isWC
-      ? `${home} vs ${away} Live Score | FIFA World Cup 2026`
-      : `${home} vs ${away} Live Score | GoalRadar`;
+    const isFinished = match.status === 'FINISHED';
+    const isLive     = match.status === 'IN_PLAY' || match.status === 'PAUSED';
+    const ftH = match.score?.fullTime?.home;
+    const ftA = match.score?.fullTime?.away;
+    const hasScore = isFinished && ftH != null && ftA != null;
 
-    const description = isWC
-      ? `Follow ${home} vs ${away} live score, match results and World Cup 2026 updates.`
-      : `Follow ${home} vs ${away} live score, lineups, stats and match events.`;
+    // Build a rich, status-aware title
+    let title: string;
+    if (hasScore) {
+      // e.g. "Arsenal 2-1 Chelsea – Match Result | Premier League | GoalRadar"
+      title = `${home} ${ftH}–${ftA} ${away} – Match Result | ${compSuffix} | GoalRadar`;
+    } else if (isLive) {
+      title = isWC
+        ? `${home} vs ${away} LIVE Score | FIFA World Cup 2026`
+        : `${home} vs ${away} LIVE Score | ${comp} | GoalRadar`;
+    } else {
+      // Upcoming — include matchday for context
+      const md = match.matchday ? ` Matchday ${match.matchday}` : '';
+      title = isWC
+        ? `${home} vs ${away} Preview | FIFA World Cup 2026${md}`
+        : `${home} vs ${away} Preview | ${comp}${md} | GoalRadar`;
+    }
+
+    // Build a rich description
+    let description: string;
+    if (hasScore) {
+      const winner =
+        match.score.winner === 'HOME_TEAM' ? `${home} won` :
+        match.score.winner === 'AWAY_TEAM' ? `${away} won` :
+        'The match ended in a draw';
+      const goals = (match.goals ?? [])
+        .sort((a, b) => a.minute - b.minute)
+        .map((g) => `${g.scorer?.name} ${g.minute}'`)
+        .join(', ');
+      description = `Final score: ${home} ${ftH}–${ftA} ${away}. ${winner}. ${goals ? `Goals: ${goals}. ` : ''}Full match report, stats and head-to-head on GoalRadar.`;
+    } else if (isLive) {
+      description = isWC
+        ? `${home} vs ${away} is LIVE now. Follow the World Cup 2026 score, goals and match events in real time.`
+        : `${home} vs ${away} is LIVE. Follow the score, goals and match events in real time on GoalRadar.`;
+    } else {
+      const matchDate = new Date(match.utcDate).toLocaleDateString('en-GB', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
+      });
+      const matchTime = new Date(match.utcDate).toLocaleTimeString('en-GB', {
+        hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
+      });
+      const venue = match.venue ? ` at ${match.venue}` : '';
+      description = `${home} vs ${away} — ${matchDate} at ${matchTime} UTC${venue}. Match preview, head-to-head stats and live score on GoalRadar.`;
+    }
 
     const BASE_URL = 'https://goalradar.org';
     const canonical = `${BASE_URL}${matchPath(match.id, home, away)}`;
@@ -57,6 +102,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       title,
       description,
       alternates: { canonical },
+      robots: { index: true, follow: true },
       openGraph: {
         title,
         description,
@@ -185,7 +231,7 @@ function ScoreHero({ match }: { match: MatchDetail }) {
 
       <div className="grid grid-cols-3 items-center gap-4">
         {/* Home */}
-        <Link href={`/team/${homeTeam.id}`} className="text-center group block">
+        <Link href={teamPath(homeTeam.id, homeTeam.name)} className="text-center group block">
           {homeTeam.crest && (
             <img
               src={homeTeam.crest}
@@ -221,7 +267,7 @@ function ScoreHero({ match }: { match: MatchDetail }) {
         </div>
 
         {/* Away */}
-        <Link href={`/team/${awayTeam.id}`} className="text-center group block">
+        <Link href={teamPath(awayTeam.id, awayTeam.name)} className="text-center group block">
           {awayTeam.crest && (
             <img
               src={awayTeam.crest}
@@ -1435,12 +1481,11 @@ function WCBottomFunnel({
 // ---------------------------------------------------------------------------
 
 function JsonLd({ match }: { match: MatchDetail }) {
-  const isFinished = match.status === 'FINISHED';
-  const isLive = match.status === 'IN_PLAY' || match.status === 'PAUSED';
+  const isFinished  = match.status === 'FINISHED';
+  const isLive      = match.status === 'IN_PLAY' || match.status === 'PAUSED';
   const isCancelled = match.status === 'CANCELLED' || match.status === 'SUSPENDED';
   const isPostponed = match.status === 'POSTPONED';
 
-  // Estimate endDate as startDate + 105 min (90 min + injury time buffer)
   const endDate = match.utcDate
     ? new Date(new Date(match.utcDate).getTime() + 105 * 60 * 1000).toISOString()
     : undefined;
@@ -1449,45 +1494,75 @@ function JsonLd({ match }: { match: MatchDetail }) {
     ? 'https://schema.org/EventCancelled'
     : isPostponed
     ? 'https://schema.org/EventPostponed'
+    : isFinished
+    ? 'https://schema.org/EventScheduled'
     : 'https://schema.org/EventScheduled';
 
   const homeScore = match.score?.fullTime?.home;
   const awayScore = match.score?.fullTime?.away;
-  const hasScore = isFinished && homeScore != null && awayScore != null;
+  const hasScore  = isFinished && homeScore != null && awayScore != null;
+
+  const canonicalUrl = `https://goalradar.org${matchPath(match.id, match.homeTeam.name, match.awayTeam.name)}`;
+
+  const homeTeamSchema: Record<string, unknown> = {
+    '@type': 'SportsTeam',
+    name:  match.homeTeam.name,
+    url:   `https://goalradar.org${teamPath(match.homeTeam.id, match.homeTeam.name)}`,
+    ...(match.homeTeam.crest ? { image: match.homeTeam.crest } : {}),
+  };
+  const awayTeamSchema: Record<string, unknown> = {
+    '@type': 'SportsTeam',
+    name:  match.awayTeam.name,
+    url:   `https://goalradar.org${teamPath(match.awayTeam.id, match.awayTeam.name)}`,
+    ...(match.awayTeam.crest ? { image: match.awayTeam.crest } : {}),
+  };
 
   const data: Record<string, unknown> = {
     '@context': 'https://schema.org',
-    '@type': 'SportsEvent',
-    name: `${match.homeTeam.name} vs ${match.awayTeam.name}`,
+    '@type':    'SportsEvent',
+    name:        `${match.homeTeam.name} vs ${match.awayTeam.name}`,
     description: hasScore
       ? `Final score: ${match.homeTeam.name} ${homeScore}–${awayScore} ${match.awayTeam.name}. ${match.competition?.name ?? 'Football'} match.`
       : `${match.homeTeam.name} vs ${match.awayTeam.name} — ${match.competition?.name ?? 'Football'}`,
-    sport: 'Association football',
-    url: `https://goalradar.org/match/${match.id}`,
-    startDate: match.utcDate,
+    sport:       'Association football',
+    url:         canonicalUrl,
+    startDate:   match.utcDate,
     ...(isFinished && endDate ? { endDate } : {}),
     eventStatus,
-    homeTeam: {
-      '@type': 'SportsTeam',
-      name: match.homeTeam.name,
-      ...(match.homeTeam.crest ? { image: match.homeTeam.crest } : {}),
-    },
-    awayTeam: {
-      '@type': 'SportsTeam',
-      name: match.awayTeam.name,
-      ...(match.awayTeam.crest ? { image: match.awayTeam.crest } : {}),
-    },
-    location: {
-      '@type': 'SportsActivityLocation',
-      name: match.venue ?? match.competition?.name ?? 'Football Stadium',
-    },
+    eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+    // Both homeTeam/awayTeam (legacy) and competitor (current spec)
+    homeTeam:   homeTeamSchema,
+    awayTeam:   awayTeamSchema,
+    competitor: [homeTeamSchema, awayTeamSchema],
+    location: match.venue
+      ? {
+          '@type': 'StadiumOrArena',
+          name:    match.venue,
+          address: { '@type': 'PostalAddress' },
+        }
+      : {
+          '@type': 'SportsActivityLocation',
+          name:    match.competition?.name ?? 'Football Stadium',
+        },
     organizer: {
       '@type': 'Organization',
-      name: match.competition?.name ?? 'FIFA',
+      name:    match.competition?.name ?? 'FIFA',
+      url:     match.competition?.code
+                 ? `https://goalradar.org/competition/${match.competition.code}`
+                 : 'https://goalradar.org',
     },
+    // Score result for finished matches
+    ...(hasScore
+      ? {
+          subEvent: {
+            '@type':   'SportsEvent',
+            name:      'Full Time',
+            startDate: endDate,
+          },
+        }
+      : {}),
   };
 
-  // Add eventAttendanceMode for live matches (helps Google News / SERP)
   if (isLive) {
     data.eventAttendanceMode = 'https://schema.org/MixedEventAttendanceMode';
   }
@@ -1497,6 +1572,163 @@ function JsonLd({ match }: { match: MatchDetail }) {
       type="application/ld+json"
       dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
     />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// FAQ — structured data + visible section for rich-snippet eligibility
+// ---------------------------------------------------------------------------
+
+interface Faq { q: string; a: string }
+
+function buildFaqs(match: MatchDetail, h2h: HeadToHead | null): Faq[] {
+  const home  = match.homeTeam.name  ?? 'Home';
+  const away  = match.awayTeam.name  ?? 'Away';
+  const homeS = match.homeTeam.shortName || home;
+  const awayS = match.awayTeam.shortName || away;
+  const comp  = match.competition?.name ?? 'the competition';
+
+  const dateStr = new Date(match.utcDate).toLocaleDateString('en-GB', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
+  });
+  const timeStr = new Date(match.utcDate).toLocaleTimeString('en-GB', {
+    hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
+  });
+
+  const isFinished = match.status === 'FINISHED';
+  const isLive     = match.status === 'IN_PLAY' || match.status === 'PAUSED';
+  const isUpcoming = !isFinished && !isLive;
+  const ftH = match.score?.fullTime?.home ?? 0;
+  const ftA = match.score?.fullTime?.away ?? 0;
+  const md  = match.matchday ? `, Matchday ${match.matchday}` : '';
+
+  const faqs: Faq[] = [];
+
+  // ── Upcoming / live: when / where / what competition ───────────────────────
+  if (isUpcoming || isLive) {
+    faqs.push({
+      q: `When is ${home} vs ${away}?`,
+      a: isLive
+        ? `${home} vs ${away} is currently in progress${match.status === 'PAUSED' ? ' — it is half-time' : ''}.`
+        : `${home} vs ${away} is scheduled for ${dateStr} at ${timeStr} UTC.`,
+    });
+
+    faqs.push({
+      q: `Where is ${home} vs ${away} being played?`,
+      a: match.venue
+        ? `${home} vs ${away} is being played at ${match.venue}.`
+        : `The venue for ${home} vs ${away} has not yet been confirmed.`,
+    });
+
+    faqs.push({
+      q: `What competition is ${home} vs ${away}?`,
+      a: `${home} vs ${away} is a ${comp} fixture${md}.`,
+    });
+  }
+
+  // ── Finished: result / winner / scorers / when / where ─────────────────────
+  if (isFinished) {
+    const resultLine =
+      match.score.winner === 'DRAW'
+        ? `${home} and ${away} drew ${ftH}–${ftA}`
+        : match.score.winner === 'HOME_TEAM'
+        ? `${home} beat ${away} ${ftH}–${ftA}`
+        : `${away} beat ${home} ${ftH}–${ftA}`;
+
+    faqs.push({
+      q: `What was the ${home} vs ${away} result?`,
+      a: `${resultLine} in ${comp}${md} on ${dateStr}.`,
+    });
+
+    faqs.push({
+      q: `Who won ${home} vs ${away}?`,
+      a: match.score.winner === 'DRAW'
+        ? `The match ended in a ${ftH}–${ftA} draw — neither side took all three points.`
+        : match.score.winner === 'HOME_TEAM'
+        ? `${home} won the match ${ftH}–${ftA}.`
+        : `${away} won the match ${ftH}–${ftA}.`,
+    });
+
+    const goals = [...(match.goals ?? [])].sort((a, b) => a.minute - b.minute);
+    if (goals.length > 0) {
+      const scorerLines = goals
+        .map((g) => `${g.scorer?.name} ${g.minute}'${g.injuryTime ? `+${g.injuryTime}` : ''} (${g.team?.id === match.homeTeam.id ? homeS : awayS})`)
+        .join('; ');
+      faqs.push({
+        q: `Who scored in ${home} vs ${away}?`,
+        a: `Goals: ${scorerLines}.`,
+      });
+    } else {
+      faqs.push({
+        q: `Were there any goals in ${home} vs ${away}?`,
+        a: `The match ended goalless (0–0).`,
+      });
+    }
+
+    faqs.push({
+      q: `When and where was ${home} vs ${away} played?`,
+      a: match.venue
+        ? `The match took place at ${match.venue} on ${dateStr}.`
+        : `The match took place on ${dateStr}.`,
+    });
+  }
+
+  // ── H2H (any status, if data available) ────────────────────────────────────
+  if (h2h?.aggregates?.numberOfMatches) {
+    const total  = h2h.aggregates.numberOfMatches;
+    const hWins  = h2h.aggregates.homeTeam.wins;
+    const aWins  = h2h.aggregates.awayTeam.wins;
+    const draws  = h2h.aggregates.homeTeam.draws;
+    faqs.push({
+      q: `What are the head-to-head stats between ${home} and ${away}?`,
+      a: `Across ${total} meetings, ${homeS} have won ${hWins} time${hWins === 1 ? '' : 's'}, ${awayS} have won ${aWins} time${aWins === 1 ? '' : 's'}, and ${draws} match${draws === 1 ? '' : 'es'} ended in a draw. A total of ${h2h.aggregates.totalGoals} goals have been scored across all encounters.`,
+    });
+  }
+
+  return faqs;
+}
+
+/** JSON-LD only — no visible output */
+function MatchFaqJsonLd({ faqs }: { faqs: Faq[] }) {
+  if (!faqs.length) return null;
+  const schema = {
+    '@context': 'https://schema.org',
+    '@type':    'FAQPage',
+    mainEntity: faqs.map(({ q, a }) => ({
+      '@type': 'Question',
+      name:    q,
+      acceptedAnswer: { '@type': 'Answer', text: a },
+    })),
+  };
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+    />
+  );
+}
+
+/** Visible FAQ section — satisfies Google's requirement that FAQ content be
+ *  user-visible, not schema-only */
+function MatchFaqSection({ faqs }: { faqs: Faq[] }) {
+  if (!faqs.length) return null;
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+      <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-5">
+        Match FAQ
+      </h2>
+      <dl className="space-y-4">
+        {faqs.map(({ q, a }, i) => (
+          <div
+            key={i}
+            className={`${i < faqs.length - 1 ? 'border-b border-gray-800 pb-4' : ''}`}
+          >
+            <dt className="text-sm font-semibold text-white mb-1.5">{q}</dt>
+            <dd className="text-sm text-gray-400 leading-relaxed">{a}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }
 
@@ -1662,9 +1894,21 @@ export default async function MatchDetailPage({ params }: Params) {
 
   const showStats = ['IN_PLAY', 'PAUSED', 'FINISHED'].includes(match.status);
 
+  // Build FAQs once — used by both JSON-LD and the visible section
+  const faqs = buildFaqs(match, h2h);
+
   return (
     <>
       <JsonLd match={match} />
+      <MatchFaqJsonLd faqs={faqs} />
+      <AnalyticsTracker event={{
+        type:        'match_view',
+        matchId:     match.id,
+        homeTeam:    match.homeTeam?.name ?? '',
+        awayTeam:    match.awayTeam?.name ?? '',
+        competition: match.competition?.code ?? '',
+        status:      match.status,
+      }} />
 
       <div className="max-w-2xl mx-auto space-y-4 pb-10">
         {/* Breadcrumb: Home > WC 2026 > Group A > Match */}
@@ -1697,7 +1941,10 @@ export default async function MatchDetailPage({ params }: Params) {
 
         {h2h && <HeadToHeadSection h2h={h2h} match={match} />}
 
-        {/* Ad: mid-page — between H2H and group content */}
+        {/* FAQ — visible Q&A section + FAQPage JSON-LD for rich snippets */}
+        <MatchFaqSection faqs={faqs} />
+
+        {/* Ad: mid-page — between FAQ and group content */}
         <AdSlot slotId="match-mid" variant="rectangle" className="mx-auto" />
 
         {/* Group standings preview (WC group stage only) */}

@@ -34,6 +34,7 @@ export const metadata: Metadata = {
   title: 'FIFA World Cup 2026 Live Scores, Fixtures, Results and Standings | GoalRadar',
   description:
     'Follow FIFA World Cup 2026 live scores, today\'s fixtures, upcoming matches, group standings and recent results on GoalRadar. USA · Canada · Mexico.',
+  alternates: { canonical: `${BASE_URL}/world-cup-2026` },
   openGraph: {
     title: 'FIFA World Cup 2026 Live Scores, Fixtures, Results and Standings | GoalRadar',
     description:

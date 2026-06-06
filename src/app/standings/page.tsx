@@ -5,7 +5,8 @@ import StandingsTable from '@/components/StandingsTable';
 import CompetitionSelector from '@/components/CompetitionSelector';
 import Breadcrumb from '@/components/Breadcrumb';
 import AdSlot from '@/components/AdSlot';
-import { StandingTable } from '@/lib/types';
+import AnalyticsTracker from '@/components/AnalyticsTracker';
+import { StandingTable, COMPETITIONS } from '@/lib/types';
 
 export const revalidate = 3600;
 
@@ -89,8 +90,17 @@ export default async function StandingsPage({
 }) {
   const { competition = 'PL' } = await searchParams;
 
+  const competitionMeta = COMPETITIONS.find((c) => c.code === competition);
+  const competitionName = competitionMeta?.name ?? competition;
+
   return (
     <div className="space-y-6">
+      <AnalyticsTracker event={{
+        type:            'competition_view',
+        competitionCode: competition,
+        competitionName: competitionName,
+        context:         'standings',
+      }} />
       <Breadcrumb
         items={[
           { label: 'Home', href: '/' },
