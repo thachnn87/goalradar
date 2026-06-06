@@ -178,6 +178,24 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+
+  async rewrites() {
+    return [
+      // /sitemap.xml → sitemap index handler
+      //
+      // Why a rewrite and not src/app/sitemap.xml/route.ts:
+      //   sitemap.ts exports generateSitemaps(), which causes Next.js to
+      //   internally occupy the /sitemap.xml/route filesystem path for the
+      //   metadata system. A custom route.ts at that path produces a
+      //   Turbopack "conflicting route and metadata" build error.
+      //   The rewrite keeps /sitemap.xml as the public URL while the handler
+      //   lives safely at /api/sitemap-index.
+      {
+        source:      '/sitemap.xml',
+        destination: '/api/sitemap-index',
+      },
+    ];
+  },
 };
 
 export default nextConfig;
