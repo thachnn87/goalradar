@@ -10,6 +10,7 @@ import type { Match } from '@/lib/types';
 import MatchCard from '@/components/MatchCard';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCBracket from '@/components/WCBracket';
+import { WC_KNOCKOUT_SLOTS, type WCKnockoutSlot } from '@/lib/wc-fixtures';
 
 export const revalidate = 21600; // align with WC TTL (6 hours) — bracket changes only when knockout results land
 
@@ -157,6 +158,35 @@ function EmptyRound({ label }: { label: string }) {
   );
 }
 
+/** Pre-tournament schedule for a knockout round — shown when API is unavailable. */
+function LocalKnockoutRound({ slots }: { slots: WCKnockoutSlot[] }) {
+  if (slots.length === 0) return null;
+  return (
+    <div className="divide-y divide-gray-800/50 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      {slots.map((s) => (
+        <div key={s.localId} className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <span className="text-sm text-gray-300 font-medium truncate">{s.homeLabel}</span>
+          </div>
+          <div className="mx-4 text-center shrink-0">
+            <span className="text-gray-500 text-xs">
+              {new Date(s.utcDate).toLocaleDateString('en-GB', {
+                day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
+              })} UTC
+            </span>
+          </div>
+          <div className="flex items-center gap-3 flex-1 min-w-0 justify-end">
+            <span className="text-sm text-gray-300 font-medium truncate text-right">{s.awayLabel}</span>
+          </div>
+        </div>
+      ))}
+      <div className="px-4 py-2 text-[10px] text-gray-700">
+        ℹ️ Scheduled fixtures — teams TBD after group stage qualifies
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Third Place match card — distinct gold/bronze styling
 // ---------------------------------------------------------------------------
@@ -294,18 +324,23 @@ function FinalCard({ match }: { match: Match }) {
 // ---------------------------------------------------------------------------
 
 export default async function WCBracketPage() {
-  // getWCKnockoutMatches now returns ALL WC matches — filter to knockout stages
+  // getWCKnockoutMatches returns ALL WC matches — filter to knockout stages
   let allWCMatches: Match[] = [];
   try {
     const data = await getWCKnockoutMatches();
     allWCMatches = data.matches;
   } catch {
-    // graceful degradation — show empty bracket
+    // graceful degradation — fall back to local slot schedule below
   }
 
   const knockoutMatches = allWCMatches
     .filter((m) => KNOCKOUT_STAGES.has(m.stage))
     .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
+
+  // When API is unavailable, use local pre-tournament knockout slots
+  const useLocalSlots = knockoutMatches.length === 0;
+  const localSlots = (round: WCKnockoutSlot['round']) =>
+    useLocalSlots ? WC_KNOCKOUT_SLOTS.filter((s) => s.round === round) : [];
 
   // Group by stage
   const byStage = (stage: string) =>
@@ -396,7 +431,7 @@ export default async function WCBracketPage() {
             <h2 id="r32-heading" className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
               Round of 32
             </h2>
-            <span className="text-gray-700 text-xs">16 matches</span>
+            <span className="text-gray-700 text-xs">16 matches · 2–9 July 2026</span>
           </div>
           {r32Matches.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -404,6 +439,8 @@ export default async function WCBracketPage() {
                 <MatchCard key={m.id} match={m} />
               ))}
             </div>
+          ) : localSlots('LAST_32').length > 0 ? (
+            <LocalKnockoutRound slots={localSlots('LAST_32')} />
           ) : (
             <EmptyRound label="Round of 32" />
           )}
@@ -427,16 +464,40 @@ export default async function WCBracketPage() {
           </div>
         </section>
 
+        {/* ── Round of 16 → QF → SF — local schedule when API down ─────── */}
+        {useLocalSlots && (
+          <>
+            {(['LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS'] as const).map((round) => {
+              const sl = localSlots(round);
+              if (!sl.length) return null;
+              const label = sl[0].roundLabel;
+              return (
+                <section key={round} aria-labelledby={`${round}-heading`}>
+                  <div className="flex items-baseline gap-3 mb-4">
+                    <h2 id={`${round}-heading`} className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
+                      {label}
+                    </h2>
+                    <span className="text-gray-700 text-xs">{sl[0].utcDate.slice(0,10)} →</span>
+                  </div>
+                  <LocalKnockoutRound slots={sl} />
+                </section>
+              );
+            })}
+          </>
+        )}
+
         {/* ── Third Place ─────────────────────────────────────────────── */}
         <section aria-labelledby="third-heading">
           <div className="flex items-baseline gap-3 mb-4">
             <h2 id="third-heading" className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
               Third Place Play-off
             </h2>
-            <span className="text-gray-700 text-xs">19 July 2026</span>
+            <span className="text-gray-700 text-xs">25 July 2026 · MetLife Stadium</span>
           </div>
           {thirdMatches.length > 0 ? (
             <ThirdPlaceCard match={thirdMatches[0]} />
+          ) : localSlots('THIRD_PLACE').length > 0 ? (
+            <LocalKnockoutRound slots={localSlots('THIRD_PLACE')} />
           ) : (
             <EmptyRound label="Third Place Play-off" />
           )}
@@ -448,10 +509,28 @@ export default async function WCBracketPage() {
             <h2 id="final-heading" className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
               The Final
             </h2>
-            <span className="text-gray-700 text-xs">19 July 2026 · MetLife Stadium</span>
+            <span className="text-gray-700 text-xs">26 July 2026 · MetLife Stadium</span>
           </div>
           {finalMatches.length > 0 ? (
             <FinalCard match={finalMatches[0]} />
+          ) : localSlots('FINAL').length > 0 ? (
+            <div className="bg-gradient-to-br from-yellow-950/60 via-gray-900 to-gray-900 border border-yellow-600/40 rounded-2xl p-6">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xl">🏆</span>
+                <span className="text-sm font-bold text-yellow-400 uppercase tracking-widest">The Final</span>
+              </div>
+              {localSlots('FINAL').map((s) => (
+                <div key={s.localId} className="text-center text-gray-300 text-sm">
+                  <p className="font-semibold text-white mb-1">{s.homeLabel} vs {s.awayLabel}</p>
+                  <p className="text-xs text-gray-500">
+                    {new Date(s.utcDate).toLocaleDateString('en-GB', {
+                      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+                      hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
+                    })} UTC · MetLife Stadium
+                  </p>
+                </div>
+              ))}
+            </div>
           ) : (
             <EmptyRound label="Final" />
           )}

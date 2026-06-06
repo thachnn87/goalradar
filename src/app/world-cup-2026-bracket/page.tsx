@@ -8,6 +8,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getWCKnockoutMatches } from '@/lib/api';
+import { WC_KNOCKOUT_SLOTS } from '@/lib/wc-fixtures';
 import type { Match } from '@/lib/types';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -128,6 +129,13 @@ export default async function WC2026BracketPage() {
     byStage.get(s)!.push(m);
   }
 
+  const useLocalSlots = knockoutMatches.length === 0;
+  const localByStage = new Map(
+    ['LAST_32', 'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'THIRD_PLACE', 'FINAL'].map(
+      (round) => [round, WC_KNOCKOUT_SLOTS.filter((s) => s.round === round)]
+    )
+  );
+
   const jsonLdFaq = {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
@@ -195,7 +203,7 @@ export default async function WC2026BracketPage() {
                       {matches} match{matches !== 1 ? 'es' : ''}
                     </span>
                   </div>
-                  {/* Live matches for this stage */}
+                  {/* Live matches from API */}
                   {stageMatches.length > 0 && (
                     <div className="mt-3 space-y-1.5">
                       {stageMatches.slice(0, 4).map((m) => {
@@ -212,6 +220,21 @@ export default async function WC2026BracketPage() {
                           </Link>
                         );
                       })}
+                    </div>
+                  )}
+                  {/* Local scheduled fixtures — shown when API is unavailable */}
+                  {useLocalSlots && (localByStage.get(stage) ?? []).length > 0 && (
+                    <div className="mt-3 space-y-1.5">
+                      {(localByStage.get(stage) ?? []).slice(0, 4).map((s) => (
+                        <div key={s.localId} className="flex items-center justify-between bg-gray-800/60 rounded-lg px-3 py-2 text-xs">
+                          <span className="text-gray-400">
+                            {s.homeLabel} vs {s.awayLabel}
+                          </span>
+                          <span className="text-gray-600 font-mono">
+                            {new Date(s.utcDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
