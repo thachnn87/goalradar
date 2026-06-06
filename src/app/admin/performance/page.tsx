@@ -15,6 +15,8 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { kv } from '@vercel/kv';
 import { COMPETITIONS } from '@/lib/types';
+import { fetchGA4Summary } from '@/lib/ga4-reporting';
+import type { GA4Summary } from '@/lib/ga4-reporting';
 
 export const dynamic = 'force-dynamic';
 
@@ -183,6 +185,238 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
   );
 }
 
+// ─── GA4 section component ────────────────────────────────────────────────────
+
+function GA4Section({ ga4Id, summary }: { ga4Id: string; summary: GA4Summary | null }) {
+  const scriptConfigured   = ga4Id !== '';
+  const reportingConfigured = summary !== null;
+  const reportingEnabled   = Boolean(process.env.GOOGLE_ANALYTICS_PROPERTY_ID);
+
+  // Max page views for progress bar scaling
+  const maxViews = summary?.topPages[0]?.views ?? 1;
+
+  return (
+    <div className="space-y-6">
+
+      {/* ── Status row: script + reporting ──────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {/* Tracking script */}
+        <div className={`rounded-xl border p-5 ${scriptConfigured ? 'border-green-900/60 bg-green-950/20' : 'border-yellow-900/60 bg-yellow-950/20'}`}>
+          <div className="flex items-start gap-3">
+            <span className={`mt-0.5 text-lg ${scriptConfigured ? 'text-green-400' : 'text-yellow-400'}`}>
+              {scriptConfigured ? '✓' : '⚠'}
+            </span>
+            <div>
+              <p className={`text-sm font-semibold ${scriptConfigured ? 'text-green-300' : 'text-yellow-300'}`}>
+                {scriptConfigured ? 'Tracking script active' : 'Script not configured'}
+              </p>
+              <p className="mt-1 font-mono text-[11px] text-gray-500">
+                {scriptConfigured ? ga4Id : 'Set NEXT_PUBLIC_GA_MEASUREMENT_ID'}
+              </p>
+              <p className="mt-1 text-[11px] text-gray-600">
+                {scriptConfigured
+                  ? 'Loads via next/script afterInteractive · page_view auto + route changes'
+                  : 'Add to Vercel → Settings → Environment Variables'}
+              </p>
+            </div>
+          </div>
+          {scriptConfigured && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {[
+                { label: 'Realtime',  href: `https://analytics.google.com/analytics/web/#/p${ga4Id.replace('G-', '')}/reports/realtime` },
+                { label: 'Top Pages', href: 'https://analytics.google.com/analytics/web/#/report/content-pages' },
+                { label: 'Events',    href: 'https://analytics.google.com/analytics/web/#/report/content-event-events' },
+              ].map(({ label, href }) => (
+                <a key={label} href={href} target="_blank" rel="noopener noreferrer"
+                  className="rounded-lg bg-gray-800 px-3 py-1.5 text-xs text-blue-400 hover:bg-gray-700 transition-colors">
+                  {label} →
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Reporting API */}
+        <div className={`rounded-xl border p-5 ${reportingConfigured ? 'border-green-900/60 bg-green-950/20' : reportingEnabled ? 'border-red-900/60 bg-red-950/20' : 'border-gray-800 bg-gray-900'}`}>
+          <div className="flex items-start gap-3">
+            <span className={`mt-0.5 text-lg ${reportingConfigured ? 'text-green-400' : reportingEnabled ? 'text-red-400' : 'text-gray-600'}`}>
+              {reportingConfigured ? '✓' : reportingEnabled ? '✗' : '○'}
+            </span>
+            <div>
+              <p className={`text-sm font-semibold ${reportingConfigured ? 'text-green-300' : reportingEnabled ? 'text-red-300' : 'text-gray-500'}`}>
+                {reportingConfigured ? 'Reporting API connected' : reportingEnabled ? 'Reporting API auth failed' : 'Reporting API not configured'}
+              </p>
+              <p className="mt-1 text-[11px] text-gray-600 leading-relaxed">
+                {reportingConfigured
+                  ? `Data fetched · ${summary.dateRange} · ${summary.fetchedAt.slice(0, 16).replace('T', ' ')} UTC`
+                  : reportingEnabled
+                  ? 'GOOGLE_ANALYTICS_PROPERTY_ID is set but auth failed — check service account key'
+                  : 'Set GOOGLE_ANALYTICS_PROPERTY_ID + GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY to enable live metrics'}
+              </p>
+            </div>
+          </div>
+          {!reportingConfigured && (
+            <a href="https://console.cloud.google.com/apis/library/analyticsdata.googleapis.com"
+              target="_blank" rel="noopener noreferrer"
+              className="mt-3 inline-block text-[11px] text-blue-500 hover:text-blue-400">
+              Enable GA4 Data API →
+            </a>
+          )}
+        </div>
+      </div>
+
+      {/* ── Live metrics (when reporting API is connected) ───────────────── */}
+      {summary ? (
+        <div className="space-y-6">
+
+          {/* Summary stats */}
+          <div className="grid grid-cols-3 gap-4">
+            <Stat
+              label="Page Views (7d)"
+              value={summary.totalPageViews7d.toLocaleString()}
+              sub={`${summary.dateRange} · from GA4 Data API`}
+              tone="green"
+            />
+            <Stat
+              label="Top Pages Tracked"
+              value={String(summary.topPages.length)}
+              sub="Unique paths with views in last 7 days"
+              tone="neutral"
+            />
+            <Stat
+              label="Active Competitions"
+              value={String(summary.topCompetitions.length)}
+              sub="Competitions with competition_view events"
+              tone={summary.topCompetitions.length > 0 ? 'green' : 'yellow'}
+            />
+          </div>
+
+          {/* Top pages + top competitions side by side */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+
+            {/* Top pages */}
+            <div>
+              <h3 className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                Top Pages — Last 7 Days
+              </h3>
+              <div className="space-y-1.5">
+                {summary.topPages.map((row, i) => (
+                  <div key={row.path} className="rounded-lg border border-gray-800 bg-gray-900 px-3 py-2">
+                    <div className="flex items-center justify-between gap-2 text-xs mb-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-gray-600 shrink-0 w-4 text-right">{i + 1}</span>
+                        <span className="font-mono text-gray-300 truncate">{row.path}</span>
+                      </div>
+                      <span className="text-white font-bold shrink-0">{row.views.toLocaleString()}</span>
+                    </div>
+                    {/* Progress bar */}
+                    <div className="h-0.5 w-full rounded-full bg-gray-800">
+                      <div
+                        className="h-0.5 rounded-full bg-green-500"
+                        style={{ width: `${Math.round((row.views / maxViews) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Top competitions */}
+            <div>
+              <h3 className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                Top Competitions — competition_view Events
+              </h3>
+              {summary.topCompetitions.length > 0 ? (
+                <div className="space-y-1.5">
+                  {summary.topCompetitions.map((row) => {
+                    const comp = COMPETITIONS.find((c) => c.code === row.code);
+                    return (
+                      <div key={row.code} className="flex items-center justify-between rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span>{comp?.flag ?? '🏆'}</span>
+                          <span className="text-gray-300">{comp?.name ?? row.code}</span>
+                          <span className="font-mono text-gray-600">{row.code}</span>
+                        </div>
+                        <span className="font-bold text-white">{row.views.toLocaleString()}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-gray-800 bg-gray-900 p-5 text-center">
+                  <p className="text-sm text-gray-500">No competition_view events in last 7 days</p>
+                  <p className="mt-1 text-xs text-gray-600">Events fire when users visit competition, schedule or standings pages</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* ── Static fallback when Reporting API not connected ─────────── */
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div>
+            <h3 className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-500">Tracked Events</h3>
+            <div className="overflow-hidden rounded-xl border border-gray-800">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-gray-800 bg-gray-900/60">
+                    <th className="px-4 py-2.5 text-left font-semibold text-gray-400">Event</th>
+                    <th className="px-4 py-2.5 text-left font-semibold text-gray-400">Fired on</th>
+                    <th className="px-4 py-2.5 text-left font-semibold text-gray-400">Key params</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800 bg-gray-900">
+                  {[
+                    { event: 'page_view',       page: 'All pages (auto + route changes)', params: 'page_location, page_title'                           },
+                    { event: 'match_view',       page: '/match/[id]',                     params: 'match_id, home_team, away_team, competition'          },
+                    { event: 'team_view',        page: '/teams/[slug]',                   params: 'team_id, team_name'                                   },
+                    { event: 'competition_view', page: '/competition/[code], /schedule, /standings', params: 'competition_code, competition_name, view_context' },
+                  ].map(({ event, page, params }) => (
+                    <tr key={event} className="hover:bg-gray-800/30">
+                      <td className="px-4 py-2.5 font-mono text-emerald-400">{event}</td>
+                      <td className="px-4 py-2.5 text-gray-400">{page}</td>
+                      <td className="px-4 py-2.5 font-mono text-gray-500">{params}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="mb-3 text-[10px] font-bold uppercase tracking-widest text-gray-500">Expected Top Pages</h3>
+            <div className="space-y-1.5">
+              {[
+                { path: '/world-cup-2026',                         label: 'WC 2026 Hub'         },
+                { path: '/world-cup-2026/matches-today',           label: 'WC Today'             },
+                { path: '/world-cup-2026/matches-tomorrow',        label: 'WC Tomorrow'          },
+                { path: '/world-cup-2026-schedule',                label: 'WC Schedule (static)' },
+                { path: '/schedule?competition=WC',                label: 'WC Live Schedule'     },
+                { path: '/standings?competition=WC',               label: 'WC Standings'         },
+              ].map(({ path, label }) => (
+                <div key={path} className="flex items-center justify-between rounded-lg bg-gray-900 border border-gray-800 px-3 py-2 text-xs">
+                  <div className="min-w-0">
+                    <span className="font-mono text-gray-400 truncate block">{path}</span>
+                    <span className="text-gray-600">{label}</span>
+                  </div>
+                  <a href={`https://analytics.google.com/analytics/web/#/report/content-pages/a${ga4Id.replace('G-', '')}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="ml-3 shrink-0 text-blue-500 hover:text-blue-400 text-xs">
+                    GA →
+                  </a>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-[11px] text-gray-600">
+              Configure Reporting API credentials to see real data above.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── page ────────────────────────────────────────────────────────────────────
 
 export default async function AdminPerformancePage() {
@@ -236,6 +470,9 @@ export default async function AdminPerformancePage() {
 
   // ── 4. API key ────────────────────────────────────────────────────────────
   const apiKeySet = Boolean(process.env.FOOTBALL_API_KEY);
+
+  // ── 5. GA4 reporting metrics (null if service account not configured) ─────
+  const ga4Summary = await fetchGA4Summary();
 
   // ── 5. Computed tones ─────────────────────────────────────────────────────
   const kvTone: 'green' | 'red' | 'yellow' =
@@ -490,160 +727,7 @@ export default async function AdminPerformancePage() {
       {/* ── Google Analytics 4 ──────────────────────────────────────────── */}
       <section>
         <SectionHeader>Google Analytics 4</SectionHeader>
-
-        {/* GA4 status card */}
-        {(() => {
-          const gaId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? '';
-          const configured = gaId !== '';
-          return (
-            <div className={`rounded-xl border p-5 mb-6 ${configured ? 'border-green-900/60 bg-green-950/20' : 'border-yellow-900/60 bg-yellow-950/20'}`}>
-              <div className="flex items-center gap-3">
-                <span className={`text-xl ${configured ? 'text-green-400' : 'text-yellow-400'}`}>
-                  {configured ? '✓' : '⚠'}
-                </span>
-                <div>
-                  <p className={`text-sm font-semibold ${configured ? 'text-green-300' : 'text-yellow-300'}`}>
-                    {configured ? `GA4 active — ${gaId}` : 'GA4 not configured'}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {configured
-                      ? 'NEXT_PUBLIC_GA_MEASUREMENT_ID is set. Script loads via next/script strategy="afterInteractive".'
-                      : 'Set NEXT_PUBLIC_GA_MEASUREMENT_ID in Vercel environment variables to enable tracking.'}
-                  </p>
-                </div>
-              </div>
-              {configured && (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <a
-                    href={`https://analytics.google.com/analytics/web/#/p${gaId.replace('G-', '')}/reports/realtime`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-lg bg-gray-800 px-3 py-1.5 text-xs text-blue-400 hover:bg-gray-700 transition-colors"
-                  >
-                    Real-time →
-                  </a>
-                  <a
-                    href="https://analytics.google.com/analytics/web/#/report/content-pages"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-lg bg-gray-800 px-3 py-1.5 text-xs text-blue-400 hover:bg-gray-700 transition-colors"
-                  >
-                    Top Pages →
-                  </a>
-                  <a
-                    href="https://analytics.google.com/analytics/web/#/report/content-event-events"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-lg bg-gray-800 px-3 py-1.5 text-xs text-blue-400 hover:bg-gray-700 transition-colors"
-                  >
-                    Events →
-                  </a>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
-        {/* Tracked events schema */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <section>
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-500">Tracked Events</h3>
-            <div className="overflow-hidden rounded-xl border border-gray-800">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-gray-800 bg-gray-900/60">
-                    <th className="px-4 py-2.5 text-left font-semibold text-gray-400">Event</th>
-                    <th className="px-4 py-2.5 text-left font-semibold text-gray-400">Fired on</th>
-                    <th className="px-4 py-2.5 text-left font-semibold text-gray-400">Key params</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-800 bg-gray-900">
-                  {[
-                    { event: 'page_view',        page: 'All pages (automatic)',  params: 'page_location, page_title' },
-                    { event: 'match_view',        page: '/match/[id]',           params: 'match_id, home_team, away_team, competition' },
-                    { event: 'team_view',         page: '/team/[id]',            params: 'team_id, team_name' },
-                    { event: 'competition_view',  page: '/competition/[code], /schedule, /standings', params: 'competition_code, competition_name, view_context' },
-                  ].map(({ event, page, params }) => (
-                    <tr key={event} className="hover:bg-gray-800/30">
-                      <td className="px-4 py-2.5 font-mono text-emerald-400">{event}</td>
-                      <td className="px-4 py-2.5 text-gray-400">{page}</td>
-                      <td className="px-4 py-2.5 font-mono text-gray-500">{params}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section>
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-500">Expected Top Pages</h3>
-            <div className="space-y-1.5">
-              {[
-                { path: '/world-cup-2026',             label: 'World Cup 2026 Hub' },
-                { path: '/world-cup-2026-schedule',    label: 'WC Schedule (static)' },
-                { path: '/schedule?competition=WC',    label: 'WC Live Schedule' },
-                { path: '/standings?competition=WC',   label: 'WC Group Standings' },
-                { path: '/schedule',                   label: 'General Schedule' },
-                { path: '/standings',                  label: 'League Standings' },
-              ].map(({ path, label }) => (
-                <div key={path} className="flex items-center justify-between rounded-lg bg-gray-900 border border-gray-800 px-3 py-2 text-xs">
-                  <div>
-                    <span className="font-mono text-gray-400">{path}</span>
-                    <span className="ml-2 text-gray-600">{label}</span>
-                  </div>
-                  <a
-                    href={`https://analytics.google.com/analytics/web/#/report/content-pages/a${(process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? '').replace('G-', '')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-500 hover:text-blue-400"
-                  >
-                    GA →
-                  </a>
-                </div>
-              ))}
-            </div>
-          </section>
-        </div>
-
-        {/* Top competitions by GA event */}
-        <div className="mt-6">
-          <h3 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-500">Competitions — competition_view Events</h3>
-          <div className="overflow-hidden rounded-xl border border-gray-800">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-800 bg-gray-900/60">
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-400">Competition</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-400">Code</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-400">GA4 filter</th>
-                  <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-400">GA Console</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-800 bg-gray-900">
-                {COMPETITIONS.map((c) => (
-                  <tr key={c.code} className="hover:bg-gray-800/30">
-                    <td className="px-4 py-2.5 text-gray-300">
-                      <span className="mr-2">{c.flag}</span>{c.name}
-                    </td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{c.code}</td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-gray-600">
-                      competition_code = &quot;{c.code}&quot;
-                    </td>
-                    <td className="px-4 py-2.5 text-right">
-                      <a
-                        href="https://analytics.google.com/analytics/web/#/report/content-event-events"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-blue-500 hover:text-blue-400"
-                      >
-                        View →
-                      </a>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <GA4Section ga4Id={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? ''} summary={ga4Summary} />
       </section>
 
       {/* ── process cache note ──────────────────────────────────────────── */}

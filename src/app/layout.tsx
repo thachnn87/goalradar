@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Script from "next/script";
+import { Suspense } from "react";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
+import NavigationTracker from "@/components/NavigationTracker";
 
 const ADSENSE_ID  = process.env.NEXT_PUBLIC_ADSENSE_ID  ?? '';
 const ADS_ENABLED = process.env.NEXT_PUBLIC_ADS_ENABLED === 'true' && ADSENSE_ID !== '';
@@ -97,6 +99,11 @@ export default function RootLayout({
         )}
       </head>
       <body className="font-sans bg-gray-950 text-white min-h-screen">
+        {/* Route-change page_view tracker — Suspense required for usePathname */}
+        <Suspense fallback={null}>
+          <NavigationTracker />
+        </Suspense>
+
         <Navbar />
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
