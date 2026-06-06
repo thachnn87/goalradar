@@ -10,6 +10,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { WC_ALL_TEAM_SLUGS, getWCTeam } from '@/lib/wc-all-teams';
+import { getTeamFixtures, type WCGroupFixture } from '@/lib/wc-fixtures';
 import { getUpcomingMatches, getRecentMatches, getStandings } from '@/lib/api';
 import type { Match, StandingTable, StandingEntry } from '@/lib/types';
 import AdSlot from '@/components/AdSlot';
@@ -106,6 +107,9 @@ export default async function WCTeamPage({
   let standingEntry: StandingEntry | null = null;
   let standingGroupLabel = '';
 
+  // Local fallback fixtures — used when API returns nothing (pre-tournament or API down)
+  let localTeamFixtures: WCGroupFixture[] = [];
+
   try {
     const [upcomingData, recentData, standingsData] = await Promise.allSettled([
       getUpcomingMatches('WC'),
@@ -151,6 +155,11 @@ export default async function WCTeamPage({
       }
     }
   } catch { /* render with static content */ }
+
+  // If API returned nothing, load local scheduled fixtures for this team
+  if (upcoming.length === 0 && recent.length === 0) {
+    localTeamFixtures = getTeamFixtures(slug);
+  }
 
   // Form helper
   const recentForm: string[] = (recent.slice(0, 5).map((m) => {
@@ -374,8 +383,44 @@ export default async function WCTeamPage({
           </section>
         )}
 
-        {/* No data state */}
-        {upcoming.length === 0 && recent.length === 0 && (
+        {/* Scheduled fixtures from local dataset — shown when API is empty */}
+        {upcoming.length === 0 && recent.length === 0 && localTeamFixtures.length > 0 && (
+          <section className="mb-8">
+            <h2 className="text-lg font-bold text-white mb-3">
+              Group {team.group} Schedule
+            </h2>
+            <div className="space-y-2">
+              {localTeamFixtures.map((f) => {
+                const isHome = f.homeSlug === slug;
+                return (
+                  <div key={f.localId}
+                    className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-white truncate">
+                        <span className={isHome ? 'text-yellow-400' : ''}>{f.homeFlag} {f.homeLabel}</span>
+                        <span className="text-gray-500 font-normal mx-2">vs</span>
+                        <span className={!isHome ? 'text-yellow-400' : ''}>{f.awayLabel} {f.awayFlag}</span>
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {new Date(f.utcDate).toLocaleDateString('en-GB', {
+                          weekday: 'short', day: 'numeric', month: 'short',
+                          hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
+                        })} UTC · {f.venueCity}
+                      </p>
+                    </div>
+                    <span className="text-[10px] text-gray-600 shrink-0">MD{f.matchday}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-xs text-gray-600 mt-2 px-1">
+              ℹ️ Scheduled kickoff times — live match links appear once the tournament begins.
+            </p>
+          </section>
+        )}
+
+        {/* No data state — only if API empty AND no local fixtures found */}
+        {upcoming.length === 0 && recent.length === 0 && localTeamFixtures.length === 0 && (
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center mb-8">
             <p className="text-3xl mb-3">{team.flag}</p>
             <p className="text-gray-300 font-semibold">Fixtures load once the tournament begins</p>

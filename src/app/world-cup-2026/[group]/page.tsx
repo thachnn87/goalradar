@@ -3,13 +3,16 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
 import { getStandings, getUpcomingMatches, getRecentMatches } from '@/lib/api';
+import { getGroupFixtures, type WCGroupFixture } from '@/lib/wc-fixtures';
+import { getStaticWCGroupTables } from '@/lib/wc-static-groups';
+import { WC_ALL_TEAMS } from '@/lib/wc-all-teams';
 import { matchPath } from '@/lib/url';
 import type { Match, StandingEntry } from '@/lib/types';
 import MatchCard from '@/components/MatchCard';
 import WCGroupTable from '@/components/WCGroupTable';
 import Breadcrumb from '@/components/Breadcrumb';
 
-export const revalidate = 60;
+export const revalidate = 3600;
 
 const BASE_URL = 'https://goalradar.org';
 
@@ -53,21 +56,13 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
   const label = slugToLabel(slug);
   const url   = `${BASE_URL}/world-cup-2026/${slug}`;
+  const letter = letterFromSlug(slug);
 
-  let teamNames = '';
-  try {
-    const data = await getStandings('WC');
-    const table = data.standings.find(
-      (s) => s.type === 'TOTAL' && s.group === slugToApiGroup(slug)
-    );
-    if (table?.table.length) {
-      teamNames = table.table
-        .map((e) => e.team.shortName || e.team.name)
-        .join(', ');
-    }
-  } catch { /* standings not yet available */ }
+  // Use local team data — no API call needed during build
+  const groupTeams = WC_ALL_TEAMS.filter((t) => t.group === letter);
+  const teamNames  = groupTeams.map((t) => t.displayName).join(', ');
+  const teamsText  = teamNames ? ` Featuring ${teamNames}.` : '';
 
-  const teamsText = teamNames ? ` Featuring ${teamNames}.` : '';
   const title = `FIFA World Cup 2026 ${label} Standings, Fixtures & Teams | GoalRadar`;
   const description =
     `Follow FIFA World Cup 2026 ${label} with live standings, match results, upcoming fixtures and team information.${teamsText}`;
@@ -340,15 +335,24 @@ export default async function WCGroupPage({ params }: Params) {
     getRecentMatches('WC'),
   ]);
 
-  // Group standings table
-  const groupTable =
+  // Group standings table — fall back to static (zeroed) table if API fails
+  const liveGroupTable =
     standingsResult.status === 'fulfilled'
       ? standingsResult.value.standings.find(
           (s) => s.type === 'TOTAL' && s.group === apiGroup
         ) ?? null
       : null;
 
-  const tableEntries: StandingEntry[] = groupTable?.table ?? [];
+  let tableEntries: StandingEntry[] = liveGroupTable?.table ?? [];
+  let isStaticStandings = false;
+
+  if (tableEntries.length === 0) {
+    // Serve static pre-tournament group table so the page always has team names
+    const staticTables = getStaticWCGroupTables();
+    const staticGroup  = staticTables.find((t) => t.group === apiGroup);
+    tableEntries       = staticGroup?.table ?? [];
+    isStaticStandings  = tableEntries.length > 0;
+  }
 
   // All group matches — for JSON-LD and stats
   const allGroupUpcoming: Match[] =
@@ -367,6 +371,12 @@ export default async function WCGroupPage({ params }: Params) {
   const results = [...allGroupResults].sort(
     (a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime()
   );
+
+  // Local fixture fallback — used when API upcoming is empty (pre-tournament or API down)
+  const localFixtures: WCGroupFixture[] =
+    upcoming.length === 0 && results.length === 0
+      ? getGroupFixtures(letter)
+      : [];
 
   const allMatches = [...allGroupResults, ...allGroupUpcoming];
   const totalGroupMatches = 6; // each WC group plays 6 matches (4 teams × 3 rounds C(4,2))
@@ -419,6 +429,11 @@ export default async function WCGroupPage({ params }: Params) {
                 <span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500 shrink-0" />
                 Advances to knockout stage
               </p>
+              {isStaticStandings && (
+                <p className="text-xs text-yellow-600/80 mt-2 px-1">
+                  ⏳ Pre-tournament lineup — live standings update once matches begin on 11 June 2026.
+                </p>
+              )}
             </>
           ) : (
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center text-gray-500 text-sm">
@@ -469,7 +484,7 @@ export default async function WCGroupPage({ params }: Params) {
         {/* 5. Upcoming fixtures */}
         <section aria-labelledby="fixtures-heading">
           <h2 id="fixtures-heading" className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">
-            Upcoming Fixtures
+            {localFixtures.length > 0 ? 'Group Stage Schedule' : 'Upcoming Fixtures'}
           </h2>
           {upcoming.length > 0 ? (
             <div className="space-y-2">
@@ -479,6 +494,24 @@ export default async function WCGroupPage({ params }: Params) {
                   <MatchCard match={m} />
                 </div>
               ))}
+            </div>
+          ) : localFixtures.length > 0 ? (
+            /* Local static fixture list — shown when API is unavailable pre-tournament */
+            <div className="space-y-2">
+              {localFixtures.map((f) => (
+                <div key={f.localId} className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">
+                      {f.homeFlag} {f.homeLabel} <span className="text-gray-500 font-normal">vs</span> {f.awayLabel} {f.awayFlag}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">{formatKickoff(f.utcDate)} · {f.venueCity}</p>
+                  </div>
+                  <span className="text-[10px] text-gray-600 shrink-0">MD{f.matchday}</span>
+                </div>
+              ))}
+              <p className="text-xs text-gray-600 px-1 pt-1">
+                ℹ️ Scheduled kickoff times — live match links appear once the tournament begins.
+              </p>
             </div>
           ) : (
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center text-gray-500 text-sm">

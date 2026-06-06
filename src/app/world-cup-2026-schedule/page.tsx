@@ -12,6 +12,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getUpcomingMatches } from '@/lib/api';
 import type { Match } from '@/lib/types';
+import { getUpcomingGroupFixtures, type WCGroupFixture } from '@/lib/wc-fixtures';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCPageNav from '@/components/WCPageNav';
@@ -125,15 +126,36 @@ const FAQ = [
 // Page
 // ---------------------------------------------------------------------------
 
+/** Group local WCGroupFixtures by calendar date (YYYY-MM-DD). */
+function groupLocalByDay(fixtures: WCGroupFixture[]): Map<string, WCGroupFixture[]> {
+  const map = new Map<string, WCGroupFixture[]>();
+  for (const f of fixtures) {
+    const day = f.utcDate.slice(0, 10);
+    if (!map.has(day)) map.set(day, []);
+    map.get(day)!.push(f);
+  }
+  return map;
+}
+
 export default async function WC2026SchedulePage() {
   let upcoming: Match[] = [];
+  let localUpcoming: WCGroupFixture[] = [];
+
   try {
     const data = await getUpcomingMatches('WC');
     upcoming = data.matches.slice(0, 48); // first 48 upcoming
   } catch { /* show static FAQ only */ }
 
+  // If API returned nothing, serve local group-stage schedule
+  if (upcoming.length === 0) {
+    localUpcoming = getUpcomingGroupFixtures().slice(0, 48);
+  }
+
   const byDay = groupByDay(upcoming);
   const days = Array.from(byDay.keys()).sort().slice(0, 14); // next 14 days
+
+  const localByDay = groupLocalByDay(localUpcoming);
+  const localDays  = Array.from(localByDay.keys()).sort().slice(0, 14);
 
   const jsonLdFaq = {
     '@context': 'https://schema.org',
@@ -256,7 +278,7 @@ export default async function WC2026SchedulePage() {
           </div>
         </section>
 
-        {/* Live upcoming schedule */}
+        {/* Live upcoming schedule — from API */}
         {days.length > 0 && (
           <section className="mb-8">
             <h2 className="text-xl font-bold text-white mb-4">Upcoming Fixtures</h2>
@@ -286,6 +308,44 @@ export default async function WC2026SchedulePage() {
                           <span className="text-yellow-600 text-xs">→</span>
                         </div>
                       </Link>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </section>
+        )}
+
+        {/* Local static schedule — shown when API is unavailable */}
+        {days.length === 0 && localDays.length > 0 && (
+          <section className="mb-8">
+            <h2 className="text-xl font-bold text-white mb-1">Group Stage Schedule</h2>
+            <p className="text-xs text-gray-600 mb-4">
+              ℹ️ Showing scheduled kickoff times. Live match links will appear once the tournament begins.
+            </p>
+            {localDays.map((day) => {
+              const dayFixtures = localByDay.get(day) ?? [];
+              return (
+                <div key={day} className="mb-6">
+                  <p className="text-xs font-bold text-yellow-400 uppercase tracking-wider mb-3">
+                    {formatDay(day + 'T00:00:00Z')}
+                  </p>
+                  <div className="space-y-2">
+                    {dayFixtures.map((f) => (
+                      <div key={f.localId}
+                        className="flex items-center justify-between bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="text-[10px] text-gray-600 font-mono shrink-0">
+                            {utcToLocal(f.utcDate, -4)} ET
+                          </span>
+                          <span className="text-sm text-white font-semibold truncate">
+                            {f.homeFlag} {f.homeLabel} <span className="text-gray-500 font-normal">vs</span> {f.awayLabel} {f.awayFlag}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-[10px] text-gray-600">Group {f.group} · MD{f.matchday}</span>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
