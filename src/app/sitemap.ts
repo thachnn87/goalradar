@@ -17,7 +17,7 @@
 import { MetadataRoute } from 'next';
 import { COMPETITIONS } from '@/lib/types';
 import { getRecentMatches, getUpcomingMatches, getStandings } from '@/lib/api';
-import { matchPath, teamPath } from '@/lib/url';
+import { matchPath, predictPath, teamPath } from '@/lib/url';
 import { WC_TEAM_SLUGS } from '@/lib/wc-teams';
 import { WC_WATCH_COUNTRY_SLUGS } from '@/lib/wc-watch-countries';
 import { WC_TV_COUNTRY_SLUGS } from '@/lib/wc-tv-countries';
@@ -369,7 +369,9 @@ async function matchSitemap(): Promise<MetadataRoute.Sitemap> {
     const isWC       = match.competition?.code === 'WC';
     const isLive     = ['IN_PLAY', 'PAUSED'].includes(match.status);
     const isFinished = match.status === 'FINISHED';
+    const isUpcoming = match.status === 'SCHEDULED' || match.status === 'TIMED';
 
+    // Match detail page
     entries.push({
       url: `${BASE_URL}${matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}`,
       lastModified: match.lastUpdated ? new Date(match.lastUpdated) : new Date(),
@@ -382,6 +384,16 @@ async function matchSitemap(): Promise<MetadataRoute.Sitemap> {
         ? isLive ? 0.95 : 0.88
         : isLive ? 0.85 : 0.70,
     });
+
+    // Prediction page — only for upcoming and live matches (finished predictions are stale)
+    if (isUpcoming || isLive) {
+      entries.push({
+        url: `${BASE_URL}${predictPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}`,
+        lastModified: match.lastUpdated ? new Date(match.lastUpdated) : new Date(),
+        changeFrequency: isLive ? ('hourly' as const) : ('daily' as const),
+        priority: isWC ? 0.82 : 0.65,
+      });
+    }
   }
 
   return entries;

@@ -79,3 +79,18 @@ export function teamPath(
 export function extractTeamId(slug: string): string | null {
   return /^(\d+)/.exec(slug)?.[1] ?? null;
 }
+
+/**
+ * Build the canonical path for a match prediction page.
+ * Format: /predict/{id}-{home-team}-vs-{away-team}
+ * Examples:
+ *   predictPath(537327, "France",  "England") → "/predict/537327-france-vs-england"
+ *   predictPath(537417, null,      null)       → "/predict/537417-tbd-vs-tbd"
+ */
+export function predictPath(
+  id:           number,
+  homeTeamName: string | null | undefined,
+  awayTeamName: string | null | undefined,
+): string {
+  return `/predict/${id}-${slugify(homeTeamName)}-vs-${slugify(awayTeamName)}`;
+}
