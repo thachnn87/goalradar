@@ -21,12 +21,10 @@ type Params = { params: Promise<{ id: string }> };
 export default async function TeamIdRedirect({ params }: Params) {
   const { id } = await params;
 
-  try {
-    const team = await getTeam(id);
-    permanentRedirect(teamPath(team.id, team.name));
-  } catch {
-    // Team not found or API unavailable — redirect to the slug pattern so the
-    // /teams/[slug] page can handle the 404 or show an error state itself.
-    permanentRedirect(`/teams/${id}`);
-  }
+  // Resolve the team name from the API; fall back to undefined on any error.
+  // permanentRedirect() must sit outside any try/catch — it throws a
+  // NEXT_REDIRECT sentinel that a bare catch{} would intercept and replace
+  // with the fallback, producing /teams/{id}-tbd even when the API succeeds.
+  const team = await getTeam(id).catch(() => null);
+  permanentRedirect(teamPath(team?.id ?? id, team?.name));
 }
