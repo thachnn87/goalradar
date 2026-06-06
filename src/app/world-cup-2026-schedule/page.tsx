@@ -153,10 +153,41 @@ export default async function WC2026SchedulePage() {
     ],
   };
 
+  // ItemList — up to 24 upcoming matches for Google rich results
+  const jsonLdItemList = upcoming.length > 0 ? {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: 'FIFA World Cup 2026 Schedule',
+    description: 'Upcoming FIFA World Cup 2026 matches with kickoff times',
+    url: CANONICAL,
+    numberOfItems: upcoming.length,
+    itemListElement: upcoming.slice(0, 24).map((m, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      item: {
+        '@type': 'SportsEvent',
+        name: `${m.homeTeam.name} vs ${m.awayTeam.name}`,
+        startDate: m.utcDate,
+        sport: 'Association football',
+        url: `${BASE_URL}${matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name)}`,
+        location: {
+          '@type': 'SportsActivityLocation',
+          name: 'FIFA World Cup 2026 Venue',
+        },
+        organizer: { '@type': 'Organization', name: 'FIFA' },
+        homeTeam: { '@type': 'SportsTeam', name: m.homeTeam.name },
+        awayTeam: { '@type': 'SportsTeam', name: m.awayTeam.name },
+      },
+    })),
+  } : null;
+
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdFaq) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdBreadcrumb) }} />
+      {jsonLdItemList && (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdItemList) }} />
+      )}
 
       <div className="max-w-3xl mx-auto pb-16">
         <Breadcrumb items={[

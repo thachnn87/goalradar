@@ -92,17 +92,48 @@ function JsonLd({ matches }: { matches: Match[] }) {
     hasPart: matches.slice(0, 50).map(m => ({
       '@type': 'SportsEvent',
       name: `${m.homeTeam?.name ?? 'TBD'} vs ${m.awayTeam?.name ?? 'TBD'}`,
-      sport: 'Football',
+      sport: 'Association football',
       startDate: m.utcDate,
       url: `${BASE_URL}${matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name)}`,
       superEvent: { '@type': 'SportsEvent', name: 'FIFA World Cup 2026', url: `${BASE_URL}/world-cup-2026` },
     })),
   };
 
+  // ItemList for Google rich results — top 24 upcoming fixtures
+  const itemList = matches.length > 0 ? {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: 'FIFA World Cup 2026 Fixtures',
+    description: 'Upcoming FIFA World Cup 2026 match fixtures and kick-off times',
+    url: PAGE_URL,
+    numberOfItems: matches.length,
+    itemListElement: matches.slice(0, 24).map((m, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      item: {
+        '@type': 'SportsEvent',
+        name: `${m.homeTeam?.name ?? 'TBD'} vs ${m.awayTeam?.name ?? 'TBD'}`,
+        startDate: m.utcDate,
+        sport: 'Association football',
+        url: `${BASE_URL}${matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name)}`,
+        homeTeam: { '@type': 'SportsTeam', name: m.homeTeam?.name ?? 'TBD' },
+        awayTeam: { '@type': 'SportsTeam', name: m.awayTeam?.name ?? 'TBD' },
+        location: {
+          '@type': 'SportsActivityLocation',
+          name: 'FIFA World Cup 2026 Venue',
+        },
+        organizer: { '@type': 'Organization', name: 'FIFA' },
+      },
+    })),
+  } : null;
+
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(collection) }} />
+      {itemList && (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemList) }} />
+      )}
     </>
   );
 }

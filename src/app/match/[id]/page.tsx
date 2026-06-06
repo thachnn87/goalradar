@@ -1435,29 +1435,63 @@ function WCBottomFunnel({
 // ---------------------------------------------------------------------------
 
 function JsonLd({ match }: { match: MatchDetail }) {
-  const data = {
+  const isFinished = match.status === 'FINISHED';
+  const isLive = match.status === 'IN_PLAY' || match.status === 'PAUSED';
+  const isCancelled = match.status === 'CANCELLED' || match.status === 'SUSPENDED';
+  const isPostponed = match.status === 'POSTPONED';
+
+  // Estimate endDate as startDate + 105 min (90 min + injury time buffer)
+  const endDate = match.utcDate
+    ? new Date(new Date(match.utcDate).getTime() + 105 * 60 * 1000).toISOString()
+    : undefined;
+
+  const eventStatus = isCancelled
+    ? 'https://schema.org/EventCancelled'
+    : isPostponed
+    ? 'https://schema.org/EventPostponed'
+    : 'https://schema.org/EventScheduled';
+
+  const homeScore = match.score?.fullTime?.home;
+  const awayScore = match.score?.fullTime?.away;
+  const hasScore = isFinished && homeScore != null && awayScore != null;
+
+  const data: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'SportsEvent',
     name: `${match.homeTeam.name} vs ${match.awayTeam.name}`,
-    sport: 'Football',
+    description: hasScore
+      ? `Final score: ${match.homeTeam.name} ${homeScore}–${awayScore} ${match.awayTeam.name}. ${match.competition?.name ?? 'Football'} match.`
+      : `${match.homeTeam.name} vs ${match.awayTeam.name} — ${match.competition?.name ?? 'Football'}`,
+    sport: 'Association football',
+    url: `https://goalradar.org/match/${match.id}`,
     startDate: match.utcDate,
-    eventStatus:
-      match.status === 'FINISHED'
-        ? 'https://schema.org/EventScheduled'
-        : 'https://schema.org/EventScheduled',
-    competitor: [
-      { '@type': 'SportsTeam', name: match.homeTeam.name, image: match.homeTeam.crest },
-      { '@type': 'SportsTeam', name: match.awayTeam.name, image: match.awayTeam.crest },
-    ],
+    ...(isFinished && endDate ? { endDate } : {}),
+    eventStatus,
+    homeTeam: {
+      '@type': 'SportsTeam',
+      name: match.homeTeam.name,
+      ...(match.homeTeam.crest ? { image: match.homeTeam.crest } : {}),
+    },
+    awayTeam: {
+      '@type': 'SportsTeam',
+      name: match.awayTeam.name,
+      ...(match.awayTeam.crest ? { image: match.awayTeam.crest } : {}),
+    },
     location: {
-      '@type': 'Place',
+      '@type': 'SportsActivityLocation',
       name: match.venue ?? match.competition?.name ?? 'Football Stadium',
     },
     organizer: {
       '@type': 'Organization',
-      name: match.competition?.name ?? 'Football',
+      name: match.competition?.name ?? 'FIFA',
     },
   };
+
+  // Add eventAttendanceMode for live matches (helps Google News / SERP)
+  if (isLive) {
+    data.eventAttendanceMode = 'https://schema.org/MixedEventAttendanceMode';
+  }
+
   return (
     <script
       type="application/ld+json"
