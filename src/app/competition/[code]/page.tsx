@@ -207,8 +207,11 @@ export default async function CompetitionPage({ params }: Params) {
                 ))}
               </div>
             ) : (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center text-gray-500 text-sm">
-                No recent results found.
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center text-gray-500 text-sm space-y-2">
+                <p>No recent results found.</p>
+                <Link href={`/schedule?competition=${code}`} className="inline-block text-xs text-green-400 hover:text-green-300 transition-colors">
+                  Browse {competitionName} schedule →
+                </Link>
               </div>
             )}
           </section>
@@ -228,12 +231,31 @@ export default async function CompetitionPage({ params }: Params) {
                 ))}
               </div>
             ) : (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center text-gray-500 text-sm">
-                No upcoming fixtures found.
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center text-gray-500 text-sm space-y-2">
+                <p>No upcoming fixtures found.</p>
+                <Link href={`/schedule?competition=${code}`} className="inline-block text-xs text-green-400 hover:text-green-300 transition-colors">
+                  Browse {competitionName} schedule →
+                </Link>
               </div>
             )}
           </section>
         </div>
+
+        {/* Static internal links — always crawlable, not API-gated */}
+        <nav aria-label={`${competitionName} quick links`} className="flex flex-wrap gap-4 pt-4 border-t border-gray-800 text-sm">
+          <Link href={`/schedule?competition=${code}`} className="text-gray-500 hover:text-white transition-colors">
+            📅 {competitionName} fixtures
+          </Link>
+          <Link href={`/standings?competition=${code}`} className="text-gray-500 hover:text-white transition-colors">
+            📊 {competitionName} standings &amp; teams
+          </Link>
+          <Link href="/schedule" className="text-gray-500 hover:text-white transition-colors">
+            All fixtures →
+          </Link>
+          <Link href="/standings" className="text-gray-500 hover:text-white transition-colors">
+            All standings →
+          </Link>
+        </nav>
       </div>
     </>
   );

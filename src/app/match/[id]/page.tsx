@@ -1145,11 +1145,17 @@ function GroupStandingsPreview({
 function WCNavBox({
   groupSlug,
   groupLabel,
+  homeTeam,
+  awayTeam,
 }: {
-  groupSlug: string | null;
+  groupSlug:  string | null;
   groupLabel: string | null;
+  homeTeam:   { id: number; name: string; shortName: string; crest: string };
+  awayTeam:   { id: number; name: string; shortName: string; crest: string };
 }) {
   const navLinks = [
+    { href: teamPath(homeTeam.id, homeTeam.name), icon: '🔵', label: homeTeam.shortName || homeTeam.name, desc: 'Team page' },
+    { href: teamPath(awayTeam.id, awayTeam.name), icon: '🔴', label: awayTeam.shortName || awayTeam.name, desc: 'Team page' },
     { href: '/schedule?competition=WC',   icon: '📅', label: 'WC Fixtures', desc: 'Upcoming matches'         },
     { href: '/world-cup-2026/results',    icon: '🏁', label: 'Results',     desc: 'All scores & reports'     },
     { href: '/world-cup-2026/bracket',    icon: '🔗', label: 'Bracket',     desc: 'Knockout tournament tree'  },
@@ -2007,7 +2013,7 @@ export default async function MatchDetailPage({ params }: Params) {
 
         {/* WC navigation box (replaces generic CompetitionLinks for WC matches) */}
         {isWC
-          ? <WCNavBox groupSlug={matchGroupSlug} groupLabel={matchGroupLabel} />
+          ? <WCNavBox groupSlug={matchGroupSlug} groupLabel={matchGroupLabel} homeTeam={match.homeTeam} awayTeam={match.awayTeam} />
           : <CompetitionLinks match={match} />
         }
 

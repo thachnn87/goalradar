@@ -735,6 +735,26 @@ export default async function TeamSlugPage({ params }: Params) {
           />
         )}
 
+        {/* ── Static crawler anchors — always present regardless of API ── */}
+        <nav aria-label={`${team.name} quick links`} className="flex flex-wrap gap-4 text-sm border-t border-gray-800 pt-4">
+          {leagueCode && (
+            <>
+              <Link href={`/schedule?competition=${leagueCode}`} className="text-gray-500 hover:text-white transition-colors">
+                📅 {leagueName || 'League'} fixtures
+              </Link>
+              <Link href={`/standings?competition=${leagueCode}`} className="text-gray-500 hover:text-white transition-colors">
+                📊 {leagueName || 'League'} standings
+              </Link>
+              <Link href={`/competition/${leagueCode}`} className="text-gray-500 hover:text-white transition-colors">
+                {leagueName || 'Competition'} hub →
+              </Link>
+            </>
+          )}
+          <Link href="/schedule" className="text-gray-500 hover:text-white transition-colors">
+            All fixtures →
+          </Link>
+        </nav>
+
         {/* ── Below-fold ad ────────────────────────────────────────────── */}
         <AdSlot slotId={`team-${id}-bottom`} variant="banner" />
 
