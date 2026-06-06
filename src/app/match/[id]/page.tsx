@@ -1543,16 +1543,10 @@ function JsonLd({ match }: { match: MatchDetail }) {
     homeTeam:   homeTeamSchema,
     awayTeam:   awayTeamSchema,
     competitor: [homeTeamSchema, awayTeamSchema],
-    location: match.venue
-      ? {
-          '@type': 'StadiumOrArena',
-          name:    match.venue,
-          address: { '@type': 'PostalAddress' },
-        }
-      : {
-          '@type': 'SportsActivityLocation',
-          name:    match.competition?.name ?? 'Football Stadium',
-        },
+    location: {
+      '@type': 'Place',
+      name: match.venue || match.competition?.name || 'Football Stadium',
+    },
     organizer: {
       '@type': 'Organization',
       name:    match.competition?.name ?? 'FIFA',
