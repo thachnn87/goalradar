@@ -1495,23 +1495,38 @@ function JsonLd({ match }: { match: MatchDetail }) {
   const isCancelled = match.status === 'CANCELLED' || match.status === 'SUSPENDED';
   const isPostponed = match.status === 'POSTPONED';
 
+  // endDate: kick-off + 2 h (120 min) — used for finished matches
   const endDate = match.utcDate
-    ? new Date(new Date(match.utcDate).getTime() + 105 * 60 * 1000).toISOString()
+    ? new Date(new Date(match.utcDate).getTime() + 120 * 60 * 1000).toISOString()
     : undefined;
 
+  // Correct eventStatus mapping per schema.org/EventStatusType
   const eventStatus = isCancelled
     ? 'https://schema.org/EventCancelled'
     : isPostponed
     ? 'https://schema.org/EventPostponed'
     : isFinished
-    ? 'https://schema.org/EventScheduled'
+    ? 'https://schema.org/EventCompleted'
+    : isLive
+    ? 'https://schema.org/EventInProgress'
     : 'https://schema.org/EventScheduled';
 
   const homeScore = match.score?.fullTime?.home;
   const awayScore = match.score?.fullTime?.away;
   const hasScore  = isFinished && homeScore != null && awayScore != null;
 
+  const compName     = match.competition?.name ?? 'Football';
   const canonicalUrl = `https://goalradar.org${matchPath(match.id, match.homeTeam.name, match.awayTeam.name)}`;
+
+  // Rich description with context regardless of match status
+  const description = hasScore
+    ? `Final score: ${match.homeTeam.name} ${homeScore}–${awayScore} ${match.awayTeam.name}. ${compName} football match, including score, statistics, timeline and head-to-head records.`
+    : isLive
+    ? `${match.homeTeam.name} vs ${match.awayTeam.name} is live now. ${compName} football match — live score, statistics and timeline.`
+    : `${match.homeTeam.name} vs ${match.awayTeam.name} — ${compName} football match, including score, statistics, timeline and head-to-head records.`;
+
+  // Best available image: competition emblem → home crest → away crest
+  const image = match.competition?.emblem || match.homeTeam.crest || match.awayTeam.crest || undefined;
 
   const homeTeamSchema: Record<string, unknown> = {
     '@type': 'SportsTeam',
@@ -1530,26 +1545,32 @@ function JsonLd({ match }: { match: MatchDetail }) {
     '@context': 'https://schema.org',
     '@type':    'SportsEvent',
     name:        `${match.homeTeam.name} vs ${match.awayTeam.name}`,
-    description: hasScore
-      ? `Final score: ${match.homeTeam.name} ${homeScore}–${awayScore} ${match.awayTeam.name}. ${match.competition?.name ?? 'Football'} match.`
-      : `${match.homeTeam.name} vs ${match.awayTeam.name} — ${match.competition?.name ?? 'Football'}`,
+    description,
     sport:       'Association football',
     url:         canonicalUrl,
     startDate:   match.utcDate,
     ...(isFinished && endDate ? { endDate } : {}),
     eventStatus,
-    eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+    eventAttendanceMode: isLive
+      ? 'https://schema.org/MixedEventAttendanceMode'
+      : 'https://schema.org/OfflineEventAttendanceMode',
+    ...(image ? { image } : {}),
     // Both homeTeam/awayTeam (legacy) and competitor (current spec)
     homeTeam:   homeTeamSchema,
     awayTeam:   awayTeamSchema,
     competitor: [homeTeamSchema, awayTeamSchema],
+    // performer — required by Google Rich Results for SportsEvent
+    performer: [homeTeamSchema, awayTeamSchema],
     location: {
       '@type': 'Place',
-      name: match.venue || match.competition?.name || 'Football Stadium',
+      name: match.venue || compName || 'Football Stadium',
+      ...(match.competition?.area?.name
+        ? { address: { '@type': 'PostalAddress', addressLocality: match.competition.area.name } }
+        : {}),
     },
     organizer: {
       '@type': 'Organization',
-      name:    match.competition?.name ?? 'FIFA',
+      name:    compName,
       url:     match.competition?.code
                  ? `https://goalradar.org/competition/${match.competition.code}`
                  : 'https://goalradar.org',
@@ -1565,10 +1586,6 @@ function JsonLd({ match }: { match: MatchDetail }) {
         }
       : {}),
   };
-
-  if (isLive) {
-    data.eventAttendanceMode = 'https://schema.org/MixedEventAttendanceMode';
-  }
 
   const breadcrumb = {
     '@context': 'https://schema.org',

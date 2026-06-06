@@ -55,16 +55,23 @@ export const metadata: Metadata = {
 // ---------------------------------------------------------------------------
 
 function JsonLd() {
+  const today = todayUTC();
+  const wcEventStatus =
+    today > WC_END   ? 'https://schema.org/EventCompleted'  :
+    today >= WC_START ? 'https://schema.org/EventInProgress' :
+                        'https://schema.org/EventScheduled';
+
   const event = {
     '@context': 'https://schema.org',
     '@type': 'SportsEvent',
     name: 'FIFA World Cup 2026',
-    sport: 'Football',
+    sport: 'Association football',
     startDate: WC_START,
     endDate: WC_END,
     url: `${BASE_URL}/world-cup-2026`,
     description:
-      'The FIFA World Cup 2026 is hosted by the United States, Canada and Mexico, featuring 48 nations.',
+      'FIFA World Cup 2026 football match coverage — live scores, fixtures, group standings, results and statistics. Hosted by the United States, Canada and Mexico, featuring 48 nations.',
+    image: 'https://upload.wikimedia.org/wikipedia/en/thumb/a/a8/FIFA_World_Cup_2026_logo.svg/800px-FIFA_World_Cup_2026_logo.svg.png',
     location: {
       '@type': 'Place',
       name: 'United States, Canada & Mexico',
@@ -75,7 +82,12 @@ function JsonLd() {
       name: 'FIFA',
       url: 'https://www.fifa.com',
     },
-    eventStatus: 'https://schema.org/EventScheduled',
+    performer: [
+      { '@type': 'SportsOrganization', name: 'UEFA', description: '16 qualified UEFA nations' },
+      { '@type': 'SportsOrganization', name: 'CONMEBOL', description: '6 qualified CONMEBOL nations' },
+      { '@type': 'SportsOrganization', name: 'CONCACAF', description: '6 qualified CONCACAF nations (inc. hosts)' },
+    ],
+    eventStatus: wcEventStatus,
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
   };
 
