@@ -355,6 +355,152 @@ function WCStats({ results, upcomingCount }: { results: Match[]; upcomingCount: 
 }
 
 // ---------------------------------------------------------------------------
+// Evergreen SEO content — always SSR-rendered, no API dependency
+//
+// Provides meaningful body text for Googlebot regardless of API state or
+// tournament phase. Sits directly below the hero so it is in the first
+// screenful of content that crawlers see.
+// ---------------------------------------------------------------------------
+
+function HomepageEvergreen() {
+  return (
+    <section
+      aria-label="About GoalRadar — FIFA World Cup 2026 coverage"
+      className="rounded-2xl border border-gray-800 bg-gray-900 px-6 py-8 sm:px-10"
+    >
+      {/* ── Main heading ─────────────────────────────────────────── */}
+      <h2 className="text-2xl font-black text-white mb-2">
+        FIFA World Cup 2026 — Live Scores, Fixtures &amp; Standings
+      </h2>
+      <p className="text-gray-400 text-sm leading-relaxed mb-8 max-w-3xl">
+        GoalRadar is your home for the <strong className="text-gray-200">2026 FIFA World Cup</strong> — the
+        largest football tournament in history. 48 national teams, 104 matches, 16 host cities across the
+        United States, Canada, and Mexico. Follow every game from the{' '}
+        <strong className="text-gray-200">opening match on 11 June 2026</strong> to the{' '}
+        <strong className="text-gray-200">Final at MetLife Stadium on 19 July 2026</strong>.
+      </p>
+
+      <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+
+        {/* ── Col 1: Live scores ──────────────────────────────────── */}
+        <div>
+          <h3 className="text-base font-bold text-white mb-2 flex items-center gap-2">
+            <span className="text-red-400">●</span> Live Scores &amp; Match Updates
+          </h3>
+          <p className="text-gray-500 text-sm leading-relaxed mb-3">
+            Track every World Cup match as it happens — scorelines, goal scorers, minute-by-minute
+            status, extra time, and penalty shootouts. During the group stage up to eight matches
+            run simultaneously; the{' '}
+            <a href="/live" className="text-yellow-500 hover:text-yellow-300 transition-colors underline-offset-2 hover:underline">
+              live scores dashboard
+            </a>{' '}
+            keeps them all visible at a glance.
+          </p>
+          <ul className="space-y-1.5 text-sm text-gray-500">
+            {[
+              'Real-time scorelines with goal times',
+              'Status: KO · HT · FT · AET · Pens',
+              'All 104 World Cup 2026 matches',
+              'Premier League, La Liga, Bundesliga &amp; more',
+            ].map((item) => (
+              <li key={item} className="flex items-start gap-2">
+                <span className="text-yellow-600 shrink-0 mt-0.5">›</span>
+                <span dangerouslySetInnerHTML={{ __html: item }} />
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* ── Col 2: Standings ────────────────────────────────────── */}
+        <div>
+          <h3 className="text-base font-bold text-white mb-2 flex items-center gap-2">
+            <span className="text-yellow-500">▲</span> Group Standings &amp; Bracket
+          </h3>
+          <p className="text-gray-500 text-sm leading-relaxed mb-3">
+            The 2026 World Cup group stage features <strong className="text-gray-400">12 groups</strong> (A–L),
+            each with four teams. The top two from each group advance to the round of 32. GoalRadar&apos;s{' '}
+            <a href="/standings" className="text-yellow-500 hover:text-yellow-300 transition-colors underline-offset-2 hover:underline">
+              standings tables
+            </a>{' '}
+            show points, goal difference, and qualification status updated live after every match.
+          </p>
+          <ul className="space-y-1.5 text-sm text-gray-500">
+            {[
+              'Groups A–L · 48 qualified nations',
+              'Points, GD, GF, GA after every match',
+              'Advancement indicators per group',
+              'Knockout bracket: R32 → R16 → QF → SF → Final',
+            ].map((item) => (
+              <li key={item} className="flex items-start gap-2">
+                <span className="text-yellow-600 shrink-0 mt-0.5">›</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* ── Col 3: Fixtures & schedule ──────────────────────────── */}
+        <div>
+          <h3 className="text-base font-bold text-white mb-2 flex items-center gap-2">
+            <span className="text-blue-400">📅</span> Fixtures &amp; Match Schedule
+          </h3>
+          <p className="text-gray-500 text-sm leading-relaxed mb-3">
+            Every World Cup 2026 fixture listed with kick-off times, venue, and stage. The{' '}
+            <a href="/schedule" className="text-yellow-500 hover:text-yellow-300 transition-colors underline-offset-2 hover:underline">
+              full schedule
+            </a>{' '}
+            covers all 104 matches across 16 stadiums — MetLife Stadium, SoFi Stadium,
+            AT&amp;T Stadium, Estadio Azteca, and twelve more venues.
+          </p>
+          <ul className="space-y-1.5 text-sm text-gray-500">
+            {[
+              'All 104 matches · group stage through Final',
+              'Kick-off times: ET · BST · CET · JST',
+              '16 venues across USA, Canada & Mexico',
+              'Filter by group, stage, and team',
+            ].map((item) => (
+              <li key={item} className="flex items-start gap-2">
+                <span className="text-yellow-600 shrink-0 mt-0.5">›</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {/* ── Bottom strip: tournament context + additional links ─── */}
+      <div className="mt-8 pt-6 border-t border-gray-800">
+        <h3 className="text-sm font-bold text-white mb-3">
+          Complete Football Coverage
+        </h3>
+        <p className="text-gray-500 text-sm leading-relaxed mb-4 max-w-3xl">
+          Beyond the World Cup, GoalRadar covers Europe&apos;s top club competitions year-round —
+          the Premier League, La Liga, Bundesliga, Serie A, Ligue 1, and the UEFA Champions League.
+          Live scores, standings tables, fixtures, and results for every tracked competition are
+          available on a single platform, updated in real time throughout the season.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          {[
+            { href: '/world-cup-2026', label: '🏆 World Cup 2026 Hub' },
+            { href: '/live',           label: '● Live Scores'          },
+            { href: '/schedule',       label: '📅 Match Schedule'      },
+            { href: '/standings',      label: '📊 League Standings'    },
+          ].map(({ href, label }) => (
+            <a
+              key={href}
+              href={href}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-300 hover:border-gray-600 hover:text-white transition-colors"
+            >
+              {label}
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Standard hero (non-WC mode)
 // ---------------------------------------------------------------------------
 
@@ -502,6 +648,12 @@ export default async function HomePage() {
 
       {/* Ad: below hero — banner */}
       <AdSlot slotId="homepage-top" variant="banner" className="my-2" />
+
+      {/* ── Evergreen SEO content ─────────────────────────────────────────
+           Always SSR-rendered. No API dependency. Ensures meaningful body
+           text is present for Googlebot regardless of API state or whether
+           the World Cup is currently active.                               */}
+      <HomepageEvergreen />
 
       {/* ── 2. Today's World Cup Matches ─────────────────────────────────── */}
       {wcActive && (
