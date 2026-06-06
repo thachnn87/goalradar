@@ -51,6 +51,15 @@ export default async function sitemap({
 }: {
   id: number | Promise<string | undefined>;
 }): Promise<MetadataRoute.Sitemap> {
+  // TEMP LOGGING — remove after confirming runtime id type
+  console.log(
+    '[sitemap] typeof id:',
+    typeof idParam,
+    'constructor:',
+    (idParam as any)?.constructor?.name,
+    'value:',
+    idParam
+  );
   const id = Number(await idParam);
   switch (id) {
     case 0:
