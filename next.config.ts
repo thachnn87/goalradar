@@ -106,6 +106,76 @@ const nextConfig: NextConfig = {
         destination: '/world-cup-2026-bracket',
         permanent: true,
       },
+
+      // ── Schedule aliases ─────────────────────────────────────────────────
+      {
+        source: '/wc2026-schedule',
+        destination: '/world-cup-2026-schedule',
+        permanent: true,
+      },
+      {
+        source: '/wc-2026-schedule',
+        destination: '/world-cup-2026-schedule',
+        permanent: true,
+      },
+      {
+        source: '/worldcup2026-schedule',
+        destination: '/world-cup-2026-schedule',
+        permanent: true,
+      },
+
+      // ── Results aliases ──────────────────────────────────────────────────
+      {
+        source: '/world-cup-2026/results',
+        destination: '/world-cup-2026-results',
+        permanent: true,
+      },
+      {
+        source: '/wc2026-results',
+        destination: '/world-cup-2026-results',
+        permanent: true,
+      },
+
+      // ── Live stream aliases (additional) ─────────────────────────────────
+      {
+        source: '/world-cup-2026/live',
+        destination: '/world-cup-2026-live-stream',
+        permanent: true,
+      },
+      {
+        source: '/world-cup-2026/live-stream',
+        destination: '/world-cup-2026-live-stream',
+        permanent: true,
+      },
+      {
+        source: '/wc2026-live',
+        destination: '/world-cup-2026-live-stream',
+        permanent: true,
+      },
+
+      // ── Venues aliases ────────────────────────────────────────────────────
+      {
+        source: '/world-cup-2026/stadiums',
+        destination: '/world-cup-2026/venues',
+        permanent: true,
+      },
+      {
+        source: '/wc2026-stadiums',
+        destination: '/world-cup-2026/venues',
+        permanent: true,
+      },
+      {
+        source: '/wc2026-venues',
+        destination: '/world-cup-2026/venues',
+        permanent: true,
+      },
+
+      // ── Teams aliases ─────────────────────────────────────────────────────
+      {
+        source: '/world-cup-2026/teams',
+        destination: '/world-cup-2026-groups',
+        permanent: true,
+      },
     ];
   },
 };

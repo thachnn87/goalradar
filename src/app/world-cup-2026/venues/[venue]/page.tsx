@@ -12,6 +12,8 @@ import { WC_VENUE_SLUGS, getVenue } from '@/lib/wc-venues';
 import type { VenueTransport, VenueMatchInfo } from '@/lib/wc-venues';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
+import WCPageNav from '@/components/WCPageNav';
+import WCRelatedLinks from '@/components/WCRelatedLinks';
 
 export const revalidate = 3600; // hourly — match assignments can update
 
@@ -147,6 +149,8 @@ export default async function VenuePage({
           { label: 'Venues', href: '/world-cup-2026/venues' },
           { label: venue.shortName },
         ]} />
+
+        <div className="mt-3 mb-6"><WCPageNav /></div>
 
         {/* Hero */}
         <div className="mt-6 mb-8">
@@ -318,25 +322,17 @@ export default async function VenuePage({
           </div>
         </section>
 
-        {/* Internal links */}
-        <div className="border-t border-gray-800 pt-8">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">More World Cup 2026</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {[
-              { href: '/world-cup-2026',                 label: '🏆 WC Hub' },
-              { href: '/world-cup-2026/fixtures',        label: '📅 Fixtures' },
-              { href: '/world-cup-2026/watch-live',      label: '📺 Watch Live' },
-              { href: '/world-cup-2026/tv-schedule',     label: '🗓️ TV Schedule' },
-              { href: '/world-cup-2026/groups',          label: '🗂️ Groups' },
-              { href: '/world-cup-2026/bracket',         label: '🔗 Bracket' },
-            ].map(({ href, label }) => (
-              <Link key={href} href={href}
-                className="bg-gray-900 hover:bg-gray-800 border border-gray-800 rounded-xl p-3 text-sm text-gray-300 hover:text-white transition-colors text-center">
-                {label}
-              </Link>
-            ))}
-          </div>
-        </div>
+        <WCRelatedLinks links={[
+          { href: '/world-cup-2026',               icon: '🏆', label: 'WC 2026 Hub',      desc: 'Full tournament overview and latest news' },
+          { href: '/world-cup-2026-schedule',       icon: '📅', label: 'Match Schedule',   desc: 'All 104 fixtures with kickoff times' },
+          { href: '/world-cup-2026-results',        icon: '🏁', label: 'Results',           desc: 'Full-time scores for every match' },
+          { href: '/world-cup-2026/fixtures',       icon: '📋', label: 'Live Fixtures',     desc: 'API-driven fixture cards' },
+          { href: '/world-cup-2026-tv-guide',       icon: '📺', label: 'TV Guide',          desc: 'How to watch in your country' },
+          { href: '/world-cup-2026-bracket',        icon: '🔗', label: 'Knockout Bracket',  desc: 'Round of 32 through the Final' },
+          { href: '/world-cup-2026-groups',         icon: '🗂️', label: 'Group Stage',       desc: 'All 12 groups and standings' },
+          { href: '/world-cup-2026/teams/argentina',icon: '👥', label: 'All 48 Teams',      desc: 'Squads, stats and fixtures per nation' },
+          { href: '/world-cup-2026/venues/metlife-stadium', icon: '🏟️', label: 'All 16 Venues', desc: 'Stadium guides for all WC 2026 host cities' },
+        ]} heading="More World Cup 2026" />
       </div>
     </>
   );

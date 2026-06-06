@@ -137,6 +137,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'weekly' as const,
       priority: 0.84,
     })),
+    // Venues hub page
+    {
+      url: `${BASE_URL}/world-cup-2026/venues`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: 0.85,
+    },
     // Venue pages
     ...WC_VENUE_SLUGS.map((slug) => ({
       url: `${BASE_URL}/world-cup-2026/venues/${slug}`,
