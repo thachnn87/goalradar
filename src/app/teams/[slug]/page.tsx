@@ -176,11 +176,23 @@ function TeamJsonLd({
       : {}),
   };
 
+  const breadcrumb = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: BASE_URL },
+      ...(leagueName && leagueCode
+        ? [{ '@type': 'ListItem', position: 2, name: leagueName, item: `${BASE_URL}/competition/${leagueCode}` }]
+        : []),
+      { '@type': 'ListItem', position: leagueName ? 3 : 2, name: team.name, item: canonicalUrl },
+    ],
+  };
+
   return (
-    <script
-      type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
-    />
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }} />
+    </>
   );
 }
 
@@ -361,9 +373,11 @@ function UpcomingCard({
 function RecentResultsCard({
   matches,
   teamId,
+  leagueCode,
 }: {
-  matches: Match[];
-  teamId:  number;
+  matches:    Match[];
+  teamId:     number;
+  leagueCode: string;
 }) {
   const outcomeStyles = {
     W: 'bg-green-500/15 text-green-400 border border-green-500/25',
@@ -373,7 +387,9 @@ function RecentResultsCard({
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-      <SectionHeader>Recent Results</SectionHeader>
+      <SectionHeader action={
+        <SectionLink href={`/competition/${leagueCode}`}>View all →</SectionLink>
+      }>Recent Results</SectionHeader>
 
       <div className="divide-y divide-gray-800/60 rounded-xl border border-gray-800 overflow-hidden">
         {matches.map((match) => {
@@ -707,7 +723,7 @@ export default async function TeamSlugPage({ params }: Params) {
 
         {/* ── Recent results ───────────────────────────────────────────── */}
         {recentMatches.length > 0 && (
-          <RecentResultsCard matches={recentMatches} teamId={team.id} />
+          <RecentResultsCard matches={recentMatches} teamId={team.id} leagueCode={leagueCode ?? ''} />
         )}
 
         {/* ── Competition internal links ────────────────────────────────── */}

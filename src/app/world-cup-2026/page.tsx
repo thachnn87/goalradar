@@ -19,6 +19,7 @@ import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
 import AdSlot from '@/components/AdSlot';
 import NewsletterSignup from '@/components/NewsletterSignup';
+import { WC_ALL_TEAMS } from '@/lib/wc-all-teams';
 
 export const revalidate = 30;
 
@@ -488,6 +489,51 @@ export default async function WorldCup2026Page() {
 
         {/* ── Newsletter ────────────────────────────────────────────────── */}
         <NewsletterSignup source="world-cup-hub" />
+
+        {/* ── Crawler discovery — static links for all groups, fixtures, teams ── */}
+        <nav aria-label="World Cup 2026 groups and teams" className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5 space-y-5">
+          {/* Groups A–L */}
+          <div>
+            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
+              All Groups
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {['a','b','c','d','e','f','g','h','i','j','k','l'].map((g) => (
+                <Link
+                  key={g}
+                  href={`/world-cup-2026/group-${g}`}
+                  className="px-3 py-1.5 rounded-lg border border-gray-700 bg-gray-800 text-xs font-semibold text-gray-300 hover:text-white hover:border-gray-600 transition-colors"
+                >
+                  Group {g.toUpperCase()}
+                </Link>
+              ))}
+              <Link
+                href="/world-cup-2026/fixtures"
+                className="px-3 py-1.5 rounded-lg border border-gray-700 bg-gray-800 text-xs font-semibold text-gray-300 hover:text-white hover:border-gray-600 transition-colors"
+              >
+                📅 All Fixtures
+              </Link>
+            </div>
+          </div>
+
+          {/* All 48 teams */}
+          <div>
+            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
+              All 48 Teams
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {WC_ALL_TEAMS.map((team) => (
+                <Link
+                  key={team.slug}
+                  href={`/world-cup-2026/teams/${team.slug}`}
+                  className="px-2.5 py-1 rounded-lg border border-gray-800 bg-gray-950 text-xs text-gray-400 hover:text-white hover:border-gray-700 transition-colors"
+                >
+                  {team.flag} {team.shortName}
+                </Link>
+              ))}
+            </div>
+          </div>
+        </nav>
 
         {/* ── Footer ────────────────────────────────────────────────────── */}
         <div className="flex justify-center gap-6 text-sm text-gray-600 mb-4">

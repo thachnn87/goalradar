@@ -1042,8 +1042,15 @@ function CompetitionLinks({ match }: { match: MatchDetail }) {
 
   type LinkItem = { href: string; icon: string; label: string; desc: string };
 
+  const homePath = teamPath(match.homeTeam.id, match.homeTeam.name);
+  const awayPath = teamPath(match.awayTeam.id, match.awayTeam.name);
+  const homeLabel = match.homeTeam.shortName || match.homeTeam.name || 'Home team';
+  const awayLabel = match.awayTeam.shortName || match.awayTeam.name || 'Away team';
+
   const links: LinkItem[] = isWC
     ? [
+        { href: homePath,                  icon: '🔵', label: homeLabel,          desc: 'Team page' },
+        { href: awayPath,                  icon: '🔴', label: awayLabel,          desc: 'Team page' },
         { href: '/world-cup-2026',         icon: '🏆', label: 'World Cup Hub',    desc: 'Scores, fixtures, standings' },
         { href: '/world-cup-2026/bracket', icon: '🔗', label: 'Knockout Bracket', desc: 'Full tournament bracket' },
         ...(groupSlug && groupLabel
@@ -1055,6 +1062,8 @@ function CompetitionLinks({ match }: { match: MatchDetail }) {
         { href: '/live',                   icon: '🔴', label: 'Live Scores',       desc: 'Matches in play' },
       ]
     : [
+        { href: homePath,  icon: '🔵', label: homeLabel, desc: 'Team page' },
+        { href: awayPath,  icon: '🔴', label: awayLabel, desc: 'Team page' },
         ...(compCode
           ? [{ href: `/competition/${compCode}`, icon: '📊', label: compName,    desc: 'Standings & fixtures' }]
           : []
@@ -1567,11 +1576,22 @@ function JsonLd({ match }: { match: MatchDetail }) {
     data.eventAttendanceMode = 'https://schema.org/MixedEventAttendanceMode';
   }
 
+  const breadcrumb = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: buildBreadcrumb(match).map((item, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: item.label,
+      ...(item.href ? { item: `https://goalradar.org${item.href}` } : {}),
+    })),
+  };
+
   return (
-    <script
-      type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
-    />
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }} />
+    </>
   );
 }
 
