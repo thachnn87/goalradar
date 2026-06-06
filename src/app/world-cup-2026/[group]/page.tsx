@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
 import { getStandings, getUpcomingMatches, getRecentMatches } from '@/lib/api';
-import { getGroupFixtures, type WCGroupFixture } from '@/lib/wc-fixtures';
+import { getGroupFixtures, WC_GROUP_FIXTURES, type WCGroupFixture } from '@/lib/wc-fixtures';
 import { getStaticWCGroupTables } from '@/lib/wc-static-groups';
 import { WC_ALL_TEAMS } from '@/lib/wc-all-teams';
 import { matchPath } from '@/lib/url';
@@ -165,14 +165,26 @@ function JsonLd({
 // Teams grid
 // ---------------------------------------------------------------------------
 
+/** Resolve a WC team slug from the API team name or display name. */
+function wcTeamSlug(name: string): string | null {
+  const t = WC_ALL_TEAMS.find(
+    (t) =>
+      t.apiName.toLowerCase() === name.toLowerCase() ||
+      t.displayName.toLowerCase() === name.toLowerCase(),
+  );
+  return t?.slug ?? null;
+}
+
 function TeamCard({ entry, rank }: { entry: StandingEntry; rank: number }) {
   const advances    = rank <= 2;
   const mayAdvance  = rank === 3; // best third-placed teams rule
   const { team }    = entry;
+  const slug        = wcTeamSlug(team.name);
+  const href        = slug ? `/world-cup-2026/teams/${slug}` : `/teams/${team.id}`;
 
   return (
     <Link
-      href={`/team/${team.id}`}
+      href={href}
       className="flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-xl p-3 hover:border-gray-700 hover:bg-gray-800/50 transition-all group"
     >
       {team.crest ? (
@@ -318,6 +330,299 @@ function GroupNav({ currentSlug }: { currentSlug: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// FAQ — generated from static fixture + team data (no API call)
+// ---------------------------------------------------------------------------
+
+interface GroupFaq {
+  question: string;
+  answer: string;
+}
+
+function buildGroupFaqs(letter: string, label: string): GroupFaq[] {
+  const groupTeams = WC_ALL_TEAMS.filter((t) => t.group === letter);
+  const fixtures   = getGroupFixtures(letter);
+
+  const teamNames  = groupTeams.map((t) => `${t.flag} ${t.displayName}`).join(', ');
+
+  // Distinct venue cities
+  const cities = [...new Set(fixtures.map((f) => f.venueCity))];
+  const venueText = cities.length > 0 ? cities.join(', ') : 'various venues across the USA, Canada and Mexico';
+
+  // Date range
+  const dates = fixtures.map((f) => f.utcDate).sort();
+  const startDate = dates[0]
+    ? new Date(dates[0]).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+    : '11 June 2026';
+  const endDate = dates[dates.length - 1]
+    ? new Date(dates[dates.length - 1]).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+    : '30 June 2026';
+
+  // Match fixture list
+  const fixtureLines = fixtures.map(
+    (f) =>
+      `${f.homeLabel} vs ${f.awayLabel} (Matchday ${f.matchday}, ${f.venueCity})`,
+  );
+  const fixtureText = fixtureLines.length > 0
+    ? fixtureLines.join('; ')
+    : 'Fixtures to be confirmed.';
+
+  // Top team by FIFA ranking
+  const sortedByRanking = [...groupTeams].sort((a, b) => a.fifaRanking - b.fifaRanking);
+  const topTeam = sortedByRanking[0];
+  const favoriteText = topTeam
+    ? `${topTeam.displayName} (FIFA ranking #${topTeam.fifaRanking}) enter as the highest-ranked side in ${label}, making them the pre-tournament favourite to top the group.`
+    : `All teams enter ${label} with a genuine chance of qualification.`;
+
+  return [
+    {
+      question: `Which teams are in FIFA World Cup 2026 ${label}?`,
+      answer: `${label} at the FIFA World Cup 2026 features four teams: ${teamNames}. Each team will play three group-stage matches against the other sides in the group.`,
+    },
+    {
+      question: `When does FIFA World Cup 2026 ${label} start and finish?`,
+      answer: `${label} begins on ${startDate} and concludes on ${endDate}. All three matchdays must be completed before the knockout stage begins, with the final matchday fixtures played simultaneously to ensure fairness.`,
+    },
+    {
+      question: `How do teams qualify from ${label} at the 2026 World Cup?`,
+      answer: `The top two teams from ${label} advance automatically to the Round of 32. Additionally, 8 of the 12 third-placed teams (those with the best record across all groups) will also progress. Teams earn 3 points for a win, 1 point for a draw, and 0 points for a loss. If teams are level on points, tiebreakers are applied in order: goal difference, goals scored, head-to-head result, and disciplinary record.`,
+    },
+    {
+      question: `Where are ${label} matches played at the 2026 World Cup?`,
+      answer: `${label} fixtures take place at ${venueText}. The FIFA World Cup 2026 is co-hosted by the United States, Canada and Mexico, with matches spread across 16 stadiums in all three nations.`,
+    },
+    {
+      question: `What are the ${label} fixtures at the 2026 World Cup?`,
+      answer: `The ${label} schedule is: ${fixtureText}.`,
+    },
+    {
+      question: `Who is the favourite to win ${label} at the 2026 World Cup?`,
+      answer: favoriteText,
+    },
+  ];
+}
+
+function GroupFaqJsonLd({ faqs }: { faqs: GroupFaq[] }) {
+  const schema = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faqs.map((faq) => ({
+      '@type': 'Question',
+      name: faq.question,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: faq.answer,
+      },
+    })),
+  };
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+    />
+  );
+}
+
+function GroupFaqSection({ faqs }: { faqs: GroupFaq[] }) {
+  return (
+    <section aria-labelledby="faq-heading">
+      <h2
+        id="faq-heading"
+        className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4"
+      >
+        Frequently Asked Questions
+      </h2>
+      <dl className="space-y-4">
+        {faqs.map((faq, i) => (
+          <div
+            key={i}
+            className="bg-gray-900 border border-gray-800 rounded-xl p-4"
+          >
+            <dt className="text-sm font-semibold text-white mb-1.5">
+              {faq.question}
+            </dt>
+            <dd className="text-sm text-gray-400 leading-relaxed">{faq.answer}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Qualification scenarios — static analysis, works pre-tournament
+// ---------------------------------------------------------------------------
+
+function QualificationScenarios({
+  label,
+  letter,
+  tableEntries,
+  totalMatches,
+  playedMatches,
+}: {
+  label: string;
+  letter: string;
+  tableEntries: StandingEntry[];
+  totalMatches: number;
+  playedMatches: number;
+}) {
+  const groupTeams = WC_ALL_TEAMS.filter((t) => t.group === letter);
+  const hasLiveData = tableEntries.some((e) => e.playedGames > 0);
+  const groupComplete = playedMatches >= totalMatches && totalMatches > 0;
+
+  return (
+    <section aria-labelledby="scenarios-heading">
+      <h2
+        id="scenarios-heading"
+        className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4"
+      >
+        Qualification Scenarios
+      </h2>
+
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-4">
+        {/* Points system */}
+        <div>
+          <h3 className="text-sm font-semibold text-white mb-2">Points System</h3>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            {[
+              { result: 'Win', points: '3 pts', color: 'text-green-400' },
+              { result: 'Draw', points: '1 pt',  color: 'text-yellow-400' },
+              { result: 'Loss', points: '0 pts', color: 'text-red-400' },
+            ].map(({ result, points, color }) => (
+              <div key={result} className="bg-gray-800 rounded-lg py-2 px-3">
+                <p className={`text-xs font-bold ${color}`}>{result}</p>
+                <p className="text-white text-sm font-semibold">{points}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Qualification paths */}
+        <div>
+          <h3 className="text-sm font-semibold text-white mb-2">How to Qualify</h3>
+          <div className="space-y-2 text-sm text-gray-400">
+            <div className="flex items-start gap-2">
+              <span className="w-5 h-5 rounded-full bg-green-500/20 text-green-400 text-[10px] flex items-center justify-center font-bold shrink-0 mt-0.5">1</span>
+              <p><strong className="text-white">1st place:</strong> Automatically advances to the Round of 32. Maximum 9 points (3 wins). Six points from two wins is typically enough to clinch top spot.</p>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="w-5 h-5 rounded-full bg-green-500/20 text-green-400 text-[10px] flex items-center justify-center font-bold shrink-0 mt-0.5">2</span>
+              <p><strong className="text-white">2nd place:</strong> Automatically advances to the Round of 32. Four or more points generally secures a top-two finish, depending on the group.</p>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="w-5 h-5 rounded-full bg-yellow-500/20 text-yellow-500 text-[10px] flex items-center justify-center font-bold shrink-0 mt-0.5">3</span>
+              <p><strong className="text-white">3rd place (best record):</strong> Eight of the twelve third-placed teams advance. A team finishing third typically needs at least 4 points to be considered for one of the eight best-third-place spots. Goal difference is the first tiebreaker.</p>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="w-5 h-5 rounded-full bg-red-500/20 text-red-500 text-[10px] flex items-center justify-center font-bold shrink-0 mt-0.5">4</span>
+              <p><strong className="text-white">4th place:</strong> Eliminated. A team finishing fourth is out regardless of their points total.</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Tiebreakers */}
+        <div>
+          <h3 className="text-sm font-semibold text-white mb-2">Tiebreaker Rules</h3>
+          <p className="text-sm text-gray-400">
+            When teams finish level on points, FIFA applies tiebreakers in order:{' '}
+            <strong className="text-gray-300">(1)</strong> goal difference,{' '}
+            <strong className="text-gray-300">(2)</strong> goals scored,{' '}
+            <strong className="text-gray-300">(3)</strong> head-to-head points,{' '}
+            <strong className="text-gray-300">(4)</strong> head-to-head goal difference,{' '}
+            <strong className="text-gray-300">(5)</strong> disciplinary record,{' '}
+            <strong className="text-gray-300">(6)</strong> FIFA ranking.
+          </p>
+        </div>
+
+        {/* Live scenario analysis — only shown when matches have been played */}
+        {hasLiveData && !groupComplete && (
+          <div>
+            <h3 className="text-sm font-semibold text-white mb-2">Current Standing Analysis</h3>
+            <div className="space-y-2">
+              {tableEntries.map((entry, i) => {
+                const rank = i + 1;
+                const gamesLeft = 3 - entry.playedGames;
+                const maxPts = entry.points + gamesLeft * 3;
+                const canStillWin = maxPts >= (tableEntries[0]?.points ?? 0);
+
+                let outlook = '';
+                if (rank <= 2 && entry.points >= 6) {
+                  outlook = 'Very likely to qualify — needs only a draw from remaining matches.';
+                } else if (rank <= 2 && entry.points >= 4) {
+                  outlook = 'On track to qualify — a win or draw from remaining fixtures should be enough.';
+                } else if (rank === 3 && entry.points >= 4) {
+                  outlook = 'In contention for a best third-place spot — results in other groups will matter.';
+                } else if (rank === 4 && !canStillWin) {
+                  outlook = 'Eliminated from top-two contention. Must win remaining matches and hope for a best-third qualification.';
+                } else if (gamesLeft === 0) {
+                  outlook = rank <= 2 ? 'Qualified for the Round of 32.' : 'Awaiting best third-place determination.';
+                } else {
+                  outlook = `${gamesLeft} match${gamesLeft !== 1 ? 'es' : ''} remaining — maximum ${maxPts} points achievable.`;
+                }
+
+                return (
+                  <div key={entry.team.id || i} className="flex items-start gap-2 text-sm">
+                    <span className={`w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-bold shrink-0 mt-0.5 ${
+                      rank <= 2 ? 'bg-green-500/20 text-green-400' : rank === 3 ? 'bg-yellow-500/20 text-yellow-500' : 'bg-gray-700 text-gray-500'
+                    }`}>{rank}</span>
+                    <div>
+                      <span className="text-white font-medium">
+                        {entry.team.shortName || entry.team.name}
+                      </span>
+                      <span className="text-gray-600 text-xs ml-2">{entry.points} pts</span>
+                      <p className="text-gray-500 text-xs mt-0.5">{outlook}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Pre-tournament — show team-level max points potential */}
+        {!hasLiveData && groupTeams.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold text-white mb-2">Pre-Tournament Overview</h3>
+            <p className="text-sm text-gray-400">
+              Each of the four teams in {label} will play 3 matches (6 total — every team plays each other once).
+              The maximum any team can earn is <strong className="text-white">9 points</strong> (three wins).
+              Historically at the World Cup, 6 points (2 wins) is virtually guaranteed to advance,
+              4 points (1W 1D 1L) usually qualifies in the top two or as a strong third-place team,
+              and 3 points or fewer typically requires other results to go your way.
+            </p>
+            {groupTeams.length > 0 && (
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {[...groupTeams]
+                  .sort((a, b) => a.fifaRanking - b.fifaRanking)
+                  .map((t) => (
+                    <div key={t.slug} className="flex items-center gap-2 text-sm">
+                      <span className="text-base">{t.flag}</span>
+                      <Link
+                        href={`/world-cup-2026/teams/${t.slug}`}
+                        className="text-white hover:text-yellow-400 transition-colors font-medium"
+                      >
+                        {t.displayName}
+                      </Link>
+                      <span className="text-gray-600 text-xs ml-auto shrink-0">
+                        FIFA #{t.fifaRanking}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {groupComplete && (
+          <p className="text-sm text-gray-400 border-t border-gray-800 pt-3">
+            ✅ {label} is complete. The top two teams have advanced to the Round of 32.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -382,9 +687,12 @@ export default async function WCGroupPage({ params }: Params) {
   const totalGroupMatches = 6; // each WC group plays 6 matches (4 teams × 3 rounds C(4,2))
   const playedMatches = results.length;
 
+  const faqs = buildGroupFaqs(letter, label);
+
   return (
     <>
       <JsonLd slug={slug} label={label} allMatches={allMatches} />
+      <GroupFaqJsonLd faqs={faqs} />
 
       <div className="max-w-3xl mx-auto space-y-8 pb-10">
         {/* Breadcrumb */}
@@ -521,6 +829,18 @@ export default async function WCGroupPage({ params }: Params) {
             </div>
           )}
         </section>
+
+        {/* 6. Qualification scenarios */}
+        <QualificationScenarios
+          label={label}
+          letter={letter}
+          tableEntries={tableEntries}
+          totalMatches={totalGroupMatches}
+          playedMatches={playedMatches}
+        />
+
+        {/* 7. FAQ */}
+        <GroupFaqSection faqs={faqs} />
 
         {/* Internal links — World Cup hub + adjacent groups */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-4">
