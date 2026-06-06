@@ -1575,16 +1575,6 @@ function JsonLd({ match }: { match: MatchDetail }) {
                  ? `https://goalradar.org/competition/${match.competition.code}`
                  : 'https://goalradar.org',
     },
-    // Score result for finished matches
-    ...(hasScore
-      ? {
-          subEvent: {
-            '@type':   'SportsEvent',
-            name:      'Full Time',
-            startDate: endDate,
-          },
-        }
-      : {}),
   };
 
   const breadcrumb = {
