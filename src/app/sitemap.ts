@@ -225,6 +225,25 @@ function wcHubSitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'hourly',
       priority: 0.90,
     },
+    // Sprint G5 — money pages (predictions)
+    {
+      url: `${BASE_URL}/world-cup-2026/winner-predictions`,
+      lastModified: new Date(),
+      changeFrequency: 'daily',
+      priority: 0.92,
+    },
+    {
+      url: `${BASE_URL}/world-cup-2026/golden-boot-predictions`,
+      lastModified: new Date(),
+      changeFrequency: 'daily',
+      priority: 0.92,
+    },
+    ...['a','b','c','d','e','f','g','h'].map((g) => ({
+      url: `${BASE_URL}/world-cup-2026/group-${g}-predictions`,
+      lastModified: new Date(),
+      changeFrequency: 'daily' as const,
+      priority: 0.88,
+    })),
     // Sprint D2 — programmatic SEO hub pages
     {
       url: `${BASE_URL}/world-cup-2026/teams`,
