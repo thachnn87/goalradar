@@ -170,12 +170,7 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
 
-      // ── Teams aliases ─────────────────────────────────────────────────────
-      {
-        source: '/world-cup-2026/teams',
-        destination: '/world-cup-2026-groups',
-        permanent: true,
-      },
+      // /world-cup-2026/teams now has its own page (Sprint D2) — redirect removed
     ];
   },
 

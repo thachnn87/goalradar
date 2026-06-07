@@ -225,6 +225,25 @@ function wcHubSitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'hourly',
       priority: 0.90,
     },
+    // Sprint D2 — programmatic SEO hub pages
+    {
+      url: `${BASE_URL}/world-cup-2026/teams`,
+      lastModified: new Date(),
+      changeFrequency: 'daily',
+      priority: 0.90,
+    },
+    {
+      url: `${BASE_URL}/world-cup-2026/matches`,
+      lastModified: new Date(),
+      changeFrequency: 'hourly',
+      priority: 0.90,
+    },
+    {
+      url: `${BASE_URL}/world-cup-2026/host-cities`,
+      lastModified: new Date('2026-05-01'),
+      changeFrequency: 'weekly',
+      priority: 0.85,
+    },
     {
       url: `${BASE_URL}/world-cup-2026/bracket`,
       lastModified: new Date(),
