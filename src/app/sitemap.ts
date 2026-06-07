@@ -225,7 +225,13 @@ function wcHubSitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'hourly',
       priority: 0.90,
     },
-    // Sprint G5 — money pages (predictions)
+    // Sprint G5 — prediction hub + money pages
+    {
+      url: `${BASE_URL}/world-cup-2026/predictions`,
+      lastModified: new Date(),
+      changeFrequency: 'daily',
+      priority: 0.93,
+    },
     {
       url: `${BASE_URL}/world-cup-2026/winner-predictions`,
       lastModified: new Date(),
