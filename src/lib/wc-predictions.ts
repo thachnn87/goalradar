@@ -732,4 +732,43 @@ export const GOLDEN_BOOT_PREDICTIONS: GoldenBootPrediction[] = [
     reasoning:
       'One of football\'s greatest strikers, Lewandowski can still score goals at the highest level. At 37 this is his final World Cup chance and he will be Poland\'s focal point throughout the tournament. Against lesser opposition in the group stage, he could score heavily.',
   },
+  {
+    rank: 9,
+    name: 'Erling Haaland',
+    country: 'Norway',
+    countrySlug: 'norway',
+    countryFlag: '🇳🇴',
+    club: 'Manchester City',
+    age: 25,
+    worldCupGoals: 0,
+    probability: '7%',
+    reasoning:
+      'The most ruthless finisher in world football heads to his first ever World Cup. Haaland averages over a goal per game for club and country and his combination of pace, power and positioning is unmatched. If Norway reach the knockout rounds he has the capacity to score 6–8 goals in a tournament and run away with the Golden Boot.',
+  },
+  {
+    rank: 10,
+    name: 'Jude Bellingham',
+    country: 'England',
+    countrySlug: 'england',
+    countryFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
+    club: 'Real Madrid',
+    age: 22,
+    worldCupGoals: 1,
+    probability: '5%',
+    reasoning:
+      'Bellingham defies position — he plays as a box-to-box midfielder yet scores at the rate of a striker, netting 23 goals in his debut Real Madrid season. England will rely on him to create and score throughout the tournament. At 22 in his prime, a deep England run could see him accumulate goals from midfield and challenge the traditional striker picks.',
+  },
+  {
+    rank: 11,
+    name: 'Julián Álvarez',
+    country: 'Argentina',
+    countrySlug: 'argentina',
+    countryFlag: '🇦🇷',
+    club: 'Atlético Madrid',
+    age: 25,
+    worldCupGoals: 4,
+    probability: '6%',
+    reasoning:
+      'The 2022 World Cup winner scored 4 goals in Qatar — including a stunning solo effort against Croatia — and proved he can deliver on the biggest stage. At Atlético Madrid he has established himself as a top-level striker. Playing alongside Messi in Argentina\'s attack he will get chances and has the composure to take them.',
+  },
 ];
