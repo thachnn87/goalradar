@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import LocalTime from '@/components/LocalTime';
+import AddToCalendar from '@/components/AddToCalendar';
 
 import { getMatchDetail, getHeadToHead, getUpcomingMatches, getRecentMatches, getStandings, NotFoundError } from '@/lib/api';
 import AnalyticsTracker from '@/components/AnalyticsTracker';
@@ -210,7 +211,8 @@ function StatusPill({ status }: { status: MatchDetail['status'] }) {
 
 function ScoreHero({ match }: { match: MatchDetail }) {
   const { score, homeTeam, awayTeam, status } = match;
-  const showScore = ['IN_PLAY', 'PAUSED', 'FINISHED'].includes(status);
+  const showScore   = ['IN_PLAY', 'PAUSED', 'FINISHED'].includes(status);
+  const isUpcoming  = ['SCHEDULED', 'TIMED'].includes(status);
   const mainRef = match.referees?.find((r) => r.type === 'REFEREE') ?? match.referees?.[0];
 
   return (
@@ -226,6 +228,23 @@ function ScoreHero({ match }: { match: MatchDetail }) {
         <p className="text-xs text-gray-500 mt-1">{formatMatchDate(match.utcDate)} UTC</p>
         {/* Local time — client-side island, renders after hydration only */}
         <LocalTime utcDate={match.utcDate} variant="with-label" className="mt-2" />
+        {/* Add to Calendar — upcoming matches only */}
+        {isUpcoming && (
+          <div className="mt-4 flex justify-center">
+            <AddToCalendar
+              matchId={match.id}
+              utcDate={match.utcDate}
+              homeTeam={homeTeam.name}
+              awayTeam={awayTeam.name}
+              competition={
+                match.competition?.code === 'WC'
+                  ? 'FIFA World Cup 2026'
+                  : (match.competition?.name ?? 'Football')
+              }
+              venue={match.venue ?? undefined}
+            />
+          </div>
+        )}
       </div>
 
       <div className="flex justify-center mb-6">

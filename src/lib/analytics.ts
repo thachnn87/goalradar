@@ -79,6 +79,25 @@ export function trackTeamView(params: {
   });
 }
 
+/** Fire when a user adds a match to their calendar. */
+export function trackCalendarSubscribe(params: {
+  matchId:     number | string;
+  homeTeam:    string;
+  awayTeam:    string;
+  competition: string;
+  /** 'google' | 'apple' | 'outlook' */
+  calendarType: string;
+}): void {
+  send('calendar_subscribe', {
+    match_id:      String(params.matchId),
+    home_team:     params.homeTeam,
+    away_team:     params.awayTeam,
+    competition:   params.competition,
+    calendar_type: params.calendarType,
+    content_type:  'match',
+  });
+}
+
 /** Fire when a user views a competition (schedule, standings, or hub). */
 export function trackCompetitionView(params: {
   competitionCode: string;
