@@ -1,6 +1,7 @@
 import { Match, MatchDetail, HeadToHead, StandingTable, TeamDetail } from './types';
 import { withCache, TTL } from './cache';
 import { withKVCache, SWR } from './kv-cache';
+import { recordAuditCall } from './api-audit';
 
 const BASE_URL = 'https://api.football-data.org/v4';
 
@@ -42,8 +43,9 @@ async function fetchFromAPI<T>(endpoint: string, revalidate: number): Promise<T>
   const MAX_RETRIES = 3;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    const controller = new AbortController();
-    const timeoutId  = setTimeout(() => controller.abort(), 10_000);
+    const controller  = new AbortController();
+    const timeoutId   = setTimeout(() => controller.abort(), 10_000);
+    const _fetchStart = Date.now(); // API-1 network timing
 
     try {
       const res = await fetch(`${BASE_URL}${endpoint}`, {
@@ -54,7 +56,15 @@ async function fetchFromAPI<T>(endpoint: string, revalidate: number): Promise<T>
 
       clearTimeout(timeoutId);
 
-      if (res.ok) return res.json() as Promise<T>;
+      if (res.ok) {
+        // ── API-1 instrumentation — actual network call ──
+        recordAuditCall({
+          endpoint,
+          source:     'network',
+          durationMs: Date.now() - _fetchStart,
+        });
+        return res.json() as Promise<T>;
+      }
 
       // ── Error responses ────────────────────────────────────────────────
       const body = await res.text().catch(() => '');

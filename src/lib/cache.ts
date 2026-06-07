@@ -1,6 +1,10 @@
 /**
  * In-memory server-side cache for football-data.org API responses.
  *
+ * Sprint API-1: instrumented with recordAuditCall() to feed the per-render
+ * API usage report.  All audit calls are fire-and-forget (no performance
+ * impact on the happy path).
+ *
  * Two layers of protection:
  *   1. TTL cache  — returns stored data until it expires.
  *   2. In-flight deduplication  — collapses concurrent requests for the
@@ -17,6 +21,8 @@
  * Usage:
  *   const data = await withCache('key', TTL.FIXTURES, () => fetchSomething());
  */
+
+import { recordAuditCall } from './api-audit';
 
 // ---------------------------------------------------------------------------
 // TTL constants  (seconds)
@@ -102,6 +108,8 @@ export async function withCache<T>(
     console.log(
       `[Cache] HIT   ${key} | ttl ${ttlRemaining(cached)}s remaining | ratio ${ratio()} (${_hits}/${_hits + _misses})`,
     );
+    // ── API-1 instrumentation ──
+    recordAuditCall({ endpoint: key, source: 'hit', durationMs: 0 });
     return cached.data as T;
   }
 
@@ -109,6 +117,8 @@ export async function withCache<T>(
   const pending = inflight.get(key) as Promise<T> | undefined;
   if (pending) {
     console.log(`[Cache] DEDUP ${key} | coalescing with in-flight request`);
+    // ── API-1 instrumentation ──
+    recordAuditCall({ endpoint: key, source: 'dedup', durationMs: 0 });
     return pending;
   }
 
@@ -117,11 +127,14 @@ export async function withCache<T>(
   console.log(
     `[Cache] MISS  ${key} | ratio ${ratio()} (${_hits}/${_hits + _misses})`,
   );
+  const _missStart = Date.now(); // API-1 timing
 
   const promise = fetcher()
     .then((data) => {
       store.set(key, { data, expiresAt: now + ttl * 1000, fetchedAt: now });
       inflight.delete(key);
+      // ── API-1 instrumentation ──
+      recordAuditCall({ endpoint: key, source: 'miss', durationMs: Date.now() - _missStart });
       return data;
     })
     .catch((err: unknown) => {
@@ -141,6 +154,8 @@ export async function withCache<T>(
         // Extend the stale entry's TTL by 60 s so concurrent requests don't
         // all hammer the API simultaneously while the outage persists.
         stale.expiresAt = Date.now() + 60_000;
+        // ── API-1 instrumentation ──
+        recordAuditCall({ endpoint: key, source: 'stale', durationMs: Date.now() - _missStart });
         return stale.data as T;
       }
 
