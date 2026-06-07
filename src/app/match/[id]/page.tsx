@@ -4,7 +4,8 @@ import type { Metadata } from 'next';
 import LocalTime from '@/components/LocalTime';
 import AddToCalendar from '@/components/AddToCalendar';
 
-import { getMatchDetail, getHeadToHead, getUpcomingMatches, getRecentMatches, getStandings, NotFoundError } from '@/lib/api';
+import { NotFoundError } from '@/lib/api';
+import { getOrBuildMatchSnapshot, getGroupTable } from '@/lib/match-snapshot';
 import AnalyticsTracker from '@/components/AnalyticsTracker';
 import WCGroupTable from '@/components/WCGroupTable';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -40,7 +41,8 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   if (!numericId) return { title: 'Match Details | GoalRadar' };
 
   try {
-    const match = await getMatchDetail(numericId);
+    // Snapshot read — React.cache() ensures this is deduplicated with the page component
+    const { match } = await getOrBuildMatchSnapshot(numericId);
     const home  = match.homeTeam.name ?? 'TBD';
     const away  = match.awayTeam.name ?? 'TBD';
     const comp  = match.competition?.name ?? 'Football';
@@ -1806,20 +1808,23 @@ export default async function MatchDetailPage({ params }: Params) {
     );
   }
 
+  // ── Snapshot fetch (React.cache deduplicates with generateMetadata call above)
+  // On warm KV: 1 single KV read, 0 API calls.
+  // On miss: parallel fetch of match + h2h + WC fixtures + standings.
   let match: MatchDetail | null = null;
   type MatchError = 'not_found' | 'unavailable' | null;
   let matchError: MatchError = null;
+  let snapshot: import('@/lib/match-snapshot').MatchSnapshot | null = null;
 
   try {
-    match = await getMatchDetail(numericId);
+    snapshot = await getOrBuildMatchSnapshot(numericId);
+    match    = snapshot.match;
 
     if (!match) {
-      // API returned success but null body — treat as unavailable
-      console.error(`[MatchPage] id=${numericId} API returned null body`);
+      console.error(`[MatchPage] id=${numericId} snapshot returned null match`);
       matchError = 'unavailable';
     } else {
       // Redirect old numeric-only URLs to the canonical slug URL.
-      // e.g. /match/537327 → /match/537327-mexico-vs-south-africa
       const canonical = matchPath(match.id, match.homeTeam.name, match.awayTeam.name);
       if (slug === numericId) {
         redirect(canonical);
@@ -1827,20 +1832,16 @@ export default async function MatchDetailPage({ params }: Params) {
     }
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
-
     if (err instanceof NotFoundError) {
-      // Genuine 404 from football-data — match does not exist in their system.
-      // Per product requirement: show graceful fallback, do NOT call notFound().
       console.error(`[MatchPage] id=${numericId} not found in football-data API`);
       matchError = 'not_found';
     } else {
-      // Transient failure: timeout, 429 rate-limit, 403 plan restriction, network error.
       console.error(`[MatchPage] id=${numericId} temporarily unavailable:`, errMsg);
       matchError = 'unavailable';
     }
   }
 
-  if (matchError || !match) {
+  if (matchError || !match || !snapshot) {
     const isNotFound = matchError === 'not_found';
     return (
       <div className="max-w-2xl mx-auto space-y-4 pb-10">
@@ -1871,66 +1872,14 @@ export default async function MatchDetailPage({ params }: Params) {
     );
   }
 
-  const isWC       = match.competition?.code === 'WC';
-  const hasGroup   = Boolean(match.group);
+  // ── Unpack snapshot ─────────────────────────────────────────────────────
+  const isWC     = match.competition?.code === 'WC';
+  const hasGroup = Boolean(match.group);
 
-  // Fetch h2h + (for WC group matches) upcoming, recent and standings — in parallel
-  const [h2hResult, wcUpcomingResult, wcRecentResult, wcStandingsResult] =
-    await Promise.allSettled([
-      getHeadToHead(numericId),
-      isWC && hasGroup ? getUpcomingMatches('WC') : Promise.resolve(null),
-      isWC && hasGroup ? getRecentMatches('WC')   : Promise.resolve(null),
-      isWC && hasGroup ? getStandings('WC')        : Promise.resolve(null),
-    ]);
-
-  const h2h: HeadToHead | null = h2hResult.status === 'fulfilled' ? h2hResult.value : null;
-
-  // All WC matches for this group (upcoming + recent), excluding current
-  const allWCGroupMatches: Match[] = (() => {
-    if (!isWC || !match.group) return [];
-    const upcoming: Match[] =
-      wcUpcomingResult.status === 'fulfilled' && wcUpcomingResult.value
-        ? wcUpcomingResult.value.matches.filter((m) => m.group === match.group)
-        : [];
-    const recent: Match[] =
-      wcRecentResult.status === 'fulfilled' && wcRecentResult.value
-        ? wcRecentResult.value.matches.filter((m) => m.group === match.group)
-        : [];
-    // Deduplicate by id
-    const seen = new Set<number>();
-    return [...upcoming, ...recent].filter((m) => {
-      if (seen.has(m.id)) return false;
-      seen.add(m.id);
-      return true;
-    });
-  })();
-
-  // All WC matches for related matches (any match involving either team)
-  const allWCMatches: Match[] = (() => {
-    if (!isWC) return [];
-    const upcoming: Match[] =
-      wcUpcomingResult.status === 'fulfilled' && wcUpcomingResult.value
-        ? wcUpcomingResult.value.matches : [];
-    const recent: Match[] =
-      wcRecentResult.status === 'fulfilled' && wcRecentResult.value
-        ? wcRecentResult.value.matches : [];
-    const seen = new Set<number>();
-    return [...upcoming, ...recent].filter((m) => {
-      if (seen.has(m.id)) return false;
-      seen.add(m.id);
-      return true;
-    });
-  })();
-
-  // WC group standings for this match's group
-  const wcGroupTable: import('@/lib/types').StandingEntry[] | null = (() => {
-    if (!isWC || !match.group) return null;
-    if (wcStandingsResult.status !== 'fulfilled' || !wcStandingsResult.value) return null;
-    const table = wcStandingsResult.value.standings.find(
-      (s) => s.type === 'TOTAL' && s.group === match.group
-    );
-    return table?.table ?? null;
-  })();
+  const h2h: HeadToHead | null       = snapshot.headToHead;
+  const allWCGroupMatches: Match[]   = snapshot.wcGroupMatches;
+  const allWCMatches: Match[]        = snapshot.wcAllMatches;
+  const wcGroupTable                 = getGroupTable(snapshot);
 
   // Group slug/label for nav links
   const matchGroupSlug  = match.group ? match.group.toLowerCase().replace('_', '-') : null;
