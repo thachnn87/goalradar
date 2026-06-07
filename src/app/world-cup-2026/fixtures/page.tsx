@@ -8,6 +8,8 @@ import Breadcrumb from '@/components/Breadcrumb';
 import MatchCard from '@/components/MatchCard';
 import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
+import TimezoneBanner from '@/components/TimezoneBanner';
+import LocalTime from '@/components/LocalTime';
 
 export const revalidate = 900; // align with FIXTURES TTL (15 min)
 
@@ -189,6 +191,9 @@ export default async function WCFixturesPage() {
         {/* Cross-page navigation */}
         <WCPageNav />
 
+        {/* Timezone banner */}
+        <TimezoneBanner />
+
         {/* Fixture list */}
         {fixtures.length === 0 ? (
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-10 text-center">
@@ -224,9 +229,10 @@ export default async function WCFixturesPage() {
                           href={matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name)}
                           className="flex items-center gap-3 px-4 py-3 hover:bg-gray-800/50 transition-colors group"
                         >
-                          <span className="text-white font-mono text-sm w-16 shrink-0">
-                            {formatKickoff(m.utcDate)}
-                          </span>
+                          <div className="flex flex-col items-start gap-0.5 w-20 shrink-0">
+                            <span className="text-white font-mono text-xs">{formatKickoff(m.utcDate)}</span>
+                            <LocalTime utcDate={m.utcDate} variant="badge" />
+                          </div>
                           <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
                             {m.homeTeam?.crest && <img src={m.homeTeam.crest} alt="" width={18} height={18} className="object-contain shrink-0" />}
                             <span className="text-gray-200 text-sm font-medium truncate text-right group-hover:text-white">{hn}</span>

@@ -6,6 +6,8 @@ import Breadcrumb from '@/components/Breadcrumb';
 import WCCountdown from '@/components/WCCountdown';
 import AnalyticsTracker from '@/components/AnalyticsTracker';
 import AdSlot from '@/components/ads/AdSlot';
+import TimezoneBanner from '@/components/TimezoneBanner';
+import LocalTime from '@/components/LocalTime';
 import type { Metadata } from 'next';
 import { Match, COMPETITIONS } from '@/lib/types';
 import { WC_ALL_FIXTURES, type WCGroupFixture } from '@/lib/wc-fixtures';
@@ -65,11 +67,14 @@ function WCLocalSchedule({ fixtures }: { fixtures: WCGroupFixture[] }) {
               <div key={f.localId}
                 className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-[10px] text-gray-600 font-mono shrink-0">
-                    {new Date(f.utcDate).toLocaleTimeString('en-GB', {
-                      hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
-                    })} UTC
-                  </span>
+                  <div className="flex flex-col items-start gap-0.5 shrink-0">
+                    <span className="text-[10px] text-gray-600 font-mono">
+                      {new Date(f.utcDate).toLocaleTimeString('en-GB', {
+                        hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
+                      })} UTC
+                    </span>
+                    <LocalTime utcDate={f.utcDate} variant="badge" />
+                  </div>
                   <span className="text-sm text-white font-semibold truncate">
                     {f.homeFlag} {f.homeLabel} <span className="text-gray-500 font-normal">vs</span> {f.awayLabel} {f.awayFlag}
                   </span>
@@ -292,6 +297,9 @@ export default async function SchedulePage({
 
       {/* Above-fold banner — height reserved to prevent CLS */}
       <AdSlot slotId="schedule-top" variant="banner" />
+
+      {/* Timezone banner — client island, no hydration mismatch */}
+      <TimezoneBanner />
 
       <Suspense fallback={null}>
         <CompetitionSelector

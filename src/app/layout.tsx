@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import NavigationTracker from "@/components/NavigationTracker";
+import { TimezoneProvider } from "@/contexts/TimezoneContext";
 
 const ADSENSE_ID  = process.env.NEXT_PUBLIC_ADSENSE_ID  ?? '';
 const ADS_ENABLED = process.env.NEXT_PUBLIC_ADS_ENABLED === 'true' && ADSENSE_ID !== '';
@@ -99,16 +100,18 @@ export default function RootLayout({
         )}
       </head>
       <body className="font-sans bg-gray-950 text-white min-h-screen">
-        {/* Route-change page_view tracker — Suspense required for usePathname */}
-        <Suspense fallback={null}>
-          <NavigationTracker />
-        </Suspense>
+        <TimezoneProvider>
+          {/* Route-change page_view tracker — Suspense required for usePathname */}
+          <Suspense fallback={null}>
+            <NavigationTracker />
+          </Suspense>
 
-        <Navbar />
+          <Navbar />
 
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {children}
-        </main>
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {children}
+          </main>
+        </TimezoneProvider>
       </body>
     </html>
   );

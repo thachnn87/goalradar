@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
+import LocalTime from '@/components/LocalTime';
 
 import { getMatchDetail, getHeadToHead, getUpcomingMatches, getRecentMatches, getStandings, NotFoundError } from '@/lib/api';
 import AnalyticsTracker from '@/components/AnalyticsTracker';
@@ -222,7 +223,9 @@ function ScoreHero({ match }: { match: MatchDetail }) {
           {match.competition?.name}
           {match.matchday ? ` · Matchday ${match.matchday}` : ''}
         </Link>
-        <p className="text-xs text-gray-500 mt-1">{formatMatchDate(match.utcDate)}</p>
+        <p className="text-xs text-gray-500 mt-1">{formatMatchDate(match.utcDate)} UTC</p>
+        {/* Local time — client-side island, renders after hydration only */}
+        <LocalTime utcDate={match.utcDate} variant="with-label" className="mt-2" />
       </div>
 
       <div className="flex justify-center mb-6">

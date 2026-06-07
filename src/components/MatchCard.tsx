@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Match } from '@/lib/types';
 import { matchPath } from '@/lib/url';
+import LocalTime from '@/components/LocalTime';
 
 function formatTime(utcDate: string) {
   return new Date(utcDate).toLocaleTimeString('en-GB', {
@@ -87,7 +88,10 @@ export default function MatchCard({ match }: { match: Match }) {
           <span className="text-xs text-gray-500 truncate mr-2">{match.competition.name}</span>
           <div className="flex items-center gap-2 shrink-0">
             {!showScore && (
-              <span className="text-xs text-gray-400">{formatTime(match.utcDate)}</span>
+              <div className="flex flex-col items-end gap-0.5">
+                <span className="text-xs text-gray-400">{formatTime(match.utcDate)} UTC</span>
+                <LocalTime utcDate={match.utcDate} variant="badge" />
+              </div>
             )}
             <StatusBadge status={status} duration={score.duration} />
           </div>
