@@ -19,6 +19,7 @@
 
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
+import { cache } from 'react';
 import type { Metadata } from 'next';
 
 import { getMatchDetail, getHeadToHead, getTeamMatches } from '@/lib/api';
@@ -47,6 +48,13 @@ const BASE_URL = 'https://goalradar.org';
 type Params = { params: Promise<{ id: string }> };
 
 // ---------------------------------------------------------------------------
+// Per-request deduplication
+// React.cache() ensures generateMetadata and the page component share
+// a single getMatchDetail call per request lifecycle.
+// ---------------------------------------------------------------------------
+const getMatchDetailCached = cache(getMatchDetail);
+
+// ---------------------------------------------------------------------------
 // Metadata
 // ---------------------------------------------------------------------------
 
@@ -56,7 +64,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   if (!numericId) return { title: 'Match Prediction | GoalRadar' };
 
   try {
-    const match = await getMatchDetail(numericId);
+    const match = await getMatchDetailCached(numericId);
     const home  = match.homeTeam?.name ?? 'TBD';
     const away  = match.awayTeam?.name ?? 'TBD';
     const comp  = match.competition?.name ?? 'Football';
@@ -870,10 +878,12 @@ export default async function PredictionPage({ params }: Params) {
   const numericId = extractMatchId(slug);
   if (!numericId) notFound();
 
-  // Fetch match first — we need team IDs for the parallel requests below
+  // Fetch match first — we need team IDs for the parallel requests below.
+  // getMatchDetailCached is React.cache()-wrapped: if generateMetadata already
+  // called it with the same ID this request, this returns the memoised result.
   let match: MatchDetail;
   try {
-    match = await getMatchDetail(numericId);
+    match = await getMatchDetailCached(numericId);
   } catch {
     notFound();
   }

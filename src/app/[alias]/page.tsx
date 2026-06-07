@@ -20,6 +20,7 @@
  */
 
 import { permanentRedirect, notFound } from 'next/navigation';
+import { cache } from 'react';
 import type { Metadata } from 'next';
 
 import { getUpcomingMatches, getRecentMatches } from '@/lib/api';
@@ -41,7 +42,9 @@ function aliasFor(m: Match): string | null {
   return `${slugify(m.homeTeam.name)}-vs-${slugify(m.awayTeam.name)}${SUFFIX}`;
 }
 
-async function fetchAllWCMatches(): Promise<Match[]> {
+// React.cache() deduplicates this across generateMetadata + page component
+// within a single request lifecycle. Both callers share one network fetch.
+const fetchAllWCMatches = cache(async (): Promise<Match[]> => {
   const [upRes, recentRes] = await Promise.allSettled([
     getUpcomingMatches('WC'),
     getRecentMatches('WC'),
@@ -54,7 +57,7 @@ async function fetchAllWCMatches(): Promise<Match[]> {
     seen.add(m.id);
     return true;
   });
-}
+});
 
 function findMatch(alias: string, matches: Match[]): Match | null {
   const body = alias.slice(0, -SUFFIX.length); // strip '-live-score'

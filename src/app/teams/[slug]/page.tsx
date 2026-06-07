@@ -20,6 +20,7 @@
 
 import Link from 'next/link';
 import { permanentRedirect, notFound } from 'next/navigation';
+import { cache } from 'react';
 import type { Metadata } from 'next';
 
 import {
@@ -41,6 +42,13 @@ export const revalidate = 300;
 const BASE_URL = 'https://goalradar.org';
 
 type Params = { params: Promise<{ slug: string }> };
+
+// ---------------------------------------------------------------------------
+// Per-request deduplication
+// React.cache() ensures generateMetadata and the page component share
+// a single getTeam API call per request lifecycle.
+// ---------------------------------------------------------------------------
+const getTeamCached = cache(getTeam);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -85,7 +93,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   if (!id) return { title: 'Team | GoalRadar' };
 
   try {
-    const team = await getTeam(id);
+    const team = await getTeamCached(id);
     const leagueComp = team.runningCompetitions.find(
       (c) => c.type === 'LEAGUE' && COMPETITIONS.some((k) => k.code === c.code),
     );
@@ -502,9 +510,11 @@ export default async function TeamSlugPage({ params }: Params) {
   if (!id) notFound();
 
   // ── 2. Fetch team data ─────────────────────────────────────────────────
+  // getTeamCached is React.cache()-wrapped: if generateMetadata already called
+  // it with the same ID this request, this returns the memoised result.
   let team: TeamDetail | null = null;
   try {
-    team = await getTeam(id);
+    team = await getTeamCached(id);
   } catch (err) {
     if (err instanceof NotFoundError) notFound();
     // API unavailable — render graceful error below
