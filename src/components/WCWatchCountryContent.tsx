@@ -311,11 +311,12 @@ export default function WCWatchCountryContent({ country }: Props) {
             <h2 className="text-lg font-bold text-white mb-4">More World Cup 2026</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {[
-                { href: '/world-cup-2026',               label: '🏆 WC Hub' },
-                { href: '/world-cup-2026/watch-live',    label: '📺 Watch Live (All Countries)' },
-                { href: '/world-cup-2026/fixtures',      label: '📅 Fixtures' },
-                { href: '/world-cup-2026/results',       label: '📊 Results' },
-                { href: '/world-cup-2026/groups',        label: '🗂️ Groups' },
+                { href: '/world-cup-2026',                 label: '🏆 WC Hub' },
+                { href: '/world-cup-2026/watch-live',      label: '📺 Watch Live (All Countries)' },
+                { href: '/live',                           label: '🔴 Live Scores' },
+                { href: '/world-cup-2026/fixtures',        label: '📅 Fixtures' },
+                { href: '/world-cup-2026/results',         label: '📊 Results' },
+                { href: '/world-cup-2026/groups',          label: '🗂️ Groups' },
                 { href: '/world-cup-2026/streaming-guide', label: '📡 Streaming Guide' },
               ].map(({ href, label }) => (
                 <Link

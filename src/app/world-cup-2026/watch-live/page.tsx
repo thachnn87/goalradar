@@ -522,6 +522,7 @@ export default async function WatchLivePage() {
               { href: '/world-cup-2026/watch-live/uk',        flag: '🇬🇧', label: 'United Kingdom', sub: 'BBC · ITV (all free)' },
               { href: '/world-cup-2026/watch-live/canada',    flag: '🇨🇦', label: 'Canada',         sub: 'CTV free · TSN full' },
               { href: '/world-cup-2026/watch-live/australia', flag: '🇦🇺', label: 'Australia',      sub: 'SBS free — all 104 matches' },
+              { href: '/world-cup-2026/watch-live/india',     flag: '🇮🇳', label: 'India',          sub: 'JioCinema free · Sports18' },
               { href: '/world-cup-2026/watch-live/thailand',  flag: '🇹🇭', label: 'Thailand',       sub: 'TrueVisions · TrueID' },
               { href: '/world-cup-2026/watch-live/vietnam',   flag: '🇻🇳', label: 'Vietnam',        sub: 'FPT Play · VTV' },
             ] as { href: string; flag: string; label: string; sub: string }[]).map(({ href, flag, label, sub }) => (

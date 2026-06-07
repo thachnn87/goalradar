@@ -409,6 +409,166 @@ export const WC_WATCH_COUNTRIES: Record<string, WCWatchCountry> = {
     ],
   },
 
+  // ── India ───────────────────────────────────────────────────────────────────
+  india: {
+    slug: 'india',
+    name: 'India',
+    flag: '🇮🇳',
+    timezone: 'Asia/Kolkata',
+    utcOffset: 'UTC+5:30',
+    metaTitle: 'How to Watch FIFA World Cup 2026 in India – JioCinema, Sports18 & Free Streaming | GoalRadar',
+    metaDesc: 'Watch FIFA World Cup 2026 live in India on JioCinema (free online streaming), Sports18 and DD Sports. Full India viewing guide — channels, kick-off times and every match free.',
+    heroSubtitle: 'JioCinema streams every match FREE online. Sports18 on TV. DD Sports for free-to-air coverage.',
+    intro:
+      'India is home to one of the world\'s most passionate football audiences, and for FIFA World Cup 2026 ' +
+      'Indian fans will have unrivalled free access: JioCinema — Reliance\'s streaming platform — ' +
+      'is expected to carry comprehensive digital rights, streaming every match live and on demand at ' +
+      'no cost with a free account. This follows JioCinema\'s landmark free coverage of the 2023 IPL and ' +
+      'their rights to major international football competitions. On television, Sports18 and Sports18 HD ' +
+      '(Viacom18\'s sports channels, now part of the JioStar ecosystem) provide full cable and DTH ' +
+      'coverage. DD Sports — Doordarshan\'s free-to-air national sports channel — traditionally carries ' +
+      'selected high-profile matches including opening games, semi-finals and the final, making them ' +
+      'available to the hundreds of millions of Indians without pay TV or internet subscriptions. ' +
+      'India\'s time zone (IST, UTC+5:30) means group stage matches kick off between 9:30 PM and 6:30 AM ' +
+      '— late nights are part of the World Cup experience for Indian fans, who are accustomed to watching ' +
+      'Premier League matches at 1:30 AM. With 48 teams and 104 matches, and beloved players like ' +
+      'Messi, Ronaldo\'s successor era, Mbappé and Vinícius Jr. in action, World Cup 2026 will be ' +
+      'an enormous television event across every corner of India.',
+    quickVerdict: 'JioCinema: all matches free online. Sports18 on cable/DTH. DD Sports for free-to-air highlights.',
+    bestFree: 'JioCinema (all 104 matches, genuinely free — no subscription)',
+    bestPaid: 'Sports18 HD (full HD TV coverage via cable or DTH)',
+    broadcasters: [
+      {
+        name: 'JioCinema',
+        type: 'streaming-free',
+        coverage: 'All 104 matches (expected)',
+        platform: 'App / Web / Smart TV / Chromecast',
+        price: 'Free (free account required)',
+        note: 'Reliance\'s flagship streaming platform — free live HD streaming for all World Cup matches. Available on iOS, Android, web, Smart TV and Chromecast.',
+      },
+      {
+        name: 'Sports18 / Sports18 HD',
+        type: 'pay-tv',
+        coverage: 'All 104 matches',
+        platform: 'TV (cable / DTH)',
+        price: 'TV subscription required (₹200–400/month approx.)',
+        note: 'Viacom18\'s sports channels — full World Cup coverage on SD and HD. Available on Tata Play, Dish TV, Airtel Digital TV, and major cable operators.',
+      },
+      {
+        name: 'DD Sports (Doordarshan)',
+        type: 'free-tv',
+        coverage: 'Selected matches (opening, semis, final)',
+        platform: 'TV (free-to-air) + DD Free Dish satellite',
+        price: 'Free',
+        note: 'India\'s national public broadcaster. Typically carries high-profile matches free. Available nationwide including rural areas via DD Free Dish satellite.',
+      },
+      {
+        name: 'DD Free Dish',
+        type: 'free-tv',
+        coverage: 'Selected matches via DD Sports',
+        platform: 'Free DTH satellite (set-top box required)',
+        price: 'Free (one-time set-top box cost only)',
+        note: 'Government-operated free satellite DTH — carries DD Sports. Reaches households across India without cable infrastructure.',
+      },
+      {
+        name: 'JioStar / Hotstar',
+        type: 'streaming-paid',
+        coverage: 'Selected matches (check availability)',
+        platform: 'App / Web',
+        price: 'Disney+ Hotstar subscription from ₹299/month',
+        note: 'Post-merger JioStar entity — check confirmed World Cup rights as the tournament approaches; JioCinema remains the primary free streaming home.',
+      },
+    ],
+    cordCuttingSection: {
+      heading: 'How to Watch World Cup 2026 Online in India — Free',
+      body:
+        'JioCinema makes it remarkably easy: download the JioCinema app on iOS, Android, or your Smart TV, ' +
+        'create a free account (no credit card, no subscription), and stream every match live in HD. ' +
+        'The JioCinema app is pre-installed on many Jio set-top boxes and supports Chromecast for ' +
+        'big-screen viewing. Data users on Jio\'s network enjoy zero-data-charge streaming on the JioCinema app ' +
+        'during major sporting events (confirm during World Cup period). For households with a smart TV, ' +
+        'the JioCinema app is available in the app stores of Samsung, LG, Sony and other major brands. ' +
+        'On a laptop or desktop, stream directly at jiocinema.com — no download required. ' +
+        'If you have a Jio Fiber broadband connection, World Cup streams at 4K quality are expected. ' +
+        'For those without internet access, DD Free Dish with a basic set-top box (one-time cost of ' +
+        'approximately ₹1,500–2,000) provides free DD Sports coverage of selected matches nationwide.',
+    },
+    timezoneSection: {
+      heading: 'World Cup 2026 Match Times in India (IST, UTC+5:30)',
+      body:
+        'India Standard Time (IST) is UTC+5:30. With World Cup 2026 hosted across North America, ' +
+        'matches translate to the following local times in India. Late-night and early-morning ' +
+        'viewing is standard for Indian football fans during major tournaments.',
+      kickoffs: [
+        { utcTime: '16:00 UTC', localTime: '9:30 PM IST',  label: 'Evening slot' },
+        { utcTime: '19:00 UTC', localTime: '12:30 AM IST', label: 'Midnight slot (next day)' },
+        { utcTime: '22:00 UTC', localTime: '3:30 AM IST',  label: 'Very early morning slot' },
+        { utcTime: '01:00 UTC', localTime: '6:30 AM IST',  label: 'Early morning slot' },
+      ],
+    },
+    vpnSection: {
+      heading: 'Watch International World Cup Coverage From India — VPN Guide',
+      body:
+        'JioCinema is available within India and may be geo-restricted abroad. Indian fans ' +
+        'travelling outside India can use a VPN with Indian servers to access JioCinema and ' +
+        'stream matches as if they were at home. Choose a VPN with fast Mumbai or Delhi servers ' +
+        'for stable HD streaming. Alternatively, expats in India from the UK, Australia or USA ' +
+        'can connect to their home country\'s VPN server to access BBC iPlayer, SBS On Demand ' +
+        'or Fox Sports streaming for home-language commentary. A VPN also protects your data ' +
+        'on public Wi-Fi at hotels, airports and cafés during the tournament.',
+    },
+    faq: [
+      {
+        q: 'How to watch FIFA World Cup 2026 in India for free?',
+        a: 'JioCinema is expected to stream every World Cup 2026 match free of charge — as it did for the 2023 IPL and other major events. Download the JioCinema app (iOS/Android/Smart TV) or visit jiocinema.com, create a free account, and watch every match live in HD. DD Sports also broadcasts selected high-profile matches free on television and via DD Free Dish satellite.',
+      },
+      {
+        q: 'Which channel is showing FIFA World Cup 2026 in India?',
+        a: 'Sports18 and Sports18 HD (Viacom18/JioStar) hold the primary television broadcast rights in India. All 104 matches air on Sports18 channels on cable and DTH platforms including Tata Play, Dish TV, Airtel Digital TV and Den/Hathway cable. DD Sports carries selected matches free to air.',
+      },
+      {
+        q: 'Is JioCinema showing World Cup 2026 in India?',
+        a: 'JioCinema is the primary digital rights holder for major international football in India. Based on previous rights agreements, JioCinema is expected to stream all World Cup 2026 matches free. Confirm on the JioCinema app or website as official tournament announcement approaches in early 2026.',
+      },
+      {
+        q: 'Is World Cup 2026 free on DD Sports in India?',
+        a: 'DD Sports (Doordarshan) typically carries selected World Cup matches free to air, including the opening match, semi-finals and the final. Full coverage of all 104 matches is not guaranteed on DD Sports — for complete access use JioCinema (free streaming) or Sports18 (TV subscription).',
+      },
+      {
+        q: 'What time do World Cup matches start in India?',
+        a: 'In India Standard Time (IST, UTC+5:30), group stage matches kick off at approximately 9:30 PM, 12:30 AM, 3:30 AM and 6:30 AM. The 9:30 PM slot is the most viewer-friendly. Early morning slots (3:30 AM and 6:30 AM) work for hardcore fans or as early-morning viewing before work.',
+      },
+      {
+        q: 'How to watch World Cup 2026 on my phone in India?',
+        a: 'Download the JioCinema app on iOS or Android — it\'s free and streams all matches live in HD. The Sports18 app may also offer streaming for Sports18 cable subscribers. Both apps support mobile data and Wi-Fi streaming.',
+      },
+      {
+        q: 'Can I watch World Cup 2026 for free on TV in India without cable?',
+        a: 'Yes — if you have a DD Free Dish satellite set-top box (one-time cost around ₹1,500–2,000 for the box), you can receive DD Sports free of charge and watch selected World Cup matches. This is particularly useful in rural areas or homes without cable infrastructure.',
+      },
+      {
+        q: 'How to watch World Cup 2026 in 4K in India?',
+        a: 'JioCinema has streamed major events in 4K for Jio Fiber broadband users. Expect a similar ultra-HD streaming option for World Cup 2026 on compatible devices. Sports18 HD provides full HD (1080i) on cable and DTH. A 4K-capable TV and a fast internet connection (25 Mbps+ recommended) are needed for 4K streaming.',
+      },
+    ],
+    affiliates: [
+      {
+        title: 'Watch International Coverage From India — VPN',
+        description: 'Access BBC iPlayer, Fox Sports or SBS On Demand from India with a fast VPN. 30-day money-back guarantee.',
+        cta: 'Get a VPN',
+        tag: 'watch-india-vpn',
+        variant: 'blue',
+      },
+      {
+        title: 'Get World Cup 2026 Match Alerts',
+        description: 'Fixture reminders, live score roundups and results delivered free to your inbox.',
+        cta: 'Subscribe Free',
+        tag: 'watch-india-newsletter',
+        variant: 'green',
+      },
+    ],
+  },
+
   // ── Thailand ────────────────────────────────────────────────────────────────
   thailand: {
     slug: 'thailand',
