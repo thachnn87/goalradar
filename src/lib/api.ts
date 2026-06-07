@@ -2,6 +2,7 @@ import { Match, MatchDetail, HeadToHead, StandingTable, TeamDetail } from './typ
 import { withCache, TTL } from './cache';
 import { withKVCache, SWR } from './kv-cache';
 import { recordAuditCall } from './api-audit';
+import { getCachedLiveMatches, getCachedWCLiveMatches } from './live-cache';
 
 const BASE_URL = 'https://api.football-data.org/v4';
 
@@ -142,7 +143,8 @@ async function fetchFromAPI<T>(endpoint: string, revalidate: number): Promise<T>
 //   Used for: fixtures, standings, match details, WC structural data.
 //
 // fetchDirect  — L1 → L3/network (no KV — data too volatile for KV overhead)
-//   Used for: live matches, today's matches.
+//   Used for: today's matches.
+//             (live matches route through live-cache.ts: L1 → L2/KV → API)
 // ---------------------------------------------------------------------------
 
 function fetchWithKV<T>(
@@ -181,11 +183,15 @@ export function getTodayMatches(): Promise<{ matches: Match[] }> {
 }
 
 export function getLiveMatches(): Promise<{ matches: Match[] }> {
-  return fetchDirect('/matches?status=IN_PLAY,PAUSED', TTL.LIVE);
+  return getCachedLiveMatches(
+    () => fetchDirect('/matches?status=IN_PLAY,PAUSED', TTL.LIVE),
+  );
 }
 
 export function getWCLiveMatches(): Promise<{ matches: Match[] }> {
-  return fetchDirect('/competitions/WC/matches?status=IN_PLAY,PAUSED', TTL.LIVE);
+  return getCachedWCLiveMatches(
+    () => fetchDirect('/competitions/WC/matches?status=IN_PLAY,PAUSED', TTL.LIVE),
+  );
 }
 
 // ── KV-cached: Fixtures (15 min) ─────────────────────────────────────────────
