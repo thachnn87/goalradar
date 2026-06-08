@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
-import { getWCLiveMatches, getUpcomingMatches, getTodayMatches } from '@/lib/api';
+import { getWCLiveMatches, getUpcomingMatches } from '@/lib/api';
 import type { Match } from '@/lib/types';
 import { matchPath } from '@/lib/url';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -233,21 +233,23 @@ function FixtureRow({ match }: { match: Match }) {
 // ---------------------------------------------------------------------------
 
 export default async function WatchLivePage() {
-  // Fetch live + today + upcoming WC matches in parallel
-  const [liveRes, upcomingRes, todayRes] = await Promise.allSettled([
+  // Fetch live + upcoming WC matches in parallel.
+  // Both are prewarmed by /api/cron/prewarm-worldcup → KV hit, no API call.
+  const [liveRes, upcomingRes] = await Promise.allSettled([
     getWCLiveMatches(),
     getUpcomingMatches('WC'),
-    getTodayMatches(),
   ]);
 
   const liveMatches: Match[] =
     liveRes.status === 'fulfilled' ? liveRes.value.matches : [];
 
+  // Derive today's upcoming WC matches from the prewarmed fixtures instead of
+  // calling getTodayMatches() (fetchDirect, all-competitions, unprewarmed).
+  // getUpcomingMatches('WC') returns SCHEDULED+TIMED — exactly what's needed here.
+  const todayISO = new Date().toISOString().split('T')[0];
   const todayWC: Match[] =
-    todayRes.status === 'fulfilled'
-      ? todayRes.value.matches.filter(
-          (m) => m.competition.code === 'WC' && !['IN_PLAY', 'PAUSED'].includes(m.status)
-        )
+    upcomingRes.status === 'fulfilled'
+      ? upcomingRes.value.matches.filter((m) => m.utcDate.startsWith(todayISO))
       : [];
 
   const upcoming: Match[] =

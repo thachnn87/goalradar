@@ -8,7 +8,7 @@
 
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { getTodayMatches, getWCLiveMatches, getUpcomingMatches } from '@/lib/api';
+import { getWCResults, getWCLiveMatches, getUpcomingMatches } from '@/lib/api';
 import type { Match } from '@/lib/types';
 import { matchPath } from '@/lib/url';
 import AdSlot from '@/components/AdSlot';
@@ -308,16 +308,27 @@ export default async function MatchesTodayPage() {
   const today    = todayUTC();
   const tomorrow = tomorrowUTC();
 
-  const [todayResult, liveResult, upcomingResult] = await Promise.allSettled([
-    getTodayMatches(),
-    getWCLiveMatches(),
-    getUpcomingMatches('WC'),
+  // All three calls are prewarmed by /api/cron/prewarm-worldcup → KV hits.
+  // Replaced getTodayMatches() (fetchDirect, all-competitions, unprewarmed) with
+  // getWCResults() (prewarmed, WC-only finished) + filter getUpcomingMatches to today.
+  const [resultsResult, liveResult, upcomingResult] = await Promise.allSettled([
+    getWCResults(),           // prewarmed → goalradar:/competitions/WC/matches?status=FINISHED
+    getWCLiveMatches(),       // prewarmed → goalradar:live:wc-matches
+    getUpcomingMatches('WC'), // prewarmed → goalradar:/competitions/WC/matches?status=SCHEDULED,TIMED
   ]);
 
-  // All-competitions today, filter to WC
-  const allToday: Match[] = todayResult.status === 'fulfilled'
-    ? todayResult.value.matches.filter((m) => m.competition?.code === 'WC')
-    : [];
+  // Build today's WC match list from prewarmed data:
+  //   finished  = getWCResults() filtered to today's date
+  //   scheduled = getUpcomingMatches('WC') filtered to today's date
+  // Live matches are handled separately via getWCLiveMatches() below.
+  const allToday: Match[] = [
+    ...(resultsResult.status === 'fulfilled'
+      ? resultsResult.value.matches.filter((m) => m.utcDate.startsWith(today))
+      : []),
+    ...(upcomingResult.status === 'fulfilled'
+      ? upcomingResult.value.matches.filter((m) => m.utcDate.startsWith(today))
+      : []),
+  ];
 
   // Live WC matches (possibly overlapping with allToday — deduplicate below)
   const liveMatches: Match[] = liveResult.status === 'fulfilled' ? liveResult.value.matches : [];
