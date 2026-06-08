@@ -507,7 +507,12 @@ export default async function WorldCup2026Page() {
         </section>
 
         {/* ── Newsletter ────────────────────────────────────────────────── */}
-        <NewsletterSignup source="world-cup-hub" />
+        <NewsletterSignup
+          source="wc-hub"
+          heading="Never miss a World Cup 2026 match"
+          description="Free email alerts delivered straight to your inbox."
+          features={['Match reminders', 'Live score alerts', 'World Cup predictions']}
+        />
 
         {/* ── Crawler discovery — static links for all groups, fixtures, teams ── */}
         <nav aria-label="World Cup 2026 groups and teams" className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5 space-y-5">

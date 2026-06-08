@@ -18,6 +18,7 @@ import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
+import NewsletterSignup from '@/components/NewsletterSignup';
 import { matchPath } from '@/lib/url';
 
 export const revalidate = 3600;
@@ -427,6 +428,13 @@ export default async function WC2026SchedulePage() {
         </section>
 
         <AdSlot slotId="wc-schedule-bottom" variant="banner" />
+
+        <NewsletterSignup
+          source="wc-schedule"
+          heading="Never miss a World Cup 2026 match"
+          description="Free email alerts delivered straight to your inbox."
+          features={['Match reminders', 'Live score alerts', 'World Cup predictions']}
+        />
 
         <WCRelatedLinks links={[
           { href: '/world-cup-2026/fixtures',       icon: '📋', label: 'Live Fixture List',     desc: 'Real-time match cards for every WC game' },

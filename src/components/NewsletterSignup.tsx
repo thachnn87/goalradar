@@ -26,6 +26,8 @@ interface Props {
   heading?: string;
   /** Optional override description for card variant */
   description?: string;
+  /** Optional benefit bullets rendered as ✓ list (card variant only) */
+  features?: string[];
 }
 
 type State = 'idle' | 'loading' | 'success' | 'error';
@@ -132,6 +134,7 @@ function SuccessMessage({ variant }: { variant: 'card' | 'inline' }) {
 function CardForm({
   heading,
   description,
+  features,
   email,
   setEmail,
   state,
@@ -141,6 +144,7 @@ function CardForm({
 }: {
   heading: string;
   description: string;
+  features?: string[];
   email: string;
   setEmail: (v: string) => void;
   state: State;
@@ -162,6 +166,16 @@ function CardForm({
           <p className="text-gray-400 text-sm mt-1 leading-relaxed">
             {description}
           </p>
+          {features && features.length > 0 && (
+            <ul className="mt-2 space-y-0.5">
+              {features.map((f) => (
+                <li key={f} className="flex items-center gap-1.5 text-sm text-gray-300">
+                  <span className="text-green-400 font-bold shrink-0" aria-hidden>✓</span>
+                  {f}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 
@@ -262,6 +276,7 @@ export default function NewsletterSignup({
   variant = 'card',
   heading     = DEFAULT_HEADING,
   description = DEFAULT_DESCRIPTION,
+  features,
 }: Props) {
   const [email, setEmail]     = useState('');
   const [state, setState]     = useState<State>('idle');
@@ -343,6 +358,7 @@ export default function NewsletterSignup({
       <CardForm
         heading={heading}
         description={description}
+        features={features}
         {...sharedProps}
       />
     </div>

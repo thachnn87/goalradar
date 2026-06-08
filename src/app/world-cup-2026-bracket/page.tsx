@@ -15,6 +15,7 @@ import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
+import NewsletterSignup from '@/components/NewsletterSignup';
 import { matchPath } from '@/lib/url';
 
 export const revalidate = 21600; // align with WC TTL (6 hours)
@@ -285,6 +286,13 @@ export default async function WC2026BracketPage() {
         </section>
 
         <AdSlot slotId="wc-bracket-bottom" variant="banner" />
+
+        <NewsletterSignup
+          source="wc-bracket"
+          heading="Never miss a World Cup 2026 match"
+          description="Free email alerts delivered straight to your inbox."
+          features={['Match reminders', 'Live score alerts', 'World Cup predictions']}
+        />
 
         <WCRelatedLinks links={[
           { href: '/world-cup-2026/bracket',        icon: '🔗', label: 'Interactive Bracket',   desc: 'Visual knockout bracket with live scores' },
