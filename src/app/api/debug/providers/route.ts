@@ -1,10 +1,22 @@
 /**
  * GET /api/debug/providers
  *
- * Returns the current health snapshot of the multi-provider architecture:
- *   - Which provider is currently active
- *   - Per-provider request / error counts and last error
- *   - Last 10 failover events with timestamps
+ * Returns the current in-process health snapshot of the multi-provider
+ * architecture (resets on cold start):
+ *
+ *   {
+ *     activeProvider,        // 'football-data' | 'api-football'
+ *     primaryHealthy,        // consecutiveErrors === 0 for football-data
+ *     secondaryHealthy,      // consecutiveErrors === 0 for api-football
+ *     failoverCount,         // total failover events since cold start
+ *     failbackCount,         // total failback events since cold start
+ *     lastFailover,          // most recent failover event object
+ *     lastFailback,          // most recent failback event object
+ *     requestsByProvider,    // { 'football-data': N, 'api-football': N }
+ *     primary, secondary,    // full per-provider health objects
+ *     recentFailovers,       // last 10 failover events
+ *     generatedAt,           // ISO timestamp
+ *   }
  *
  * Access control:
  *   Requires the DEBUG_TOKEN env var to match the ?token= query param.

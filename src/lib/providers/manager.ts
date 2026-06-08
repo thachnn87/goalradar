@@ -35,6 +35,7 @@ import type {
   MatchProvider,
   ProviderName,
   FailoverEvent,
+  FailbackEvent,
   ProviderHealth,
   ProvidersDebugResponse,
 } from './types';
@@ -81,7 +82,8 @@ const stats: Record<ProviderName, ProviderStats> = {
   'api-football':  { requestCount: 0, errorCount: 0, consecutiveErrors: 0, lastError: null, lastErrorAt: null },
 };
 
-const failoverLog: FailoverEvent[] = [];
+const failoverLog:  FailoverEvent[]  = [];
+const failbackLog:  FailbackEvent[]  = [];
 const MAX_LOG_SIZE = 50;
 
 // ---------------------------------------------------------------------------
@@ -97,8 +99,27 @@ function recordError(provider: ProviderName, err: unknown): void {
   s.lastErrorAt = Date.now();
 }
 
-function recordSuccess(provider: ProviderName): void {
-  stats[provider].consecutiveErrors = 0;
+function recordSuccess(provider: ProviderName, endpoint: string): void {
+  const s = stats[provider];
+  const wasUnhealthy = s.consecutiveErrors > 0;
+  const prevErrors   = s.consecutiveErrors;
+  s.consecutiveErrors = 0;
+
+  // Detect failback: primary recovered after being in error state.
+  if (wasUnhealthy && provider === 'football-data') {
+    const event: FailbackEvent = {
+      provider,
+      endpoint,
+      errorsBeforeRecovery: prevErrors,
+      timestamp:            Date.now(),
+    };
+    failbackLog.push(event);
+    if (failbackLog.length > MAX_LOG_SIZE) failbackLog.shift();
+
+    console.log(
+      `[FAILBACK] api-football -> football-data | endpoint: ${endpoint} | recovered after ${prevErrors} error(s) | ts: ${new Date(event.timestamp).toISOString()}`,
+    );
+  }
 }
 
 function pushFailoverEvent(event: FailoverEvent): void {
@@ -126,10 +147,10 @@ async function withFailover<T>(
 ): Promise<T> {
   // ── 1. Try primary ────────────────────────────────────────────────────────
   stats['football-data'].requestCount++;
-  console.log(`[PROVIDER_CALL] provider=football-data | endpoint=${endpoint}`);
+  console.log(`[PROVIDER] provider=football-data | endpoint=${endpoint}`);
   try {
     const result = await primaryFn();
-    recordSuccess('football-data');
+    recordSuccess('football-data', endpoint);
     return result;
   } catch (primaryErr) {
     recordError('football-data', primaryErr);
@@ -156,10 +177,10 @@ async function withFailover<T>(
 
     // ── 3. Try secondary ──────────────────────────────────────────────────
     stats['api-football'].requestCount++;
-    console.log(`[PROVIDER_CALL] provider=api-football | endpoint=${endpoint}`);
+    console.log(`[PROVIDER] provider=api-football | endpoint=${endpoint}`);
     try {
       const result = await secondaryFn();
-      recordSuccess('api-football');
+      recordSuccess('api-football', endpoint);
       return result;
     } catch (secondaryErr) {
       recordError('api-football', secondaryErr);
@@ -242,24 +263,31 @@ export const providerManager = {
       };
     }
 
-    const recentFailovers = failoverLog.slice(-10);
-    const lastFailover    = failoverLog[failoverLog.length - 1] ?? null;
+    const primaryHealthy   = stats['football-data'].consecutiveErrors === 0;
+    const secondaryHealthy = stats['api-football'].consecutiveErrors === 0;
 
-    // "active provider" is whichever one is currently not in error state.
-    // If primary is healthy → football-data. Otherwise → api-football.
-    const activeProvider: ProviderName =
-      stats['football-data'].consecutiveErrors === 0 ? 'football-data' : 'api-football';
+    // "active provider": primary when healthy, secondary otherwise.
+    // This is a per-call selection — there is no latched circuit-breaker state.
+    const activeProvider: ProviderName = primaryHealthy ? 'football-data' : 'api-football';
 
     return {
       activeProvider,
+      primaryHealthy,
+      secondaryHealthy,
       footballDataConfigured: FD_KEY_CONFIGURED,
       apiFootballConfigured:  AF_KEY_CONFIGURED,
       primary:                buildHealth('football-data'),
       secondary:              buildHealth('api-football'),
-      lastFailover,
+      lastFailover:           failoverLog[failoverLog.length - 1]  ?? null,
+      lastFailback:           failbackLog[failbackLog.length - 1]  ?? null,
       failoverCount:          failoverLog.length,
-      recentFailovers,
-      generatedAt:            new Date().toISOString(),
+      failbackCount:          failbackLog.length,
+      recentFailovers:        failoverLog.slice(-10),
+      requestsByProvider: {
+        'football-data': stats['football-data'].requestCount,
+        'api-football':  stats['api-football'].requestCount,
+      },
+      generatedAt: new Date().toISOString(),
     };
   },
 
@@ -268,6 +296,7 @@ export const providerManager = {
     for (const name of ['football-data', 'api-football'] as ProviderName[]) {
       stats[name] = { requestCount: 0, errorCount: 0, consecutiveErrors: 0, lastError: null, lastErrorAt: null };
     }
-    failoverLog.length = 0;
+    failoverLog.length  = 0;
+    failbackLog.length  = 0;
   },
 };

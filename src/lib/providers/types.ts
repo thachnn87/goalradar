@@ -64,6 +64,21 @@ export interface FailoverEvent {
 }
 
 // ---------------------------------------------------------------------------
+// Failback event — primary recovered and is serving traffic again
+// ---------------------------------------------------------------------------
+
+export interface FailbackEvent {
+  /** Provider that recovered (always 'football-data' in current design). */
+  provider:  ProviderName;
+  /** Endpoint on which the recovery was first observed. */
+  endpoint:  string;
+  /** How many consecutive errors the provider had before recovering. */
+  errorsBeforeRecovery: number;
+  /** Unix epoch ms when the failback occurred. */
+  timestamp: number;
+}
+
+// ---------------------------------------------------------------------------
 // Per-provider health snapshot (used by the debug endpoint)
 // ---------------------------------------------------------------------------
 
@@ -84,6 +99,8 @@ export interface ProviderHealth {
 
 export interface ProvidersDebugResponse {
   activeProvider:         ProviderName;
+  primaryHealthy:         boolean;
+  secondaryHealthy:       boolean;
   /** true when FOOTBALL_API_KEY env var is set and non-empty. */
   footballDataConfigured: boolean;
   /** true when API_FOOTBALL_KEY env var is set and non-empty. */
@@ -91,7 +108,10 @@ export interface ProvidersDebugResponse {
   primary:                ProviderHealth;
   secondary:              ProviderHealth;
   lastFailover:           FailoverEvent | null;
+  lastFailback:           FailbackEvent | null;
   failoverCount:          number;
+  failbackCount:          number;
   recentFailovers:        FailoverEvent[];
+  requestsByProvider:     Record<ProviderName, number>;
   generatedAt:            string; // ISO
 }
