@@ -78,13 +78,190 @@ function formatScore(m: Match): string {
 }
 
 const STAGE_LABELS: Record<string, string> = {
-  GROUP_STAGE: 'Group Stage',
-  LAST_32:     'Round of 32',
-  LAST_16:     'Round of 16',
+  GROUP_STAGE:    'Group Stage',
+  LAST_32:        'Round of 32',
+  LAST_16:        'Round of 16',
   QUARTER_FINALS: 'QF',
-  SEMI_FINALS: 'SF',
-  FINAL:       'Final',
+  SEMI_FINALS:    'SF',
+  FINAL:          'Final',
 };
+
+// ---------------------------------------------------------------------------
+// Route to Final component
+// ---------------------------------------------------------------------------
+
+const KNOCKOUT_PATH = [
+  {
+    key:   'GROUP_STAGE',
+    label: 'Group Stage',
+    short: 'Groups',
+    desc:  '3 group matches',
+  },
+  {
+    key:   'LAST_32',
+    label: 'Round of 32',
+    short: 'R32',
+    desc:  'First knockout round',
+  },
+  {
+    key:   'LAST_16',
+    label: 'Round of 16',
+    short: 'R16',
+    desc:  'Second knockout round',
+  },
+  {
+    key:   'QUARTER_FINALS',
+    label: 'Quarter-Final',
+    short: 'QF',
+    desc:  'Last 8',
+  },
+  {
+    key:   'SEMI_FINALS',
+    label: 'Semi-Final',
+    short: 'SF',
+    desc:  'Last 4',
+  },
+  {
+    key:   'FINAL',
+    label: 'World Cup Final',
+    short: '🏆 Final',
+    desc:  '19 Jul 2026 · MetLife Stadium',
+  },
+] as const;
+
+function RouteToFinal({
+  team,
+  standingEntry,
+  recentMatches,
+}: {
+  team: { displayName: string; flag: string; group: string };
+  standingEntry: StandingEntry | null;
+  recentMatches: Match[];
+}) {
+  // Determine the furthest stage this team has reached based on available data.
+  // Pre-tournament / API empty → stays at idx -1 (not yet started).
+  // Group stage kicked off → idx 0.
+  // Knockout wins → we walk recent matches to find the max stage.
+  const stageOrder = KNOCKOUT_PATH.map((s) => s.key);
+
+  let reachedIdx = standingEntry && standingEntry.playedGames > 0 ? 0 : -1;
+
+  for (const m of recentMatches) {
+    const idx = stageOrder.indexOf((m.stage ?? '') as typeof stageOrder[number]);
+    if (idx > reachedIdx) reachedIdx = idx;
+  }
+
+  const isPreTournament = reachedIdx < 0;
+
+  return (
+    <section aria-labelledby="route-to-final-heading" className="mb-8">
+      <h2 id="route-to-final-heading" className="text-lg font-bold text-white mb-3">
+        {team.flag} {team.displayName} — Route to the Final
+      </h2>
+
+      {isPreTournament && (
+        <p className="text-gray-500 text-xs mb-3 px-0.5">
+          Pre-tournament view · updated live once {team.displayName} kick off on 11 June 2026
+        </p>
+      )}
+
+      {/* Desktop: horizontal stepper */}
+      <div className="hidden sm:flex items-center gap-0">
+        {KNOCKOUT_PATH.map((stage, i) => {
+          const reached    = i <= reachedIdx;
+          const isCurrent  = i === reachedIdx;
+          const isLast     = i === KNOCKOUT_PATH.length - 1;
+
+          return (
+            <div key={stage.key} className="flex items-center flex-1 min-w-0">
+              <div className={`flex flex-col items-center flex-1 min-w-0 px-1 py-2 rounded-lg transition-colors ${
+                isCurrent
+                  ? 'bg-yellow-500/10 border border-yellow-500/30'
+                  : reached
+                  ? 'bg-green-500/10 border border-green-500/20'
+                  : 'bg-gray-900 border border-gray-800'
+              }`}>
+                <span className={`text-[10px] font-black uppercase tracking-wider ${
+                  isCurrent ? 'text-yellow-400' : reached ? 'text-green-400' : 'text-gray-600'
+                }`}>
+                  {stage.short}
+                </span>
+                <span className={`text-[9px] mt-0.5 text-center leading-tight ${
+                  isCurrent ? 'text-yellow-300/80' : reached ? 'text-green-300/70' : 'text-gray-700'
+                }`}>
+                  {stage.desc}
+                </span>
+              </div>
+              {!isLast && (
+                <span className={`text-xs mx-0.5 shrink-0 ${reached && i < reachedIdx ? 'text-green-500' : 'text-gray-700'}`}>
+                  →
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Mobile: vertical list */}
+      <div className="sm:hidden space-y-2">
+        {KNOCKOUT_PATH.map((stage, i) => {
+          const reached   = i <= reachedIdx;
+          const isCurrent = i === reachedIdx;
+          return (
+            <div key={stage.key} className={`flex items-start gap-3 rounded-xl px-4 py-3 border ${
+              isCurrent
+                ? 'bg-yellow-500/10 border-yellow-500/30'
+                : reached
+                ? 'bg-green-500/10 border-green-500/20'
+                : 'bg-gray-900 border-gray-800'
+            }`}>
+              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 mt-0.5 ${
+                isCurrent
+                  ? 'bg-yellow-500/20 text-yellow-400'
+                  : reached
+                  ? 'bg-green-500/20 text-green-400'
+                  : 'bg-gray-800 text-gray-600'
+              }`}>
+                {i + 1}
+              </span>
+              <div className="min-w-0">
+                <p className={`text-sm font-bold ${
+                  isCurrent ? 'text-yellow-400' : reached ? 'text-green-400' : 'text-gray-500'
+                }`}>
+                  {stage.label}
+                </p>
+                <p className={`text-xs mt-0.5 ${reached ? 'text-gray-400' : 'text-gray-700'}`}>
+                  {stage.desc}
+                </p>
+              </div>
+              {isCurrent && (
+                <span className="ml-auto shrink-0 text-xs font-semibold text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-full">
+                  Current
+                </span>
+              )}
+              {reached && !isCurrent && (
+                <span className="ml-auto shrink-0 text-xs font-semibold text-green-400">✓</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Matches needed to win */}
+      <div className="mt-4 bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-sm text-gray-400">
+        To lift the World Cup, {team.displayName} must win{' '}
+        <strong className="text-white">
+          {reachedIdx < 0
+            ? '7 matches in total'
+            : reachedIdx === 0
+            ? '5 more knockout matches after advancing from the group'
+            : `${Math.max(0, 5 - reachedIdx)} more match${5 - reachedIdx !== 1 ? 'es' : ''}`}
+        </strong>
+        {' '}— any of which could go to extra time and penalties.
+      </div>
+    </section>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Page
@@ -309,6 +486,13 @@ export default async function WCTeamPage({
           </section>
         )}
 
+        {/* Route to Final */}
+        <RouteToFinal
+          team={team}
+          standingEntry={standingEntry}
+          recentMatches={recent}
+        />
+
         {/* Recent form */}
         {recentForm.length > 0 && (
           <div className="flex items-center gap-3 mb-8">
@@ -479,7 +663,7 @@ export default async function WCTeamPage({
           { href: '/world-cup-2026-results',        icon: '🏁', label: 'WC 2026 Results',     desc: 'Live and full-time scores for every match' },
           { href: '/world-cup-2026-standings',      icon: '📊', label: 'Group Standings',     desc: 'Points tables for all 12 groups' },
           { href: '/world-cup-2026-live-stream',    icon: '📡', label: 'Watch Live',          desc: 'Free streaming options for every country' },
-          { href: '/world-cup-2026/teams/argentina',icon: '👥', label: 'All 48 Teams',        desc: 'Browse squads for all WC 2026 nations' },
+          { href: '/world-cup-2026/teams',           icon: '👥', label: 'All 48 Teams',        desc: 'Browse squads for all WC 2026 nations' },
         ]} />
       </div>
     </>

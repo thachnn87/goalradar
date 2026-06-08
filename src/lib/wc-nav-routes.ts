@@ -102,6 +102,7 @@ export function isValidWCNavHref(href: string): boolean {
   // Parametric sub-pages: group detail, team detail, venue detail, watch-live country, tv-schedule country
   if (/^\/world-cup-2026\/group-[a-l]$/.test(href))            return true;
   if (/^\/world-cup-2026\/teams\/[\w-]+$/.test(href))           return true;
+  if (/^\/world-cup-2026\/team\/[\w-]+$/.test(href))            return true; // singular → redirects to /teams/
   if (/^\/world-cup-2026\/venues\/[\w-]+$/.test(href))          return true;
   if (/^\/world-cup-2026\/watch-live\/[\w-]+$/.test(href))      return true;
   if (/^\/world-cup-2026\/tv-schedule\/[\w-]+$/.test(href))     return true;
