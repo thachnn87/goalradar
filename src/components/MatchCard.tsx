@@ -81,36 +81,52 @@ export default function MatchCard({ match }: { match: Match }) {
   const homeWins = score.winner === 'HOME_TEAM';
   const awayWins = score.winner === 'AWAY_TEAM';
 
-  return (
-    <Link href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}>
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-700 hover:bg-gray-800/50 transition-all h-full">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs text-gray-500 truncate mr-2">{match.competition.name}</span>
-          <div className="flex items-center gap-2 shrink-0">
-            {!showScore && (
-              <div className="flex flex-col items-end gap-0.5">
-                <span className="text-xs text-gray-400">{formatTime(match.utcDate)} UTC</span>
-                <LocalTime utcDate={match.utcDate} variant="badge" />
-              </div>
-            )}
-            <StatusBadge status={status} duration={score.duration} />
-          </div>
-        </div>
-        <div className="space-y-2">
-          <TeamRow
-            crest={match.homeTeam?.crest ?? ''}
-            name={match.homeTeam?.shortName || match.homeTeam?.name || 'TBD'}
-            score={showScore ? score.fullTime.home : null}
-            bold={status === 'FINISHED' ? homeWins : true}
-          />
-          <TeamRow
-            crest={match.awayTeam?.crest ?? ''}
-            name={match.awayTeam?.shortName || match.awayTeam?.name || 'TBD'}
-            score={showScore ? score.fullTime.away : null}
-            bold={status === 'FINISHED' ? awayWins : true}
-          />
+  // Static pre-tournament fixtures carry negative IDs (no real API record exists yet).
+  // Guard: only render a navigable link when the ID is a valid positive integer.
+  const isLinkable = Number.isFinite(match.id) && match.id > 0;
+
+  const cardInner = (
+    <div
+      className={`bg-gray-900 border border-gray-800 rounded-xl p-4 transition-all h-full${
+        isLinkable ? ' hover:border-gray-700 hover:bg-gray-800/50' : ''
+      }`}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs text-gray-500 truncate mr-2">{match.competition.name}</span>
+        <div className="flex items-center gap-2 shrink-0">
+          {!showScore && (
+            <div className="flex flex-col items-end gap-0.5">
+              <span className="text-xs text-gray-400">{formatTime(match.utcDate)} UTC</span>
+              <LocalTime utcDate={match.utcDate} variant="badge" />
+            </div>
+          )}
+          <StatusBadge status={status} duration={score.duration} />
         </div>
       </div>
+      <div className="space-y-2">
+        <TeamRow
+          crest={match.homeTeam?.crest ?? ''}
+          name={match.homeTeam?.shortName || match.homeTeam?.name || 'TBD'}
+          score={showScore ? score.fullTime.home : null}
+          bold={status === 'FINISHED' ? homeWins : true}
+        />
+        <TeamRow
+          crest={match.awayTeam?.crest ?? ''}
+          name={match.awayTeam?.shortName || match.awayTeam?.name || 'TBD'}
+          score={showScore ? score.fullTime.away : null}
+          bold={status === 'FINISHED' ? awayWins : true}
+        />
+      </div>
+    </div>
+  );
+
+  if (!isLinkable) {
+    return cardInner;
+  }
+
+  return (
+    <Link href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}>
+      {cardInner}
     </Link>
   );
 }

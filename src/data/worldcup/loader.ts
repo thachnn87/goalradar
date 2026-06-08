@@ -219,7 +219,9 @@ export function getStaticGroupMatches(): Match[] {
     const away = _teamBySlug.get(f.awayTeam);
 
     return {
-      // Synthetic negative IDs ensure no collision with real API IDs
+      // Synthetic negative IDs: no collision with real API IDs (5–7 digit positives).
+      // matchPath() and MatchCard both guard id ≤ 0 → static cards render as
+      // non-linkable display tiles; no broken /match/-31-… URLs are ever emitted.
       id:          -(idx + 1),
       utcDate:     `${f.date}T${f.localTime}:00Z`,
       status:      'SCHEDULED',

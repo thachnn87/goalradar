@@ -38,12 +38,26 @@ export function slugify(text: string | null | undefined): string {
  *   matchPath(537327, "Mexico",       "South Africa")  → "/match/537327-mexico-vs-south-africa"
  *   matchPath(537417, null,           null)             → "/match/537417-tbd-vs-tbd"
  *   matchPath(538155, "Sunderland AFC","Chelsea FC")    → "/match/538155-sunderland-afc-vs-chelsea-fc"
+ *
+ * Guard: null / undefined / NaN / non-positive IDs are invalid — they originate
+ * from synthetic static fixtures or malformed API responses.  When detected,
+ * the function logs [MATCH_URL_INVALID] and returns the schedule fallback so
+ * the caller always gets a navigable URL rather than a broken /match/-31-… link.
  */
 export function matchPath(
-  id: number,
+  id: number | null | undefined,
   homeTeamName: string | null | undefined,
   awayTeamName: string | null | undefined,
 ): string {
+  if (id == null || !Number.isFinite(id) || id <= 0) {
+    console.warn(
+      '[MATCH_URL_INVALID] id=%s home=%s away=%s — falling back to /world-cup-2026-schedule',
+      id,
+      homeTeamName ?? 'unknown',
+      awayTeamName ?? 'unknown',
+    );
+    return '/world-cup-2026-schedule';
+  }
   return `/match/${id}-${slugify(homeTeamName)}-vs-${slugify(awayTeamName)}`;
 }
 
