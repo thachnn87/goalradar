@@ -15,6 +15,7 @@
  */
 
 import { MetadataRoute } from 'next';
+import { kv } from '@vercel/kv';
 import { COMPETITIONS } from '@/lib/types';
 import { getRecentMatches, getUpcomingMatches, getStandings } from '@/lib/api';
 import { matchPath, predictPath, teamPath } from '@/lib/url';
@@ -27,6 +28,48 @@ import { WC_ALL_TEAM_SLUGS } from '@/lib/wc-all-teams';
 export const revalidate = 3600;
 
 const BASE_URL = 'https://goalradar.org';
+
+// ---------------------------------------------------------------------------
+// KV availability guard (same pattern used across the codebase)
+// ---------------------------------------------------------------------------
+
+const KV_ENABLED =
+  typeof process.env.KV_REST_API_URL === 'string' &&
+  process.env.KV_REST_API_URL !== '' &&
+  typeof process.env.KV_REST_API_TOKEN === 'string' &&
+  process.env.KV_REST_API_TOKEN !== '';
+
+/** Sitemap cache TTL: 24 hours.  Dynamic sitemaps are written here on every
+ *  successful build so a future API failure can serve the last known-good list. */
+const SITEMAP_CACHE_TTL_SEC = 24 * 3_600;
+
+async function getCachedSitemap(key: string): Promise<MetadataRoute.Sitemap | null> {
+  if (!KV_ENABLED) return null;
+  try {
+    return await kv.get<MetadataRoute.Sitemap>(key);
+  } catch {
+    return null;
+  }
+}
+
+function setCachedSitemap(key: string, entries: MetadataRoute.Sitemap): void {
+  if (!KV_ENABLED) return;
+  kv.set(key, entries, { ex: SITEMAP_CACHE_TTL_SEC }).catch(() => undefined);
+}
+
+// ---------------------------------------------------------------------------
+// Last-resort URLs — served when a sitemap segment fails completely
+// ---------------------------------------------------------------------------
+
+/** Googlebot must always receive valid XML.  These URLs are returned when both
+ *  the API fetch and the KV sitemap cache fail for any dynamic segment. */
+const CRITICAL_URLS: MetadataRoute.Sitemap = [
+  { url: BASE_URL,                          lastModified: new Date(), changeFrequency: 'daily',  priority: 1.0 },
+  { url: `${BASE_URL}/world-cup-2026`,      lastModified: new Date(), changeFrequency: 'always', priority: 0.95 },
+  { url: `${BASE_URL}/schedule`,            lastModified: new Date(), changeFrequency: 'daily',  priority: 0.8 },
+  { url: `${BASE_URL}/standings`,           lastModified: new Date(), changeFrequency: 'daily',  priority: 0.8 },
+  { url: `${BASE_URL}/live`,                lastModified: new Date(), changeFrequency: 'always', priority: 0.9 },
+];
 
 // WC 2026 group slugs A–L
 const WC_GROUPS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'];
@@ -51,31 +94,29 @@ export default async function sitemap({
 }: {
   id: number | Promise<string | undefined>;
 }): Promise<MetadataRoute.Sitemap> {
-  // TEMP LOGGING — remove after confirming runtime id type
-  console.log(
-    '[sitemap] typeof id:',
-    typeof idParam,
-    'constructor:',
-    (idParam as any)?.constructor?.name,
-    'value:',
-    idParam
-  );
   const id = Number(await idParam);
-  switch (id) {
-    case 0:
-      return coreStaticSitemap();
-    case 1:
-      return wcFlatSeoSitemap();
-    case 2:
-      return wcHubSitemap();
-    case 3:
-      return competitionSitemap();
-    case 4:
-      return matchSitemap();
-    case 5:
-      return teamSitemap();
-    default:
-      return [];
+  try {
+    switch (id) {
+      case 0:
+        return coreStaticSitemap();
+      case 1:
+        return wcFlatSeoSitemap();
+      case 2:
+        return wcHubSitemap();
+      case 3:
+        return competitionSitemap();
+      case 4:
+        return matchSitemap();
+      case 5:
+        return teamSitemap();
+      default:
+        return [];
+    }
+  } catch (err) {
+    console.error(
+      `[SITEMAP] FALLBACK sitemap/${id} | unhandled error: ${err instanceof Error ? err.message : String(err)} | serving critical URLs`,
+    );
+    return CRITICAL_URLS;
   }
 }
 
@@ -398,71 +439,78 @@ function competitionSitemap(): MetadataRoute.Sitemap {
 // ---------------------------------------------------------------------------
 
 async function matchSitemap(): Promise<MetadataRoute.Sitemap> {
-  const [recentResults, upcomingResults] = await Promise.all([
-    Promise.allSettled(COMPETITIONS.map((c) => getRecentMatches(c.code))),
-    Promise.allSettled(COMPETITIONS.map((c) => getUpcomingMatches(c.code))),
-  ]);
+  const KV_KEY = 'goalradar:sitemap:matches';
 
-  // TEMP LOGGING — remove after production diagnosis
-  console.log('[sitemap/4] recentResults  fulfilled:', recentResults.filter((r) => r.status === 'fulfilled').length);
-  console.log('[sitemap/4] recentResults  rejected:', recentResults.filter((r) => r.status === 'rejected').length);
-  console.log('[sitemap/4] upcomingResults fulfilled:', upcomingResults.filter((r) => r.status === 'fulfilled').length);
-  console.log('[sitemap/4] upcomingResults rejected:', upcomingResults.filter((r) => r.status === 'rejected').length);
+  try {
+    const [recentResults, upcomingResults] = await Promise.all([
+      Promise.allSettled(COMPETITIONS.map((c) => getRecentMatches(c.code))),
+      Promise.allSettled(COMPETITIONS.map((c) => getUpcomingMatches(c.code))),
+    ]);
 
-  const allMatches = [
-    ...recentResults.flatMap((r) =>
-      r.status === 'fulfilled' ? r.value.matches : [],
-    ),
-    ...upcomingResults.flatMap((r) =>
-      r.status === 'fulfilled' ? r.value.matches : [],
-    ),
-  ];
+    const allMatches = [
+      ...recentResults.flatMap((r) =>
+        r.status === 'fulfilled' ? r.value.matches : [],
+      ),
+      ...upcomingResults.flatMap((r) =>
+        r.status === 'fulfilled' ? r.value.matches : [],
+      ),
+    ];
 
-  console.log('[sitemap/4] allMatches.length:', allMatches.length);
+    // Deduplicate by match id
+    const seen = new Set<number>();
+    const entries: MetadataRoute.Sitemap = [];
 
-  // Deduplicate by match id
-  const seen = new Set<number>();
-  const entries: MetadataRoute.Sitemap = [];
+    for (const match of allMatches) {
+      if (seen.has(match.id)) continue;
+      seen.add(match.id);
 
-  for (const match of allMatches) {
-    if (seen.has(match.id)) continue;
-    seen.add(match.id);
+      const isWC       = match.competition?.code === 'WC';
+      const isLive     = ['IN_PLAY', 'PAUSED'].includes(match.status);
+      const isFinished = match.status === 'FINISHED';
+      const isUpcoming = match.status === 'SCHEDULED' || match.status === 'TIMED';
 
-    const isWC       = match.competition?.code === 'WC';
-    const isLive     = ['IN_PLAY', 'PAUSED'].includes(match.status);
-    const isFinished = match.status === 'FINISHED';
-    const isUpcoming = match.status === 'SCHEDULED' || match.status === 'TIMED';
-
-    // Match detail page
-    entries.push({
-      url: `${BASE_URL}${matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}`,
-      lastModified: match.lastUpdated ? new Date(match.lastUpdated) : new Date(),
-      changeFrequency: isLive
-        ? ('always' as const)
-        : isFinished
-          ? ('weekly' as const)
-          : ('hourly' as const),
-      priority: isWC
-        ? isLive ? 0.95 : 0.88
-        : isLive ? 0.85 : 0.70,
-    });
-
-    // Prediction page — only for upcoming and live matches (finished predictions are stale)
-    if (isUpcoming || isLive) {
+      // Match detail page
       entries.push({
-        url: `${BASE_URL}${predictPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}`,
+        url: `${BASE_URL}${matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}`,
         lastModified: match.lastUpdated ? new Date(match.lastUpdated) : new Date(),
-        changeFrequency: isLive ? ('hourly' as const) : ('daily' as const),
-        priority: isWC ? 0.82 : 0.65,
+        changeFrequency: isLive
+          ? ('always' as const)
+          : isFinished
+            ? ('weekly' as const)
+            : ('hourly' as const),
+        priority: isWC
+          ? isLive ? 0.95 : 0.88
+          : isLive ? 0.85 : 0.70,
       });
+
+      // Prediction page — only for upcoming and live matches (finished predictions are stale)
+      if (isUpcoming || isLive) {
+        entries.push({
+          url: `${BASE_URL}${predictPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}`,
+          lastModified: match.lastUpdated ? new Date(match.lastUpdated) : new Date(),
+          changeFrequency: isLive ? ('hourly' as const) : ('daily' as const),
+          priority: isWC ? 0.82 : 0.65,
+        });
+      }
     }
+
+    // Seed the KV cache for future fallback use
+    if (entries.length > 0) setCachedSitemap(KV_KEY, entries);
+
+    return entries;
+
+  } catch (err) {
+    console.error(
+      `[SITEMAP] FALLBACK sitemap/4 | fetch error: ${err instanceof Error ? err.message : String(err)} | checking KV cache`,
+    );
+    const cached = await getCachedSitemap(KV_KEY);
+    if (cached && cached.length > 0) {
+      console.warn(`[SITEMAP] FALLBACK sitemap/4 | serving ${cached.length} cached match entries`);
+      return cached;
+    }
+    console.warn(`[SITEMAP] FALLBACK sitemap/4 | no cache available — returning empty`);
+    return [];
   }
-
-  // TEMP LOGGING — remove after production diagnosis
-  console.log('[sitemap/4] dedupedMatches.length:', seen.size);
-  console.log('[sitemap/4] entries.length:', entries.length);
-
-  return entries;
 }
 
 // ---------------------------------------------------------------------------
@@ -470,44 +518,53 @@ async function matchSitemap(): Promise<MetadataRoute.Sitemap> {
 // ---------------------------------------------------------------------------
 
 async function teamSitemap(): Promise<MetadataRoute.Sitemap> {
-  // Fetch standings for every tracked competition in parallel.
-  // Safe to fail per-competition — standings for other comps still included.
-  const leagueComps = COMPETITIONS.filter((c) => c.code !== 'WC');
+  const KV_KEY = 'goalradar:sitemap:teams';
 
-  const results = await Promise.allSettled(
-    leagueComps.map((c) => getStandings(c.code)),
-  );
+  try {
+    // Fetch standings for every tracked competition in parallel.
+    // Safe to fail per-competition — standings for other comps still included.
+    const leagueComps = COMPETITIONS.filter((c) => c.code !== 'WC');
 
-  // TEMP LOGGING — remove after production diagnosis
-  console.log('[sitemap/5] standings fulfilled:', results.filter((r) => r.status === 'fulfilled').length);
-  console.log('[sitemap/5] standings rejected:', results.filter((r) => r.status === 'rejected').length);
+    const results = await Promise.allSettled(
+      leagueComps.map((c) => getStandings(c.code)),
+    );
 
-  const seenTeamIds = new Set<number>();
-  const entries:     MetadataRoute.Sitemap = [];
-  let totalTablesFound = 0;
+    const seenTeamIds = new Set<number>();
+    const entries:     MetadataRoute.Sitemap = [];
 
-  for (const result of results) {
-    if (result.status !== 'fulfilled') continue;
-    const totalTable = result.value.standings.find((s) => s.type === 'TOTAL');
-    if (!totalTable) continue;
-    totalTablesFound++;
+    for (const result of results) {
+      if (result.status !== 'fulfilled') continue;
+      const totalTable = result.value.standings.find((s) => s.type === 'TOTAL');
+      if (!totalTable) continue;
 
-    for (const row of totalTable.table) {
-      if (seenTeamIds.has(row.team.id)) continue;
-      seenTeamIds.add(row.team.id);
+      for (const row of totalTable.table) {
+        if (seenTeamIds.has(row.team.id)) continue;
+        seenTeamIds.add(row.team.id);
 
-      entries.push({
-        url:             `${BASE_URL}${teamPath(row.team.id, row.team.name)}`,
-        lastModified:    new Date(),
-        changeFrequency: 'daily',
-        priority:        0.70,
-      });
+        entries.push({
+          url:             `${BASE_URL}${teamPath(row.team.id, row.team.name)}`,
+          lastModified:    new Date(),
+          changeFrequency: 'daily',
+          priority:        0.70,
+        });
+      }
     }
+
+    // Seed the KV cache for future fallback use
+    if (entries.length > 0) setCachedSitemap(KV_KEY, entries);
+
+    return entries;
+
+  } catch (err) {
+    console.error(
+      `[SITEMAP] FALLBACK sitemap/5 | fetch error: ${err instanceof Error ? err.message : String(err)} | checking KV cache`,
+    );
+    const cached = await getCachedSitemap(KV_KEY);
+    if (cached && cached.length > 0) {
+      console.warn(`[SITEMAP] FALLBACK sitemap/5 | serving ${cached.length} cached team entries`);
+      return cached;
+    }
+    console.warn(`[SITEMAP] FALLBACK sitemap/5 | no cache available — returning empty`);
+    return [];
   }
-
-  // TEMP LOGGING — remove after production diagnosis
-  console.log('[sitemap/5] total tables found:', totalTablesFound);
-  console.log('[sitemap/5] entries.length:', entries.length);
-
-  return entries;
 }
