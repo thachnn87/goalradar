@@ -231,6 +231,12 @@ function wcFlatSeoSitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'weekly',
       priority: 0.88,
     },
+    {
+      url: `${BASE_URL}/world-cup-2026-predictions`,
+      lastModified: new Date(),
+      changeFrequency: 'hourly',
+      priority: 0.92,
+    },
   ];
 }
 

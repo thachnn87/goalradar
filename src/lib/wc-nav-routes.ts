@@ -29,6 +29,7 @@ export const WC_FLAT_ROUTES = [
   '/world-cup-2026-bracket',
   '/world-cup-2026-live-stream',
   '/world-cup-2026-tv-guide',
+  '/world-cup-2026-predictions',
 ] as const;
 
 // ---------------------------------------------------------------------------
