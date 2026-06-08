@@ -282,7 +282,7 @@ export default async function WC2026BracketPage() {
         <AdSlot slotId="wc-bracket-bottom" variant="banner" />
 
         <WCRelatedLinks links={[
-          { href: '/world-cup-2026/bracket',        icon: '🔗', label: 'Interactive Bracket',   desc: 'Visual knockout bracket with API match data' },
+          { href: '/world-cup-2026/bracket',        icon: '🔗', label: 'Interactive Bracket',   desc: 'Visual knockout bracket with live scores' },
           { href: '/world-cup-2026-results',        icon: '🏁', label: 'WC 2026 Results',       desc: 'All scores — live during matches, full-time after' },
           { href: '/world-cup-2026-schedule',       icon: '📅', label: 'WC 2026 Schedule',      desc: 'Full 104-match schedule with kickoff times' },
           { href: '/world-cup-2026-standings',      icon: '📊', label: 'Group Standings',       desc: 'Live tables for all 12 groups' },

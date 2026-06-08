@@ -65,23 +65,22 @@ export default function AboutPage() {
         <div>
           <h2 className="text-lg font-bold text-white mb-2">Data Sources</h2>
           <p>
-            Live match data is powered by the{' '}
+            Live match data is powered by{' '}
             <a href="https://www.football-data.org" target="_blank" rel="noopener noreferrer"
               className="text-yellow-500 hover:text-yellow-300 transition-colors">
-              football-data.org API
+              football-data.org
             </a>
             , which provides official data for over 150 football competitions worldwide.
-            Scores update automatically via Incremental Static Regeneration (ISR) — no manual
-            refresh needed.
+            Scores update automatically — no manual refresh needed.
           </p>
         </div>
 
         <div>
           <h2 className="text-lg font-bold text-white mb-2">Technology</h2>
           <p>
-            GoalRadar is built with Next.js 16 (App Router), deployed on Vercel and served from
-            global edge nodes for fast load times worldwide. We use ISR with short revalidation
-            intervals to keep scores fresh without unnecessary API calls.
+            GoalRadar is built with Next.js 16, deployed on Vercel and served from
+            global edge nodes for fast load times worldwide. Scores are refreshed on short
+            intervals so every page stays current without any manual refresh.
           </p>
         </div>
 

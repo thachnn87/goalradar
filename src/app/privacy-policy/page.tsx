@@ -94,7 +94,7 @@ export default function PrivacyPolicyPage() {
             {[
               ['Vercel',            'Hosting & serverless functions',      'IP address, request data'],
               ['Vercel Postgres',   'Newsletter subscriber database',       'Email address, subscription date'],
-              ['Vercel KV',         'Rate limiting',                        'Hashed IP address (TTL 1h)'],
+              ['Vercel KV',         'Rate limiting',                        'Hashed IP address (deleted after 1 hour)'],
               ['Resend',            'Transactional email delivery',         'Email address'],
               ['Google AdSense',    'Display advertising',                  'Cookies, browsing data'],
               ['football-data.org', 'Live match data API',                  'No personal data sent'],
@@ -145,7 +145,7 @@ export default function PrivacyPolicyPage() {
         'Newsletter subscriber data: retained until unsubscribed or deletion requested',
         'Unconfirmed subscribers (no double opt-in click): deleted after 30 days',
         'Server logs: retained up to 30 days by Vercel',
-        'Rate-limit data: auto-deleted after 1 hour (KV TTL)',
+        'Rate-limit data: auto-deleted after 1 hour',
       ]} />
 
       <H2>8. Cookies</H2>

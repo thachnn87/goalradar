@@ -326,12 +326,12 @@ export default async function VenuePage({
           { href: '/world-cup-2026',               icon: '🏆', label: 'WC 2026 Hub',      desc: 'Full tournament overview and latest news' },
           { href: '/world-cup-2026-schedule',       icon: '📅', label: 'Match Schedule',   desc: 'All 104 fixtures with kickoff times' },
           { href: '/world-cup-2026-results',        icon: '🏁', label: 'Results',           desc: 'Full-time scores for every match' },
-          { href: '/world-cup-2026/fixtures',       icon: '📋', label: 'Live Fixtures',     desc: 'API-driven fixture cards' },
+          { href: '/world-cup-2026/fixtures',       icon: '📋', label: 'Live Fixtures',     desc: 'Live fixture list with match times' },
           { href: '/world-cup-2026-tv-guide',       icon: '📺', label: 'TV Guide',          desc: 'How to watch in your country' },
           { href: '/world-cup-2026-bracket',        icon: '🔗', label: 'Knockout Bracket',  desc: 'Round of 32 through the Final' },
           { href: '/world-cup-2026-groups',         icon: '🗂️', label: 'Group Stage',       desc: 'All 12 groups and standings' },
-          { href: '/world-cup-2026/teams/argentina',icon: '👥', label: 'All 48 Teams',      desc: 'Squads, stats and fixtures per nation' },
-          { href: '/world-cup-2026/venues/metlife-stadium', icon: '🏟️', label: 'All 16 Venues', desc: 'Stadium guides for all WC 2026 host cities' },
+          { href: '/world-cup-2026/teams',          icon: '👥', label: 'All 48 Teams',      desc: 'Squads, stats and fixtures per nation' },
+          { href: '/world-cup-2026/venues',         icon: '🏟️', label: 'All 16 Venues',    desc: 'Stadium guides for all WC 2026 host cities' },
         ]} heading="More World Cup 2026" />
       </div>
     </>
