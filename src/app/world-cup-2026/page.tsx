@@ -449,7 +449,7 @@ export default async function WorldCup2026Page() {
                 {groupTables.map((t) => {
                   const groupSlug = (t.group ?? '')
                     .toLowerCase()
-                    .replace('_', '-'); // GROUP_A → group-a
+                    .replace(/[\s_]+/g, '-'); // GROUP_A / "Group A" → group-a
                   return (
                     <WCGroupTable
                       key={t.group ?? t.stage}

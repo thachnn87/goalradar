@@ -809,7 +809,7 @@ function FaqSection({ faqs }: { faqs: { q: string; a: string }[] }) {
 
 function InternalLinks({ match }: { match: MatchDetail }) {
   const isWC     = match.competition?.code === 'WC';
-  const groupSlug = match.group ? match.group.toLowerCase().replace('_', '-') : null;
+  const groupSlug = match.group ? match.group.toLowerCase().replace(/[\s_]+/g, '-') : null;
 
   type Chip = { href: string; label: string; icon: string };
 
@@ -925,7 +925,7 @@ export default async function PredictionPage({ params }: Params) {
       ? [
           { label: 'Home',           href: '/' },
           { label: 'World Cup 2026', href: '/world-cup-2026' },
-          { label: match.group.replace('GROUP_', 'Group '), href: `/world-cup-2026/${match.group.toLowerCase().replace('_', '-')}` },
+          { label: match.group.replace('GROUP_', 'Group '), href: `/world-cup-2026/${match.group.toLowerCase().replace(/[\s_]+/g, '-')}` },
           { label: `${home} vs ${away} Prediction` },
         ]
       : [

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { StandingEntry } from '@/lib/types';
+import { teamPath } from '@/lib/url';
 
 function groupLabel(raw: string | null) {
   if (!raw) return 'Group';
@@ -60,23 +61,41 @@ export default function WCGroupTable({
               >
                 <td className="px-3 py-2 text-gray-500 text-center">{entry.position}</td>
                 <td className="px-3 py-2">
-                  <Link
-                    href={`/team/${entry.team.id}`}
-                    className="flex items-center gap-1.5 group"
-                  >
-                    {entry.team.crest && (
-                      <img
-                        src={entry.team.crest}
-                        alt=""
-                        width={14}
-                        height={14}
-                        className="object-contain shrink-0"
-                      />
-                    )}
-                    <span className="text-white font-medium truncate group-hover:text-green-400 transition-colors">
-                      {entry.team.shortName || entry.team.name}
-                    </span>
-                  </Link>
+                  {/* Only render as a link when the team has a valid API id */}
+                  {entry.team.id > 0 ? (
+                    <Link
+                      href={teamPath(entry.team.id, entry.team.name)}
+                      className="flex items-center gap-1.5 group"
+                    >
+                      {entry.team.crest && (
+                        <img
+                          src={entry.team.crest}
+                          alt=""
+                          width={14}
+                          height={14}
+                          className="object-contain shrink-0"
+                        />
+                      )}
+                      <span className="text-white font-medium truncate group-hover:text-green-400 transition-colors">
+                        {entry.team.shortName || entry.team.name}
+                      </span>
+                    </Link>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      {entry.team.crest && (
+                        <img
+                          src={entry.team.crest}
+                          alt=""
+                          width={14}
+                          height={14}
+                          className="object-contain shrink-0"
+                        />
+                      )}
+                      <span className="text-white font-medium truncate">
+                        {entry.team.shortName || entry.team.name}
+                      </span>
+                    </div>
+                  )}
                 </td>
                 <td className="px-2 py-2 text-center text-gray-400">{entry.playedGames}</td>
                 <td className="px-2 py-2 text-center text-gray-400">{entry.won}</td>

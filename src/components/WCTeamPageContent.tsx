@@ -51,7 +51,7 @@ function findGroupStandings(
 }
 
 function groupSlug(apiGroup: string): string {
-  return apiGroup.toLowerCase().replace('_', '-'); // GROUP_A → group-a
+  return apiGroup.toLowerCase().replace(/[\s_]+/g, '-'); // GROUP_A / "Group A" → group-a
 }
 
 function groupLabel(apiGroup: string): string {

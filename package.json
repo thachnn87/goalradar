@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "crawl:links": "node scripts/crawl-links.mjs",
+    "build:check": "npm run build && node scripts/crawl-links.mjs --auto-server"
   },
   "dependencies": {
     "@vercel/kv": "^3.0.0",

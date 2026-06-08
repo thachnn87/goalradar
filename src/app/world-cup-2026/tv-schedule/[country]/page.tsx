@@ -96,6 +96,11 @@ export default async function TVScheduleCountryPage({
 
   const canonicalUrl = `${BASE_URL}/world-cup-2026/tv-schedule/${slug}`;
 
+  // Some TV-schedule slugs differ from the /watch-live/[country] slugs.
+  // "usa" is the TV-schedule slug but the watch-live route uses "us".
+  const WATCH_LIVE_SLUG_MAP: Record<string, string> = { usa: 'us' };
+  const watchLiveSlug = WATCH_LIVE_SLUG_MAP[slug] ?? slug;
+
   const jsonLdFaq = {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
@@ -257,7 +262,7 @@ export default async function TVScheduleCountryPage({
             </div>
           </div>
           <div className="flex flex-wrap gap-2 mt-4">
-            <Link href={`/world-cup-2026/watch-live/${slug}`}
+            <Link href={`/world-cup-2026/watch-live/${watchLiveSlug}`}
               className="bg-yellow-500 hover:bg-yellow-400 text-black px-4 py-2 rounded-xl text-sm font-bold transition-colors">
               Full Streaming Guide →
             </Link>
@@ -341,7 +346,7 @@ export default async function TVScheduleCountryPage({
             {[
               { href: '/world-cup-2026',                   label: '🏆 WC Hub' },
               { href: '/world-cup-2026/tv-schedule',       label: '📺 TV Schedule (All)' },
-              { href: `/world-cup-2026/watch-live/${slug}`, label: `📡 Watch Live (${country.name})` },
+              { href: `/world-cup-2026/watch-live/${watchLiveSlug}`, label: `📡 Watch Live (${country.name})` },
               { href: '/world-cup-2026/watch-live',        label: '🌍 Watch Live (All)' },
               { href: '/world-cup-2026/streaming-guide',   label: '📡 Streaming Guide' },
               { href: '/schedule?competition=WC',           label: '📅 WC Fixtures' },

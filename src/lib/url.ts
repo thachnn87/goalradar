@@ -79,9 +79,14 @@ export function extractMatchId(slug: string): string | null {
  *   teamPath(338, "Southampton FC")    → "/teams/338-southampton-fc"
  */
 export function teamPath(
-  id:       number | string,
+  id:       number | string | null | undefined,
   teamName: string | null | undefined,
 ): string {
+  const numId = typeof id === 'string' ? parseInt(id, 10) : id;
+  if (numId == null || !Number.isFinite(numId) || numId <= 0) {
+    console.warn('[TEAM_URL_INVALID] id=%s name=%s — falling back to /world-cup-2026-schedule', id, teamName ?? 'unknown');
+    return '/world-cup-2026-schedule';
+  }
   return `/teams/${id}-${slugify(teamName)}`;
 }
 

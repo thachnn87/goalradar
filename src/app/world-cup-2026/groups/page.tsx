@@ -30,7 +30,7 @@ export const metadata: Metadata = {
 };
 
 const GROUPS = ['a','b','c','d','e','f','g','h','i','j','k','l'];
-function groupSlug(apiGroup: string) { return apiGroup.toLowerCase().replace('_','-'); } // GROUP_A → group-a
+function groupSlug(apiGroup: string) { return apiGroup.toLowerCase().replace(/[\s_]+/g, '-'); } // GROUP_A / "Group A" → group-a
 function groupLabel(apiGroup: string) { return apiGroup.replace('GROUP_', 'Group '); }    // GROUP_A → Group A
 
 // ---------------------------------------------------------------------------

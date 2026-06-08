@@ -396,7 +396,9 @@ function RecentResultsCard({
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
       <SectionHeader action={
-        <SectionLink href={`/competition/${leagueCode}`}>View all →</SectionLink>
+        leagueCode
+          ? <SectionLink href={`/competition/${leagueCode}`}>View all →</SectionLink>
+          : undefined
       }>Recent Results</SectionHeader>
 
       <div className="divide-y divide-gray-800/60 rounded-xl border border-gray-800 overflow-hidden">

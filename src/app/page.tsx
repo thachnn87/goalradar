@@ -713,7 +713,7 @@ export default async function HomePage() {
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {activeGroupTables.map((t) => {
-              const groupSlug = (t.group ?? '').toLowerCase().replace('_', '-');
+              const groupSlug = (t.group ?? '').toLowerCase().replace(/[\s_]+/g, '-');
               return (
                 <WCGroupTable
                   key={t.group ?? t.stage}

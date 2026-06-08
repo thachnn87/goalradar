@@ -256,20 +256,37 @@ function ScoreHero({ match }: { match: MatchDetail }) {
 
       <div className="grid grid-cols-3 items-center gap-4">
         {/* Home */}
-        <Link href={teamPath(homeTeam.id, homeTeam.name)} className="text-center group block">
-          {homeTeam.crest && (
-            <img
-              src={homeTeam.crest}
-              alt={homeTeam.name}
-              width={64}
-              height={64}
-              className="object-contain mx-auto mb-3 group-hover:opacity-80 transition-opacity"
-            />
-          )}
-          <p className="font-bold text-white text-sm sm:text-base leading-tight group-hover:text-green-400 transition-colors">
-            {homeTeam.shortName || homeTeam.name}
-          </p>
-        </Link>
+        {homeTeam.id > 0 ? (
+          <Link href={teamPath(homeTeam.id, homeTeam.name)} className="text-center group block">
+            {homeTeam.crest && (
+              <img
+                src={homeTeam.crest}
+                alt={homeTeam.name}
+                width={64}
+                height={64}
+                className="object-contain mx-auto mb-3 group-hover:opacity-80 transition-opacity"
+              />
+            )}
+            <p className="font-bold text-white text-sm sm:text-base leading-tight group-hover:text-green-400 transition-colors">
+              {homeTeam.shortName || homeTeam.name}
+            </p>
+          </Link>
+        ) : (
+          <div className="text-center">
+            {homeTeam.crest && (
+              <img
+                src={homeTeam.crest}
+                alt={homeTeam.name}
+                width={64}
+                height={64}
+                className="object-contain mx-auto mb-3 opacity-50"
+              />
+            )}
+            <p className="font-bold text-white text-sm sm:text-base leading-tight">
+              {homeTeam.shortName || homeTeam.name}
+            </p>
+          </div>
+        )}
 
         {/* Score */}
         <div className="text-center">
@@ -292,20 +309,37 @@ function ScoreHero({ match }: { match: MatchDetail }) {
         </div>
 
         {/* Away */}
-        <Link href={teamPath(awayTeam.id, awayTeam.name)} className="text-center group block">
-          {awayTeam.crest && (
-            <img
-              src={awayTeam.crest}
-              alt={awayTeam.name}
-              width={64}
-              height={64}
-              className="object-contain mx-auto mb-3 group-hover:opacity-80 transition-opacity"
-            />
-          )}
-          <p className="font-bold text-white text-sm sm:text-base leading-tight group-hover:text-green-400 transition-colors">
-            {awayTeam.shortName || awayTeam.name}
-          </p>
-        </Link>
+        {awayTeam.id > 0 ? (
+          <Link href={teamPath(awayTeam.id, awayTeam.name)} className="text-center group block">
+            {awayTeam.crest && (
+              <img
+                src={awayTeam.crest}
+                alt={awayTeam.name}
+                width={64}
+                height={64}
+                className="object-contain mx-auto mb-3 group-hover:opacity-80 transition-opacity"
+              />
+            )}
+            <p className="font-bold text-white text-sm sm:text-base leading-tight group-hover:text-green-400 transition-colors">
+              {awayTeam.shortName || awayTeam.name}
+            </p>
+          </Link>
+        ) : (
+          <div className="text-center">
+            {awayTeam.crest && (
+              <img
+                src={awayTeam.crest}
+                alt={awayTeam.name}
+                width={64}
+                height={64}
+                className="object-contain mx-auto mb-3 opacity-50"
+              />
+            )}
+            <p className="font-bold text-white text-sm sm:text-base leading-tight">
+              {awayTeam.shortName || awayTeam.name}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Venue / referee meta */}
@@ -946,7 +980,7 @@ function buildBreadcrumb(match: MatchDetail): BreadcrumbItem[] {
   if (isWC) {
     if (match.group) {
       // GROUP_A → 'group-a' / 'Group A'
-      const slug  = match.group.toLowerCase().replace('_', '-');     // group-a
+      const slug  = match.group.toLowerCase().replace(/[\s_]+/g, '-'); // group-a (handles GROUP_A and "Group A")
       const label = match.group.replace('GROUP_', 'Group ');          // Group A
       return [
         { label: 'Home',           href: '/' },
@@ -1060,7 +1094,7 @@ function RelatedMatches({
 function CompetitionLinks({ match }: { match: MatchDetail }) {
   const isWC  = match.competition?.code === 'WC';
   const group = match.group;
-  const groupSlug  = group ? group.toLowerCase().replace('_', '-') : null;
+  const groupSlug  = group ? group.toLowerCase().replace(/[\s_]+/g, '-') : null;
   const groupLabel = group ? group.replace('GROUP_', 'Group ') : null;
   const compCode   = match.competition?.code;
   const compName   = match.competition?.name ?? 'Competition';
@@ -1883,7 +1917,7 @@ export default async function MatchDetailPage({ params }: Params) {
   const wcGroupTable                 = getGroupTable(snapshot);
 
   // Group slug/label for nav links
-  const matchGroupSlug  = match.group ? match.group.toLowerCase().replace('_', '-') : null;
+  const matchGroupSlug  = match.group ? match.group.toLowerCase().replace(/[\s_]+/g, '-') : null;
   const matchGroupLabel = match.group ? match.group.replace('GROUP_', 'Group ') : null;
 
   const hasEvents =
