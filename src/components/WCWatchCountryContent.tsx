@@ -7,9 +7,11 @@
 
 import Link from 'next/link';
 import type { WCWatchCountry, WCBroadcaster } from '@/lib/wc-watch-countries';
+import { WC_WATCH_COUNTRIES } from '@/lib/wc-watch-countries';
 import AdSlot from '@/components/AdSlot';
 import AffiliateBlock from '@/components/AffiliateBlock';
 import NewsletterSignup from '@/components/NewsletterSignup';
+import WCRelatedLinks from '@/components/WCRelatedLinks';
 
 const BASE_URL = 'https://goalradar.org';
 
@@ -307,28 +309,42 @@ export default function WCWatchCountryContent({ country }: Props) {
           <AdSlot variant="banner" />
 
           {/* ── Internal links ────────────────────────────────────────────── */}
-          <section aria-label="Related pages">
-            <h2 className="text-lg font-bold text-white mb-4">More World Cup 2026</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {[
-                { href: '/world-cup-2026',                 label: '🏆 WC Hub' },
-                { href: '/world-cup-2026/watch-live',      label: '📺 Watch Live (All Countries)' },
-                { href: '/live',                           label: '🔴 Live Scores' },
-                { href: '/world-cup-2026/fixtures',        label: '📅 Fixtures' },
-                { href: '/world-cup-2026/results',         label: '📊 Results' },
-                { href: '/world-cup-2026/groups',          label: '🗂️ Groups' },
-                { href: '/world-cup-2026/streaming-guide', label: '📡 Streaming Guide' },
-              ].map(({ href, label }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  className="block text-center text-sm font-medium text-white/70 hover:text-yellow-400 bg-white/5 hover:bg-white/10 rounded-xl px-3 py-3 transition-colors"
-                >
-                  {label}
-                </Link>
-              ))}
-            </div>
-          </section>
+          <WCRelatedLinks
+            sectionId={`watch-live-${country.slug}-links`}
+            heading="More World Cup 2026"
+            links={[
+              { href: '/world-cup-2026',                 icon: '🏆', label: 'WC 2026 Hub',        desc: 'Full tournament overview — fixtures, results and standings' },
+              { href: '/world-cup-2026/watch-live',      icon: '📺', label: 'Watch Live Guide',   desc: 'How to watch in every country worldwide' },
+              { href: '/world-cup-2026-schedule',        icon: '📅', label: 'Full Schedule',      desc: 'All 104 fixtures with kickoff times and venues' },
+              { href: '/world-cup-2026-results',         icon: '🏁', label: 'Results',            desc: 'Scores for every completed World Cup 2026 match' },
+              { href: '/world-cup-2026-standings',       icon: '📊', label: 'Group Standings',    desc: 'Live points tables for all 12 groups' },
+              { href: '/world-cup-2026/streaming-guide', icon: '📡', label: 'Streaming Guide',    desc: 'VPN, cord-cutting and best streaming services explained' },
+              { href: '/world-cup-2026/tv-schedule',     icon: '📋', label: 'TV Schedule',        desc: 'Match-by-match broadcast schedule by channel' },
+              { href: '/live',                           icon: '🔴', label: 'Live Scores',        desc: 'In-play scores across all competitions right now' },
+            ]}
+          />
+
+          {/* ── Watch in other countries ──────────────────────────────────── */}
+          {(() => {
+            const FEATURED = ['us', 'uk', 'canada', 'australia', 'india'];
+            const others = FEATURED.filter((s) => s !== country.slug);
+            const otherLinks = others.map((s) => {
+              const c = WC_WATCH_COUNTRIES[s];
+              return {
+                href:  `/world-cup-2026/watch-live/${s}` as const,
+                icon:  c.flag,
+                label: `Watch in ${c.name}`,
+                desc:  c.quickVerdict,
+              };
+            });
+            return (
+              <WCRelatedLinks
+                sectionId={`watch-live-${country.slug}-countries`}
+                heading="Watch Guide — Other Countries"
+                links={otherLinks}
+              />
+            );
+          })()}
 
         </div>
       </main>
