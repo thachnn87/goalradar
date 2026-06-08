@@ -23,13 +23,14 @@
  * // In a page or API route (wraps in your usual cache layers first):
  * const data = await providerManager.getFixtures('WC');
  *
- * Note: Existing pages still use api.ts directly.
- * This manager is wired in a future sprint.
+ * Wiring: api.ts delegates getMatchDetail, getUpcomingMatches, getRecentMatches,
+ * getStandings, getLiveMatches, and getWCLiveMatches to this manager.
+ * Cache layers (withCache / withKVCache / getCachedLiveMatches) remain in api.ts.
  */
 
 import { FootballDataProvider } from './football-data';
 import { ApiFootballProvider }  from './api-football';
-import { ApiUnavailableError }  from '@/lib/api';
+import { ApiUnavailableError }  from '@/lib/errors';
 import type {
   MatchProvider,
   ProviderName,
@@ -125,6 +126,7 @@ async function withFailover<T>(
 ): Promise<T> {
   // ── 1. Try primary ────────────────────────────────────────────────────────
   stats['football-data'].requestCount++;
+  console.log(`[PROVIDER_CALL] provider=football-data | endpoint=${endpoint}`);
   try {
     const result = await primaryFn();
     recordSuccess('football-data');
@@ -154,6 +156,7 @@ async function withFailover<T>(
 
     // ── 3. Try secondary ──────────────────────────────────────────────────
     stats['api-football'].requestCount++;
+    console.log(`[PROVIDER_CALL] provider=api-football | endpoint=${endpoint}`);
     try {
       const result = await secondaryFn();
       recordSuccess('api-football');

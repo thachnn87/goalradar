@@ -3,23 +3,18 @@ import { withCache, TTL } from './cache';
 import { withKVCache, SWR } from './kv-cache';
 import { recordAuditCall } from './api-audit';
 import { getCachedLiveMatches, getCachedWCLiveMatches } from './live-cache';
+import { providerManager } from './providers/manager';
 
 const BASE_URL = 'https://api.football-data.org/v4';
 
 // ---------------------------------------------------------------------------
-// Error types
+// Error types (defined in errors.ts to avoid circular imports; re-exported
+// here for backward compatibility so all existing `from '@/lib/api'` imports
+// of NotFoundError / ApiUnavailableError continue to work unchanged).
 // ---------------------------------------------------------------------------
 
-export class NotFoundError extends Error {
-  constructor() { super('Not found'); this.name = 'NotFoundError'; }
-}
-
-export class ApiUnavailableError extends Error {
-  constructor(public readonly reason: 'http' | 'timeout' | 'rate_limit' | 'disabled' | 'unknown' = 'unknown') {
-    super('Data temporarily unavailable');
-    this.name = 'ApiUnavailableError';
-  }
-}
+export { NotFoundError, ApiUnavailableError } from './errors';
+import { NotFoundError, ApiUnavailableError } from './errors';
 
 // ---------------------------------------------------------------------------
 // HTTP layer  (retry + timeout + 429 back-off + Next.js ISR)
@@ -190,8 +185,9 @@ export function getTodayMatches(): Promise<{ matches: Match[] }> {
 }
 
 export function getLiveMatches(): Promise<{ matches: Match[] }> {
+  // Routes through providerManager → failover to api-football on FD outage.
   return getCachedLiveMatches(
-    () => fetchDirect('/matches?status=IN_PLAY,PAUSED', TTL.LIVE),
+    () => providerManager.getLiveMatches(),
   );
 }
 
@@ -200,7 +196,7 @@ export function getWCLiveMatches(): Promise<{ matches: Match[] }> {
   // The WC-only filter is applied in live-cache.ts after reading from cache —
   // no separate API call or KV key is needed.
   return getCachedWCLiveMatches(
-    () => fetchDirect('/matches?status=IN_PLAY,PAUSED', TTL.LIVE),
+    () => providerManager.getLiveMatches(),
   );
 }
 
@@ -209,10 +205,15 @@ export function getWCLiveMatches(): Promise<{ matches: Match[] }> {
 export function getUpcomingMatches(
   competition: string,
 ): Promise<{ matches: Match[]; resultSet: { count: number } }> {
-  return fetchWithKV(
+  // Routes through providerManager — cache wraps the provider call.
+  return withCache(
     `/competitions/${competition}/matches?status=SCHEDULED,TIMED`,
     TTL.FIXTURES,
-    SWR.FIXTURES,
+    () => withKVCache(
+      `/competitions/${competition}/matches?status=SCHEDULED,TIMED`,
+      SWR.FIXTURES,
+      () => providerManager.getFixtures(competition),
+    ),
   );
 }
 
@@ -221,10 +222,15 @@ export function getRecentMatches(
 ): Promise<{ matches: Match[] }> {
   const today = new Date().toISOString().split('T')[0];
   const from  = new Date(Date.now() - 30 * 86_400_000).toISOString().split('T')[0];
-  return fetchWithKV(
-    `/competitions/${competition}/matches?dateFrom=${from}&dateTo=${today}`,
+  const cacheKey = `/competitions/${competition}/matches?dateFrom=${from}&dateTo=${today}`;
+  return withCache(
+    cacheKey,
     TTL.FIXTURES,
-    SWR.FIXTURES,
+    () => withKVCache(
+      cacheKey,
+      SWR.FIXTURES,
+      () => providerManager.getResults(competition),
+    ),
   );
 }
 
@@ -260,10 +266,15 @@ export function getStandings(competition: string): Promise<{
   standings:   StandingTable[];
   competition: { name: string; emblem: string };
 }> {
-  return fetchWithKV(
+  // Routes through providerManager — cache wraps the provider call.
+  return withCache(
     `/competitions/${competition}/standings`,
     TTL.STANDINGS,
-    SWR.STANDINGS,
+    () => withKVCache(
+      `/competitions/${competition}/standings`,
+      SWR.STANDINGS,
+      () => providerManager.getStandings(competition),
+    ),
   );
 }
 
@@ -274,7 +285,16 @@ export function getTeam(id: string): Promise<TeamDetail> {
 // ── KV-cached: Match details (1 min) ─────────────────────────────────────────
 
 export function getMatchDetail(id: string): Promise<MatchDetail> {
-  return fetchWithKV(`/matches/${id}`, TTL.MATCH, SWR.MATCH);
+  // Routes through providerManager — cache wraps the provider call.
+  return withCache(
+    `/matches/${id}`,
+    TTL.MATCH,
+    () => withKVCache(
+      `/matches/${id}`,
+      SWR.MATCH,
+      () => providerManager.getMatch(parseInt(id, 10)),
+    ),
+  );
 }
 
 export function getHeadToHead(id: string): Promise<HeadToHead> {

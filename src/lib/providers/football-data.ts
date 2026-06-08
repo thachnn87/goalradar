@@ -17,7 +17,7 @@
  */
 
 import type { Match, MatchDetail, StandingTable } from '@/lib/types';
-import { NotFoundError, ApiUnavailableError } from '@/lib/api';
+import { NotFoundError, ApiUnavailableError } from '@/lib/errors';
 import type { MatchProvider } from './types';
 
 const BASE_URL   = 'https://api.football-data.org/v4';

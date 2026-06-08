@@ -26,7 +26,7 @@ import type {
   Goal, Booking, Substitution,
   Competition, Team, Score,
 } from '@/lib/types';
-import { NotFoundError, ApiUnavailableError } from '@/lib/api';
+import { NotFoundError, ApiUnavailableError } from '@/lib/errors';
 import type { MatchProvider } from './types';
 
 const BASE_URL   = 'https://v3.football.api-sports.io';
