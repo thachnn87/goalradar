@@ -137,6 +137,17 @@ function isFailoverTrigger(err: unknown): err is ApiUnavailableError {
 }
 
 // ---------------------------------------------------------------------------
+// FORCE_PROVIDER override (testing / emergency manual switch)
+// Set env var FORCE_PROVIDER=api-football to skip primary entirely.
+// ---------------------------------------------------------------------------
+
+const FORCE_PROVIDER = (process.env.FORCE_PROVIDER ?? '') as ProviderName | '';
+
+if (FORCE_PROVIDER) {
+  console.warn(`[PROVIDER] FORCE_PROVIDER=${FORCE_PROVIDER} — primary provider bypassed`);
+}
+
+// ---------------------------------------------------------------------------
 // Core withFailover wrapper
 // ---------------------------------------------------------------------------
 
@@ -145,9 +156,23 @@ async function withFailover<T>(
   primaryFn:   () => Promise<T>,
   secondaryFn: () => Promise<T>,
 ): Promise<T> {
+  // ── FORCE_PROVIDER override ───────────────────────────────────────────────
+  if (FORCE_PROVIDER === 'api-football') {
+    stats['api-football'].requestCount++;
+    console.log(`[PROVIDER_CALL] provider=api-football | endpoint=${endpoint} | forced`);
+    try {
+      const result = await secondaryFn();
+      recordSuccess('api-football', endpoint);
+      return result;
+    } catch (err) {
+      recordError('api-football', err);
+      throw err;
+    }
+  }
+
   // ── 1. Try primary ────────────────────────────────────────────────────────
   stats['football-data'].requestCount++;
-  console.log(`[PROVIDER] provider=football-data | endpoint=${endpoint}`);
+  console.log(`[PROVIDER_CALL] provider=football-data | endpoint=${endpoint}`);
   try {
     const result = await primaryFn();
     recordSuccess('football-data', endpoint);
@@ -177,7 +202,7 @@ async function withFailover<T>(
 
     // ── 3. Try secondary ──────────────────────────────────────────────────
     stats['api-football'].requestCount++;
-    console.log(`[PROVIDER] provider=api-football | endpoint=${endpoint}`);
+    console.log(`[PROVIDER_CALL] provider=api-football | endpoint=${endpoint}`);
     try {
       const result = await secondaryFn();
       recordSuccess('api-football', endpoint);
@@ -240,6 +265,46 @@ export const providerManager = {
       'getLiveMatches()',
       () => PRIMARY.getLiveMatches(),
       () => SECONDARY.getLiveMatches(),
+    );
+  },
+
+  getAllMatches(competition: string) {
+    return withFailover(
+      `getAllMatches(${competition})`,
+      () => PRIMARY.getAllMatches(competition),
+      () => SECONDARY.getAllMatches(competition),
+    );
+  },
+
+  getTodayMatches() {
+    return withFailover(
+      'getTodayMatches()',
+      () => PRIMARY.getTodayMatches(),
+      () => SECONDARY.getTodayMatches(),
+    );
+  },
+
+  getTeamMatches(id: string) {
+    return withFailover(
+      `getTeamMatches(${id})`,
+      () => PRIMARY.getTeamMatches(id),
+      () => SECONDARY.getTeamMatches(id),
+    );
+  },
+
+  getTeam(id: string) {
+    return withFailover(
+      `getTeam(${id})`,
+      () => PRIMARY.getTeam(id),
+      () => SECONDARY.getTeam(id),
+    );
+  },
+
+  getHeadToHead(matchId: string) {
+    return withFailover(
+      `getHeadToHead(${matchId})`,
+      () => PRIMARY.getHeadToHead(matchId),
+      () => SECONDARY.getHeadToHead(matchId),
     );
   },
 

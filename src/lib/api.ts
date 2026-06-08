@@ -181,7 +181,12 @@ function fetchDirect<T>(endpoint: string, memTtl: number): Promise<T> {
 
 export function getTodayMatches(): Promise<{ matches: Match[] }> {
   const today = new Date().toISOString().split('T')[0];
-  return fetchDirect(`/matches?dateFrom=${today}&dateTo=${today}`, TTL.MATCH);
+  // Routes through providerManager — cache wraps the provider call.
+  return withCache(
+    `/matches?dateFrom=${today}&dateTo=${today}`,
+    TTL.MATCH,
+    () => providerManager.getTodayMatches(),
+  );
 }
 
 export function getLiveMatches(): Promise<{ matches: Match[] }> {
@@ -235,29 +240,43 @@ export function getRecentMatches(
 }
 
 export function getTeamMatches(id: string): Promise<{ matches: Match[] }> {
-  return fetchWithKV(
+  return withCache(
     `/teams/${id}/matches?status=FINISHED&limit=10`,
     TTL.FIXTURES,
-    SWR.FIXTURES,
+    () => withKVCache(
+      `/teams/${id}/matches?status=FINISHED&limit=10`,
+      SWR.FIXTURES,
+      () => providerManager.getTeamMatches(id),
+    ),
   );
 }
 
 export function getWCResults(): Promise<{ matches: Match[] }> {
-  // Finished WC matches — changes 2-3 times a day during group stage.
-  // 15-min cache is sufficient and avoids hammering the API.
-  return fetchWithKV(
+  // Finished WC matches — routes through providerManager for failover.
+  return withCache(
     '/competitions/WC/matches?status=FINISHED',
     TTL.FIXTURES,
-    SWR.FIXTURES,
+    () => withKVCache(
+      '/competitions/WC/matches?status=FINISHED',
+      SWR.FIXTURES,
+      () => providerManager.getResults('WC'),
+    ),
   );
 }
 
 // ── KV-cached: WC structural data (6 hours) ──────────────────────────────────
 
 export function getWCKnockoutMatches(): Promise<{ matches: Match[] }> {
-  // Returns all 104 WC matches.  Knockout results change at most a few times
-  // per day — 6-hour cache eliminates ~99 % of these expensive API calls.
-  return fetchWithKV('/competitions/WC/matches', TTL.WC, SWR.WC);
+  // All 104 WC matches — routes through providerManager for failover.
+  return withCache(
+    '/competitions/WC/matches',
+    TTL.WC,
+    () => withKVCache(
+      '/competitions/WC/matches',
+      SWR.WC,
+      () => providerManager.getAllMatches('WC'),
+    ),
+  );
 }
 
 // ── KV-cached: Standings (1 hour) ────────────────────────────────────────────
@@ -279,7 +298,15 @@ export function getStandings(competition: string): Promise<{
 }
 
 export function getTeam(id: string): Promise<TeamDetail> {
-  return fetchWithKV(`/teams/${id}`, TTL.STANDINGS, SWR.STANDINGS);
+  return withCache(
+    `/teams/${id}`,
+    TTL.STANDINGS,
+    () => withKVCache(
+      `/teams/${id}`,
+      SWR.STANDINGS,
+      () => providerManager.getTeam(id),
+    ),
+  );
 }
 
 // ── KV-cached: Match details (1 min) ─────────────────────────────────────────
@@ -298,5 +325,13 @@ export function getMatchDetail(id: string): Promise<MatchDetail> {
 }
 
 export function getHeadToHead(id: string): Promise<HeadToHead> {
-  return fetchWithKV(`/matches/${id}/head2head`, TTL.MATCH, SWR.MATCH);
+  return withCache(
+    `/matches/${id}/head2head`,
+    TTL.MATCH,
+    () => withKVCache(
+      `/matches/${id}/head2head`,
+      SWR.MATCH,
+      () => providerManager.getHeadToHead(id),
+    ),
+  );
 }

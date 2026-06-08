@@ -16,7 +16,7 @@
  *     .reason: 'rate_limit' | 'disabled' | 'http' | 'timeout' | 'unknown'
  */
 
-import type { Match, MatchDetail, StandingTable } from '@/lib/types';
+import type { Match, MatchDetail, StandingTable, HeadToHead, TeamDetail } from '@/lib/types';
 import { NotFoundError, ApiUnavailableError } from '@/lib/errors';
 import type { MatchProvider } from './types';
 
@@ -145,5 +145,26 @@ export class FootballDataProvider implements MatchProvider {
 
   getLiveMatches(): Promise<{ matches: Match[] }> {
     return fetchRaw('/matches?status=IN_PLAY,PAUSED');
+  }
+
+  getAllMatches(competition: string): Promise<{ matches: Match[] }> {
+    return fetchRaw(`/competitions/${competition}/matches`);
+  }
+
+  getTodayMatches(): Promise<{ matches: Match[] }> {
+    const today = new Date().toISOString().split('T')[0];
+    return fetchRaw(`/matches?dateFrom=${today}&dateTo=${today}`);
+  }
+
+  getTeamMatches(id: string): Promise<{ matches: Match[] }> {
+    return fetchRaw(`/teams/${id}/matches?status=FINISHED&limit=10`);
+  }
+
+  getTeam(id: string): Promise<TeamDetail> {
+    return fetchRaw(`/teams/${id}`);
+  }
+
+  getHeadToHead(matchId: string): Promise<HeadToHead> {
+    return fetchRaw(`/matches/${matchId}/head2head`);
   }
 }

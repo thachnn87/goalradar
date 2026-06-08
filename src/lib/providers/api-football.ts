@@ -25,6 +25,7 @@ import type {
   StandingTable, StandingEntry,
   Goal, Booking, Substitution,
   Competition, Team, Score,
+  HeadToHead, TeamDetail,
 } from '@/lib/types';
 import { NotFoundError, ApiUnavailableError } from '@/lib/errors';
 import type { MatchProvider } from './types';
@@ -439,5 +440,60 @@ export class ApiFootballProvider implements MatchProvider {
   async getLiveMatches(): Promise<{ matches: Match[] }> {
     const res = await fetchRaw<AFFixtureItem[]>('/fixtures?live=all');
     return { matches: (res.response as AFFixtureItem[]).map(normaliseMatch) };
+  }
+
+  async getAllMatches(competition: string): Promise<{ matches: Match[] }> {
+    // Returns all fixtures (all statuses) for the competition.
+    const { leagueId, season } = leagueFor(competition);
+    const res = await fetchRaw<AFFixtureItem[]>(
+      `/fixtures?league=${leagueId}&season=${season}`,
+    );
+    return { matches: (res.response as AFFixtureItem[]).map(normaliseMatch) };
+  }
+
+  async getTodayMatches(): Promise<{ matches: Match[] }> {
+    const today = new Date().toISOString().split('T')[0];
+    const res   = await fetchRaw<AFFixtureItem[]>(`/fixtures?date=${today}`);
+    return { matches: (res.response as AFFixtureItem[]).map(normaliseMatch) };
+  }
+
+  async getTeamMatches(id: string): Promise<{ matches: Match[] }> {
+    // Note: api-football uses different team IDs to football-data.org.
+    // This best-effort implementation returns results when IDs happen to match.
+    const res = await fetchRaw<AFFixtureItem[]>(`/fixtures?team=${id}&last=10&status=FT-AET-PEN`);
+    return { matches: (res.response as AFFixtureItem[]).map(normaliseMatch) };
+  }
+
+  async getTeam(id: string): Promise<TeamDetail> {
+    // Note: api-football uses different team IDs to football-data.org.
+    // This best-effort implementation; may return wrong team or throw NotFoundError.
+    const res = await fetchRaw<Array<{ team: AFTeam; venue: { name: string; city: string } }>>(`/teams?id=${id}`);
+    const item = (res.response as Array<{ team: AFTeam }>)[0];
+    if (!item) throw new NotFoundError();
+    const t = item.team;
+    // Return a minimal TeamDetail that satisfies the type
+    return {
+      id:        t.id,
+      name:      t.name,
+      shortName: t.name,
+      tla:       '',
+      crest:     t.logo ?? '',
+      address:   '',
+      website:   '',
+      founded:   null,
+      clubColors: '',
+      venue:     '',
+      runningCompetitions: [],
+      coach:     { id: 0, name: '', nationality: '' },
+      squad:     [],
+      staff:     [],
+      lastUpdated: '',
+    } as unknown as TeamDetail;
+  }
+
+  async getHeadToHead(_matchId: string): Promise<HeadToHead> {
+    // api-football head-to-head requires team pair IDs which differ from
+    // football-data.org match IDs. Not supported on this provider.
+    throw new NotFoundError();
   }
 }

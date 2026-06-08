@@ -38,6 +38,24 @@ export interface MatchProvider {
 
   /** All currently live (IN_PLAY/PAUSED) matches across all competitions. */
   getLiveMatches(): Promise<{ matches: Match[] }>;
+
+  /** All matches for a competition across all statuses (used for bracket/knockout). */
+  getAllMatches(competition: string): Promise<{ matches: Match[] }>;
+
+  /** Today's matches across all competitions. */
+  getTodayMatches(): Promise<{ matches: Match[] }>;
+
+  /** Last 10 finished matches for a team (by provider-native team ID). */
+  getTeamMatches(id: string): Promise<{ matches: Match[] }>;
+
+  /** Full team profile by provider-native team ID. */
+  getTeam(id: string): Promise<import('@/lib/types').TeamDetail>;
+
+  /**
+   * Head-to-head record for a match.
+   * Secondary providers may throw NotFoundError when IDs don't map.
+   */
+  getHeadToHead(matchId: string): Promise<import('@/lib/types').HeadToHead>;
 }
 
 // ---------------------------------------------------------------------------

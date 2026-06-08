@@ -9,9 +9,10 @@
  * cache entries are served to users by the existing fetchWithKV() flow.
  */
 
-import { kv } from '@vercel/kv';
+import { kv }                from '@vercel/kv';
+import { providerManager }  from './providers/manager';
+import { ApiUnavailableError } from './errors';
 
-const BASE_URL   = 'https://api.football-data.org/v4';
 const KV_PREFIX  = 'goalradar:';
 
 // ---------------------------------------------------------------------------
@@ -80,11 +81,64 @@ interface RefreshResult {
 }
 
 // ---------------------------------------------------------------------------
+// Endpoint → ProviderManager method dispatch
+// ---------------------------------------------------------------------------
+
+/**
+ * Maps a football-data.org endpoint path to the correct providerManager
+ * method so the refresh layer benefits from the same failover as page routes.
+ *
+ * Matched patterns (longest-match order):
+ *   /competitions/{code}/matches?status=SCHEDULED,TIMED  → getFixtures(code)
+ *   /competitions/{code}/matches?status=FINISHED          → getResults(code)  ← best-effort
+ *   /competitions/{code}/matches                          → getAllMatches(code)
+ *   /competitions/{code}/standings                        → getStandings(code)
+ *   /matches?status=IN_PLAY,PAUSED                        → getLiveMatches()
+ *   /matches?dateFrom=…&dateTo=…                          → getTodayMatches()
+ *   (fallback)                                            → throws Error
+ */
+async function dispatchToProvider(endpoint: string): Promise<unknown> {
+  // Standings
+  const standingsM = endpoint.match(/^\/competitions\/([^/]+)\/standings/);
+  if (standingsM) return providerManager.getStandings(standingsM[1]);
+
+  // Fixtures (scheduled/timed)
+  if (endpoint.includes('/matches') && endpoint.includes('SCHEDULED,TIMED')) {
+    const m = endpoint.match(/^\/competitions\/([^/]+)\/matches/);
+    if (m) return providerManager.getFixtures(m[1]);
+  }
+
+  // Finished results
+  if (endpoint.includes('/matches') && endpoint.includes('FINISHED')) {
+    const m = endpoint.match(/^\/competitions\/([^/]+)\/matches/);
+    if (m) return providerManager.getResults(m[1]);
+  }
+
+  // All competition matches (bracket / knockout)
+  const allMatchesM = endpoint.match(/^\/competitions\/([^/]+)\/matches(\?.*)?$/);
+  if (allMatchesM) return providerManager.getAllMatches(allMatchesM[1]);
+
+  // Live matches
+  if (endpoint.includes('/matches') && endpoint.includes('IN_PLAY')) {
+    return providerManager.getLiveMatches();
+  }
+
+  // Today's matches
+  if (endpoint.includes('/matches') && endpoint.includes('dateFrom')) {
+    return providerManager.getTodayMatches();
+  }
+
+  // Unknown — throw so the caller records an error
+  throw new Error(`[Refresh] No providerManager mapping for endpoint: ${endpoint}`);
+}
+
+// ---------------------------------------------------------------------------
 // Core: fetch one endpoint and write to KV
 // ---------------------------------------------------------------------------
 
 /**
- * Fetches fresh data from football-data.org and stores it in Vercel KV.
+ * Fetches fresh data via ProviderManager (with failover) and stores it in Vercel KV.
+ * Maps endpoint paths to the appropriate providerManager method.
  *
  * @param endpoint  API path, e.g. "/competitions/WC/matches?status=SCHEDULED,TIMED"
  * @param freshSec  How long (seconds) the entry is considered fully fresh.
@@ -99,22 +153,12 @@ export async function refreshEndpoint(
 
   let data: unknown;
   try {
-    const res = await fetch(`${BASE_URL}${endpoint}`, {
-      headers: { 'X-Auth-Token': process.env.FOOTBALL_API_KEY ?? '' },
-      // No next.revalidate — bypass Next.js fetch cache so we always get
-      // a live response from the upstream API.
-      cache: 'no-store',
-    });
-
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(`HTTP ${res.status}: ${body.slice(0, 120)}`);
-    }
-
-    data = await res.json();
+    // Route through ProviderManager so failover to api-football is active
+    // when football-data.org is down. Endpoint → method mapping mirrors api.ts.
+    data = await dispatchToProvider(endpoint);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[Refresh] FAIL  ${endpoint}: ${msg}`);
+    console.error(`[Refresh] FAIL  ${endpoint}: ${msg}${err instanceof ApiUnavailableError ? ' [both providers failed]' : ''}`);
     return { endpoint, status: 'error', fetchedAt: new Date(start).toISOString(), freshUntil: '', error: msg };
   }
 
