@@ -189,8 +189,11 @@ export function getLiveMatches(): Promise<{ matches: Match[] }> {
 }
 
 export function getWCLiveMatches(): Promise<{ matches: Match[] }> {
+  // Shares the same KV key (goalradar:live:matches) as getLiveMatches().
+  // The WC-only filter is applied in live-cache.ts after reading from cache —
+  // no separate API call or KV key is needed.
   return getCachedWCLiveMatches(
-    () => fetchDirect('/competitions/WC/matches?status=IN_PLAY,PAUSED', TTL.LIVE),
+    () => fetchDirect('/matches?status=IN_PLAY,PAUSED', TTL.LIVE),
   );
 }
 

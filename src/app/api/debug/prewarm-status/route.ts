@@ -40,7 +40,7 @@
  *     },
  *     {
  *       "label": "wc-live",
- *       "kvKey": "goalradar:live:wc-matches",
+ *       "kvKey": "goalradar:live:matches",
  *       "state": "fresh",
  *       "ageMs": 8000
  *     },
@@ -200,7 +200,7 @@ export async function GET(req: NextRequest) {
     ),
     probeLiveCache(
       'wc-live',
-      'goalradar:live:wc-matches',
+      'goalradar:live:matches',
     ),
     probeStandard(
       'wc-standings',

@@ -20,7 +20,7 @@
  *  ─────────────── ────────────────────── ────────────────────────────────
  *  wc-fixtures      getUpcomingMatches()   goalradar:/competitions/WC/matches?status=SCHEDULED,TIMED
  *  wc-results       getWCResults()         goalradar:/competitions/WC/matches?status=FINISHED
- *  wc-live          getWCLiveMatches()     goalradar:live:wc-matches  (via live-cache.ts, 30s TTL)
+ *  wc-live          getWCLiveMatches()     goalradar:live:matches     (via live-cache.ts, 30s TTL — shared with getLiveMatches)
  *  wc-standings     getStandings('WC')     goalradar:/competitions/WC/standings
  *  wc-all-matches   getWCKnockoutMatches() goalradar:/competitions/WC/matches
  *  wc-recent        getRecentMatches()     goalradar:/competitions/WC/matches?dateFrom=…
@@ -128,7 +128,7 @@ function buildTasks(): WarmTask[] {
   return [
     { label: 'wc-fixtures',    fetch: () => getUpcomingMatches('WC') },
     { label: 'wc-results',     fetch: () => getWCResults() },
-    // Routes through live-cache.ts → KV key goalradar:live:wc-matches (30s TTL)
+    // Routes through live-cache.ts → KV key goalradar:live:matches (30s TTL, shared with getLiveMatches)
     { label: 'wc-live',        fetch: () => getWCLiveMatches() },
     { label: 'wc-standings',   fetch: () => getStandings('WC') },
     // All 104 WC matches — powers bracket + hub summary
