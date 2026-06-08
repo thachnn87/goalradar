@@ -21,6 +21,7 @@ import AdSlot from '@/components/AdSlot';
 import NewsletterSignup from '@/components/NewsletterSignup';
 import { WC_ALL_TEAMS } from '@/lib/wc-all-teams';
 import { isStaticMode, getStaticUpcomingMatches } from '@/data/worldcup/loader';
+import PushNotificationButton from '@/components/PushNotificationButton';
 
 export const revalidate = 30;
 
@@ -368,6 +369,9 @@ export default async function WorldCup2026Page() {
 
         {/* ── Countdown ────────────────────────────────────────────────── */}
         <WCCountdown compact />
+
+        {/* ── Push notification opt-in ─────────────────────────────────── */}
+        <PushNotificationButton variant="banner" matchLabel="World Cup 2026" />
 
         {/* Ad: below countdown, above nav */}
         <AdSlot slotId="wc-top" variant="banner" />

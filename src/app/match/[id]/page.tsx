@@ -15,6 +15,7 @@ import { matchPath, extractMatchId, teamPath } from '@/lib/url';
 import AdSlot from '@/components/AdSlot';
 import AffiliateBlock from '@/components/AffiliateBlock';
 import NewsletterSignup from '@/components/NewsletterSignup';
+import PushNotificationButton from '@/components/PushNotificationButton';
 import { WC_TEAMS } from '@/lib/wc-teams';
 import type {
   Goal,
@@ -1994,6 +1995,15 @@ export default async function MatchDetailPage({ params }: Params) {
             match={match}
             matchGroupSlug={matchGroupSlug}
             matchGroupLabel={matchGroupLabel}
+          />
+        )}
+
+        {/* Push notifications — WC matches only */}
+        {isWC && (
+          <PushNotificationButton
+            variant="button"
+            matchId={String(match.id)}
+            matchLabel={`${match.homeTeam?.name ?? ''} vs ${match.awayTeam?.name ?? ''}`}
           />
         )}
 

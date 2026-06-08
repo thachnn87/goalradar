@@ -5,11 +5,13 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import NavigationTracker from "@/components/NavigationTracker";
 import { TimezoneProvider } from "@/contexts/TimezoneContext";
+import OneSignalProvider from "@/components/OneSignalProvider";
 
 const ADSENSE_ID  = process.env.NEXT_PUBLIC_ADSENSE_ID  ?? '';
 const ADS_ENABLED = process.env.NEXT_PUBLIC_ADS_ENABLED === 'true' && ADSENSE_ID !== '';
 
-const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? '';
+const GA_ID        = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? '';
+const ONESIGNAL_ID = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID  ?? '';
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://goalradar.org"),
@@ -98,9 +100,21 @@ export default function RootLayout({
             strategy="afterInteractive"
           />
         )}
+
+        {/* ── OneSignal Web SDK v16 ──────────────────────────────────────── */}
+        {ONESIGNAL_ID && (
+          <Script
+            src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
+            strategy="afterInteractive"
+            defer
+          />
+        )}
       </head>
       <body className="font-sans bg-gray-950 text-white min-h-screen">
         <TimezoneProvider>
+          {/* OneSignal SDK initialiser — no-op when NEXT_PUBLIC_ONESIGNAL_APP_ID is unset */}
+          <OneSignalProvider />
+
           {/* Route-change page_view tracker — Suspense required for usePathname */}
           <Suspense fallback={null}>
             <NavigationTracker />
