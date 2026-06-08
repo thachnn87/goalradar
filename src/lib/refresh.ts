@@ -1,8 +1,9 @@
 /**
  * Background cache refresh helpers.
  *
- * Used by the Vercel Cron route handlers to proactively populate KV so that
- * user requests always read from cache (never block on a live API call).
+ * Used by externally-triggered cron route handlers to proactively populate
+ * KV so that user requests always read from cache (never block on a live
+ * API call).
  *
  * Key format mirrors kv-cache.ts ("goalradar:<endpoint>") so the same
  * cache entries are served to users by the existing fetchWithKV() flow.
@@ -12,6 +13,57 @@ import { kv } from '@vercel/kv';
 
 const BASE_URL   = 'https://api.football-data.org/v4';
 const KV_PREFIX  = 'goalradar:';
+
+// ---------------------------------------------------------------------------
+// Prewarm run record — persisted in KV after each prewarm execution
+// ---------------------------------------------------------------------------
+
+/** Result of a single warmed endpoint within a prewarm run. */
+export interface PrewarmTaskResult {
+  label:     string;
+  status:    'ok' | 'fail';
+  elapsedMs: number;
+  error?:    string;
+}
+
+/** Full record of one prewarm run, stored in KV for the status endpoint. */
+export interface PrewarmRecord {
+  timestamp:   string;  // ISO 8601
+  elapsedMs:   number;
+  ok:          number;
+  failed:      number;
+  total:       number;
+  results:     PrewarmTaskResult[];
+  triggeredBy: 'header' | 'queryparam' | 'unknown';
+}
+
+/** KV key where the last prewarm run result is stored. TTL: 7 days. */
+export const PREWARM_RECORD_KEY = 'goalradar:prewarm:last-run';
+const PREWARM_RECORD_TTL = 7 * 24 * 3_600; // 604 800 s
+
+const KV_ENABLED =
+  typeof process.env.KV_REST_API_URL === 'string' &&
+  process.env.KV_REST_API_URL !== '' &&
+  typeof process.env.KV_REST_API_TOKEN === 'string' &&
+  process.env.KV_REST_API_TOKEN !== '';
+
+/** Persist a prewarm run record to KV. Fire-and-forget — never throws. */
+export function savePrewarmRecord(record: PrewarmRecord): void {
+  if (!KV_ENABLED) return;
+  kv.set(PREWARM_RECORD_KEY, record, { ex: PREWARM_RECORD_TTL }).catch((err) =>
+    console.error('[Prewarm] KV write failed for run record:', err instanceof Error ? err.message : String(err)),
+  );
+}
+
+/** Read the last prewarm run record from KV. Returns null on miss or KV unavailable. */
+export async function loadPrewarmRecord(): Promise<PrewarmRecord | null> {
+  if (!KV_ENABLED) return null;
+  try {
+    return await kv.get<PrewarmRecord>(PREWARM_RECORD_KEY);
+  } catch {
+    return null;
+  }
+}
 
 interface KVEntry<T> {
   data:       T;
@@ -90,27 +142,67 @@ export async function refreshEndpoint(
 }
 
 // ---------------------------------------------------------------------------
-// Auth helper — shared by both route handlers
+// Auth helpers — shared by all cron / refresh route handlers
 // ---------------------------------------------------------------------------
 
 /**
  * Returns true if the request carries a valid CRON_SECRET.
- * Vercel automatically injects `Authorization: Bearer <CRON_SECRET>`
- * on scheduled cron invocations when the secret is set in the project.
  *
- * Fails CLOSED: if CRON_SECRET is not configured the function returns false
- * and the caller responds 401. An absent secret must never be treated as
- * "allow all" — both refresh routes trigger real football-data.org API calls
- * and anonymous access would allow rate-limit exhaustion attacks.
+ * Checks the `Authorization: Bearer <secret>` header only.
+ * Used by the existing /api/refresh/* routes which receive the header
+ * from GitHub Actions / EasyCron / etc.
  *
- * To test refresh routes locally, add CRON_SECRET to .env.local and pass
- * the header: curl -H "Authorization: Bearer <secret>" http://localhost:3000/api/refresh/standings
+ * Fails CLOSED: if CRON_SECRET is not set, always returns false.
+ * An absent secret must never be treated as "allow all" — these routes
+ * trigger real football-data.org API calls and unauthenticated access
+ * would allow rate-limit exhaustion attacks.
  */
 export function isAuthorizedCronRequest(authHeader: string | null): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) {
-    console.error('[Auth] CRON_SECRET is not set — refresh endpoint denied. Set CRON_SECRET in Vercel environment variables.');
+    console.error('[Auth] CRON_SECRET is not set — cron endpoint denied.');
     return false;
   }
   return authHeader === `Bearer ${secret}`;
+}
+
+/**
+ * Flexible auth check for externally-triggered endpoints.
+ *
+ * Accepts the CRON_SECRET via EITHER:
+ *   1. Authorization: Bearer <secret>  header  — EasyCron, GitHub Actions, curl
+ *   2. ?secret=<secret>                query param — UptimeRobot (free plan cannot
+ *                                                    set custom headers; URL param
+ *                                                    is the only option)
+ *
+ * The query-param path is intentional and not a security downgrade: the
+ * transport is HTTPS so the secret is not exposed in plaintext, and the
+ * endpoint only triggers read operations against football-data.org.
+ *
+ * Usage: replace isAuthorizedCronRequest on any route that external
+ * schedulers need to call without header support.
+ */
+export function isAuthorizedExternalRequest(req: {
+  headers: { get(name: string): string | null };
+  url: string;
+}): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    console.error('[Auth] CRON_SECRET is not set — external endpoint denied.');
+    return false;
+  }
+
+  // 1. Header check (preferred)
+  if (req.headers.get('authorization') === `Bearer ${secret}`) return true;
+
+  // 2. Query param check (UptimeRobot free plan, simple curl)
+  try {
+    const url    = new URL(req.url);
+    const qParam = url.searchParams.get('secret');
+    if (qParam === secret) return true;
+  } catch {
+    // Malformed URL — deny
+  }
+
+  return false;
 }
