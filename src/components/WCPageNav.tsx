@@ -18,8 +18,8 @@ const LINKS = [
   { href: '/world-cup-2026-live-stream',      label: '📡 Watch Live' },
   { href: '/world-cup-2026-tv-guide',         label: '📺 TV Guide'   },
   { href: '/world-cup-2026/streaming-guide',  label: '💻 Streaming'  },
-  { href: '/world-cup-2026/teams/argentina',  label: '👥 Teams'      },
-  { href: '/world-cup-2026/venues/metlife-stadium', label: '🏟️ Venues' },
+  { href: '/world-cup-2026/teams',  label: '👥 Teams'  },
+  { href: '/world-cup-2026/venues', label: '🏟️ Venues' },
 ];
 
 export default function WCPageNav() {
@@ -32,11 +32,11 @@ export default function WCPageNav() {
     >
       <div className="flex gap-2 min-w-max pb-1">
         {LINKS.map(({ href, label }) => {
-          // Active if exact match, or if pathname starts with href (for team/venue sub-pages)
+          // Active if exact match, or if pathname starts with href (for teams/venues sub-pages)
           const isActive =
             pathname === href ||
-            (href.includes('/teams/') && pathname.startsWith('/world-cup-2026/teams/')) ||
-            (href.includes('/venues/') && pathname.startsWith('/world-cup-2026/venues/'));
+            (href === '/world-cup-2026/teams'  && pathname.startsWith('/world-cup-2026/teams/')) ||
+            (href === '/world-cup-2026/venues' && pathname.startsWith('/world-cup-2026/venues/'));
           return (
             <Link
               key={href}

@@ -564,8 +564,8 @@ export default async function WorldCup2026Page() {
           { href: '/world-cup-2026-bracket',        icon: '🔗', label: 'Knockout Bracket',      desc: 'Round of 32 path to the Final at MetLife' },
           { href: '/world-cup-2026-live-stream',    icon: '📡', label: 'Live Stream Guide',     desc: 'Free streaming options for every country' },
           { href: '/world-cup-2026-tv-guide',       icon: '📺', label: 'TV Channel Guide',      desc: 'What channel is World Cup 2026 on near you?' },
-          { href: '/world-cup-2026/teams/argentina',icon: '👥', label: 'All 48 Teams',          desc: 'Squads, form and group info for every nation' },
-          { href: '/world-cup-2026/venues/metlife-stadium', icon: '🏟️', label: 'WC Venues', desc: '16 stadiums across USA, Canada and Mexico' },
+          { href: '/world-cup-2026/teams',          icon: '👥', label: 'All 48 Teams',          desc: 'Squads, form and group info for every nation' },
+          { href: '/world-cup-2026/venues',         icon: '🏟️', label: 'WC Venues',           desc: '16 stadiums across USA, Canada and Mexico' },
         ]} />
       </div>
     </>

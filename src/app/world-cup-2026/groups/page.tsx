@@ -196,7 +196,7 @@ export default async function WCGroupsPage() {
           { href: '/world-cup-2026-results',    icon: '🏁', label: 'WC 2026 Results',     desc: 'Full-time and live scores for every match' },
           { href: '/world-cup-2026-bracket',    icon: '🔗', label: 'Knockout Bracket',    desc: 'Round of 32 path to the Final at MetLife' },
           { href: '/world-cup-2026-schedule',   icon: '📅', label: 'Match Schedule',      desc: 'All 104 fixtures with timezone converter' },
-          { href: '/world-cup-2026/teams/argentina', icon: '👥', label: 'All 48 Teams',   desc: 'Squads and stats for every WC nation' },
+          { href: '/world-cup-2026/teams',           icon: '👥', label: 'All 48 Teams',   desc: 'Squads and stats for every WC nation' },
         ]} />
       </div>
     </>

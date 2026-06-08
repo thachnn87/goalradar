@@ -316,7 +316,7 @@ export default async function WCResultsPage() {
         <AdSlot slotId="results-bottom" variant="banner" />
 
         <WCRelatedLinks links={[
-          { href: '/world-cup-2026-results',    icon: '🏁', label: 'Results (Editorial)',  desc: 'Live stats strip and deduped results feed' },
+          { href: '/world-cup-2026-results',    icon: '🏁', label: 'WC 2026 Results',      desc: 'Live stats strip and deduped results feed' },
           { href: '/world-cup-2026-schedule',   icon: '📅', label: 'WC 2026 Schedule',    desc: 'All 104 fixtures with kickoff times' },
           { href: '/world-cup-2026-standings',  icon: '📊', label: 'Group Standings',     desc: 'Live points tables for all 12 groups' },
           { href: '/world-cup-2026-bracket',    icon: '🔗', label: 'Knockout Bracket',    desc: 'Round of 32 path to the Final at MetLife' },

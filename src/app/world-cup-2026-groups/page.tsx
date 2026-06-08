@@ -255,12 +255,12 @@ export default async function WC2026GroupsPage() {
         <AdSlot slotId="wc-groups-bottom" variant="banner" />
 
         <WCRelatedLinks links={[
-          { href: '/world-cup-2026/groups',         icon: '🗂️', label: 'Groups Overview',        desc: 'API-driven live standings for all 12 groups' },
+          { href: '/world-cup-2026/groups',         icon: '🗂️', label: 'Groups Overview',        desc: 'Live standings for all 12 groups' },
           { href: '/world-cup-2026-standings',      icon: '📊', label: 'Live Standings',          desc: 'Points, GD and qualification status per group' },
           { href: '/world-cup-2026-results',        icon: '🏁', label: 'WC 2026 Results',         desc: 'All full-time scores and live match updates' },
           { href: '/world-cup-2026-schedule',       icon: '📅', label: 'WC 2026 Schedule',        desc: 'All 104 matches with timezone converter' },
           { href: '/world-cup-2026-bracket',        icon: '🔗', label: 'Knockout Bracket',        desc: 'Round of 32 through to the Final at MetLife' },
-          { href: '/world-cup-2026/teams/argentina',icon: '👥', label: 'All 48 Teams',            desc: 'Squads, group and form for every WC nation' },
+          { href: '/world-cup-2026/teams',          icon: '👥', label: 'All 48 Teams',            desc: 'Squads, group and form for every WC nation' },
         ]} />
       </div>
     </>

@@ -261,14 +261,14 @@ export default async function WC2026ResultsPage() {
         <AdSlot slotId="wc-results-bottom" variant="banner" />
 
         <WCRelatedLinks links={[
-          { href: '/world-cup-2026/results',        icon: '🏁', label: 'Live Results (API)',    desc: 'Real-time score updates with match cards' },
+          { href: '/world-cup-2026/results',        icon: '🏁', label: 'Live Match Feed',        desc: 'Real-time score updates with match cards' },
           { href: '/world-cup-2026-schedule',       icon: '📅', label: 'WC 2026 Schedule',      desc: 'All 104 matches with timezone converter' },
           { href: '/world-cup-2026-standings',      icon: '📊', label: 'Group Standings',       desc: 'Points tables updated after every result' },
           { href: '/world-cup-2026-groups',         icon: '🗂️', label: 'Group Stage',           desc: 'All 12 group draws and qualification rules' },
           { href: '/world-cup-2026-bracket',        icon: '🔗', label: 'Knockout Bracket',      desc: 'Follow the path from R32 to the Final' },
           { href: '/world-cup-2026-live-stream',    icon: '📡', label: 'Watch Live',            desc: 'Stream every match free or cheaply online' },
           { href: '/world-cup-2026-tv-guide',       icon: '📺', label: 'TV Channel Guide',      desc: 'What channel is World Cup 2026 on near you?' },
-          { href: '/world-cup-2026/teams/argentina',icon: '👥', label: 'All 48 Teams',          desc: 'Squads, form and stats for every WC nation' },
+          { href: '/world-cup-2026/teams',          icon: '👥', label: 'All 48 Teams',          desc: 'Squads, form and stats for every WC nation' },
         ]} />
       </div>
     </>

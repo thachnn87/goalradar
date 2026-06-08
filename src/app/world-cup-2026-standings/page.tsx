@@ -260,7 +260,7 @@ export default async function WC2026StandingsPage() {
           { href: '/world-cup-2026-schedule',       icon: '📅', label: 'WC 2026 Schedule',      desc: 'All 104 fixtures with kickoff times' },
           { href: '/world-cup-2026-bracket',        icon: '🔗', label: 'Knockout Bracket',      desc: 'Follow the path from Round of 32 to the Final' },
           { href: '/world-cup-2026-live-stream',    icon: '📡', label: 'Watch Live',            desc: 'Free streaming options for every country' },
-          { href: '/world-cup-2026/teams/argentina',icon: '👥', label: 'All 48 Teams',          desc: 'Squads, group info and form for every nation' },
+          { href: '/world-cup-2026/teams',          icon: '👥', label: 'All 48 Teams',          desc: 'Squads, group info and form for every nation' },
         ]} />
       </div>
     </>

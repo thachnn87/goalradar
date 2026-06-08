@@ -288,8 +288,8 @@ export default async function WC2026BracketPage() {
           { href: '/world-cup-2026-standings',      icon: '📊', label: 'Group Standings',       desc: 'Live tables for all 12 groups' },
           { href: '/world-cup-2026-groups',         icon: '🗂️', label: 'Group Stage',           desc: 'Group draws, fixtures and qualification rules' },
           { href: '/world-cup-2026-live-stream',    icon: '📡', label: 'Watch Live',            desc: 'Stream every match free or cheaply online' },
-          { href: '/world-cup-2026/teams/argentina',icon: '👥', label: 'All 48 Teams',          desc: 'Squads and stats for every WC nation' },
-          { href: '/world-cup-2026/venues/metlife-stadium', icon: '🏟️', label: 'WC Venues', desc: '16 match stadiums across USA, Canada, Mexico' },
+          { href: '/world-cup-2026/teams',          icon: '👥', label: 'All 48 Teams',          desc: 'Squads and stats for every WC nation' },
+          { href: '/world-cup-2026/venues',         icon: '🏟️', label: 'WC Venues',           desc: '16 match stadiums across USA, Canada, Mexico' },
         ]} />
       </div>
     </>
