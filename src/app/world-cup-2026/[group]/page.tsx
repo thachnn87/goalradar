@@ -11,6 +11,7 @@ import type { Match, StandingEntry } from '@/lib/types';
 import MatchCard from '@/components/MatchCard';
 import WCGroupTable from '@/components/WCGroupTable';
 import Breadcrumb from '@/components/Breadcrumb';
+import WCRelatedLinks from '@/components/WCRelatedLinks';
 
 export const revalidate = 3600;
 
@@ -842,33 +843,66 @@ export default async function WCGroupPage({ params }: Params) {
         {/* 7. FAQ */}
         <GroupFaqSection faqs={faqs} />
 
-        {/* Internal links — World Cup hub + adjacent groups */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-4">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
-            World Cup 2026 Navigation
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/world-cup-2026"
-              className="bg-yellow-500/15 text-yellow-400 border border-yellow-500/25 px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-yellow-500/25 transition-colors"
-            >
-              🏆 Tournament Hub
-            </Link>
-            <Link
-              href="/world-cup-2026"
-              className="bg-gray-800 text-gray-300 px-3 py-1.5 rounded-lg text-sm hover:bg-gray-700 transition-colors"
-            >
-              All Groups & Standings
-            </Link>
-            <Link
-              href="/live"
-              className="bg-gray-800 text-gray-300 px-3 py-1.5 rounded-lg text-sm hover:bg-gray-700 transition-colors"
-            >
-              Live Scores
-            </Link>
-          </div>
+        {/* Adjacent group navigation */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
           <GroupNav currentSlug={slug} />
         </div>
+
+        {/* Internal links — standings, schedule, results, teams + hub */}
+        <WCRelatedLinks
+          sectionId={`wc-group-${letter.toLowerCase()}-links`}
+          heading="More World Cup 2026"
+          links={[
+            {
+              href:  '/world-cup-2026-standings',
+              icon:  '📊',
+              label: 'Group Standings',
+              desc:  `Live standings tables for all 12 groups including ${label}`,
+            },
+            {
+              href:  '/world-cup-2026-schedule',
+              icon:  '📅',
+              label: 'Full Schedule',
+              desc:  'All 104 fixtures with kickoff times and venues',
+            },
+            {
+              href:  '/world-cup-2026-results',
+              icon:  '🏁',
+              label: 'Results',
+              desc:  'Scores for every completed World Cup 2026 match',
+            },
+            {
+              href:  '/world-cup-2026/teams',
+              icon:  '👥',
+              label: 'All 48 Teams',
+              desc:  'Squads, stats and fixtures for every qualified nation',
+            },
+            {
+              href:  '/world-cup-2026-groups',
+              icon:  '🗂️',
+              label: 'Group Stage Guide',
+              desc:  'Group draws, qualification rules and fixture lists',
+            },
+            {
+              href:  '/world-cup-2026',
+              icon:  '🏆',
+              label: 'WC 2026 Hub',
+              desc:  'Full tournament overview — fixtures, results and standings',
+            },
+            {
+              href:  '/world-cup-2026-bracket',
+              icon:  '🔗',
+              label: 'Knockout Bracket',
+              desc:  'Round of 32 draw through to the Final',
+            },
+            {
+              href:  '/live',
+              icon:  '🔴',
+              label: 'Live Scores',
+              desc:  'In-play scores across all competitions right now',
+            },
+          ]}
+        />
       </div>
     </>
   );
