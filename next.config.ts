@@ -3,6 +3,18 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   async redirects() {
     return [
+      // ── www → non-www canonical redirect ────────────────────────────────
+      // All www.goalradar.org requests 301 to goalradar.org.
+      // Prevents Googlebot treating www and non-www as separate sites,
+      // consolidates PageRank to the canonical non-www origin, and fixes
+      // the cross-host child-sitemap issue (www index → non-www children).
+      {
+        source:      '/:path*',
+        has:         [{ type: 'host', value: 'www.goalradar.org' }],
+        destination: 'https://goalradar.org/:path*',
+        permanent:   true,
+      },
+
       // ── World Cup 2026 canonical redirects ───────────────────────────────
       // Flat-URL pages are the primary SEO targets. Legacy short-form URLs
       // 301 to the canonical flat URL so PageRank consolidates there.
