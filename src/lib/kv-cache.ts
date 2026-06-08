@@ -143,9 +143,7 @@ export async function withKVCache<T>(
   if (entry) {
     _stale++;
     const staleAge = Math.ceil((now - entry.freshUntil) / 1000);
-    console.log(
-      `[KV] STALE ${key} | ${staleAge}s past fresh | serving stale, triggering bg-revalidate | ratio ${logRatio()}`,
-    );
+    console.log(`[STALE] SERVED ${key} | ${staleAge}s past fresh | bg-revalidate triggered | ratio ${logRatio()}`);
     revalidateInBackground(kvKey, disasterKey, key, swr, fetcher);
     return entry.data;
   }
@@ -169,22 +167,20 @@ export async function withKVCache<T>(
   } catch (fetchErr) {
     // ── 5. DISASTER recovery — try the long-lived emergency key ──────────
     console.error(
-      `[KV] MISS fetch failed on ${key}:`,
-      fetchErr instanceof Error ? fetchErr.message : String(fetchErr),
+      `[API] FALLBACK ${key} | fetch failed: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)} | checking disaster-recovery key`,
     );
     try {
       const dr = await kv.get<KVEntry<T>>(disasterKey);
       if (dr) {
         _disasters++;
         const ageSeconds = Math.ceil((now - dr.fetchedAt) / 1000);
-        console.warn(
-          `[KV] DISASTER ${key} | serving ${ageSeconds}s old data | disasters=${_disasters}`,
-        );
+        console.warn(`[API] FALLBACK ${key} | serving ${ageSeconds}s old disaster-recovery data | disasters=${_disasters}`);
         return dr.data;
       }
     } catch (drErr) {
-      console.error(`[KV] DISASTER read failed on ${key}:`, drErr instanceof Error ? drErr.message : String(drErr));
+      console.error(`[API] FALLBACK ${key} | disaster-recovery read failed:`, drErr instanceof Error ? drErr.message : String(drErr));
     }
+    console.error(`[STALE] EXPIRED ${key} | no stale data available — propagating error`);
     throw fetchErr;
   }
 }

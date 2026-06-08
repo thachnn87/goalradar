@@ -52,6 +52,10 @@ const LIVE_TTL_SEC = 30;
 /** Single canonical KV key for all live match data. */
 const KV_KEY = 'goalradar:live:matches';
 
+/** Disaster-recovery key — 7-day TTL, written on every successful fetch.
+ *  Served when KV misses AND the API is unavailable (403/429/5xx). */
+const DR_KEY = 'goalradar:dr:live:matches';
+
 // ---------------------------------------------------------------------------
 // L1 in-process store
 // ---------------------------------------------------------------------------
@@ -107,6 +111,18 @@ function kvSet(key: string, matches: Match[]): void {
   );
 }
 
+/** Write disaster-recovery key with 7-day TTL — fire-and-forget. */
+function kvSetDR(key: string, matches: Match[]): void {
+  if (!KV_ENABLED) return;
+  const entry: KVEntry = { matches, fetchedAt: Date.now() };
+  kv.set(key, entry, { ex: 7 * 24 * 3_600 }).catch((err) =>
+    console.error(
+      `[LIVE CACHE] DR write error on ${key}:`,
+      err instanceof Error ? err.message : String(err),
+    ),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Core fetch function
 // ---------------------------------------------------------------------------
@@ -144,13 +160,41 @@ async function fetchLiveCached(
 
   // ── 3. API fetch ──────────────────────────────────────────────────────────
   console.log(`[LIVE CACHE] miss | live-matches | fetching from API`);
-  const { matches } = await fetcher();
 
-  l1Set(KV_KEY, matches);
-  kvSet(KV_KEY, matches);
-  console.log(`[LIVE CACHE] set  | live-matches | ttl=${LIVE_TTL_SEC}s | count=${matches.length}`);
+  try {
+    const { matches } = await fetcher();
 
-  return matches;
+    l1Set(KV_KEY, matches);
+    kvSet(KV_KEY, matches);
+    kvSetDR(DR_KEY, matches); // update disaster-recovery key on every successful fetch
+    console.log(`[LIVE CACHE] set  | live-matches | ttl=${LIVE_TTL_SEC}s | count=${matches.length}`);
+
+    return matches;
+
+  } catch (fetchErr) {
+    // ── 4. Stale fallback — disaster-recovery key (7-day TTL) ───────────────
+    console.error(
+      `[API] FALLBACK live-matches | fetch failed: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)} | checking disaster-recovery key`,
+    );
+    if (KV_ENABLED) {
+      try {
+        const dr = await kv.get<KVEntry>(DR_KEY);
+        if (dr) {
+          const ageSec = Math.ceil((Date.now() - dr.fetchedAt) / 1000);
+          console.warn(`[API] FALLBACK live-matches | serving ${ageSec}s old disaster-recovery data | count=${dr.matches.length}`);
+          l1Set(KV_KEY, dr.matches); // warm L1 to avoid re-reading KV on next request
+          return dr.matches;
+        }
+      } catch (drErr) {
+        console.error(`[API] FALLBACK live-matches | disaster-recovery read failed:`, drErr instanceof Error ? drErr.message : String(drErr));
+      }
+    }
+    // No stale data at all — return empty rather than throwing.
+    // Live match data is best-effort; an empty list renders "no live matches"
+    // which is far better than an error page.
+    console.warn(`[STALE] EXPIRED live-matches | no stale data available — returning empty`);
+    return [];
+  }
 }
 
 // ---------------------------------------------------------------------------

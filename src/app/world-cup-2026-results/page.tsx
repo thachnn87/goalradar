@@ -81,14 +81,14 @@ export default async function WC2026ResultsPage() {
   let results: Match[] = [];
   let live: Match[]    = [];
 
-  try {
-    const [rData, lData] = await Promise.all([
-      getRecentMatches('WC'),
-      getWCLiveMatches(),
-    ]);
-    results = rData.matches;
-    live    = lData.matches;
-  } catch { /* show FAQ only */ }
+  // allSettled — each source fails independently so a live-data 403 does not
+  // also wipe out the results list (and vice versa).
+  const [rResult, lResult] = await Promise.allSettled([
+    getRecentMatches('WC'),
+    getWCLiveMatches(),
+  ]);
+  if (rResult.status === 'fulfilled') results = rResult.value.matches;
+  if (lResult.status === 'fulfilled') live    = lResult.value.matches;
 
   // Deduplicate live matches from results
   const liveIds = new Set(live.map((m) => m.id));

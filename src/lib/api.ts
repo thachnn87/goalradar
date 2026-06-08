@@ -15,7 +15,7 @@ export class NotFoundError extends Error {
 }
 
 export class ApiUnavailableError extends Error {
-  constructor(public readonly reason: 'http' | 'timeout' | 'rate_limit' | 'unknown' = 'unknown') {
+  constructor(public readonly reason: 'http' | 'timeout' | 'rate_limit' | 'disabled' | 'unknown' = 'unknown') {
     super('Data temporarily unavailable');
     this.name = 'ApiUnavailableError';
   }
@@ -99,7 +99,14 @@ async function fetchFromAPI<T>(endpoint: string, revalidate: number): Promise<T>
         throw new ApiUnavailableError('http');
       }
 
-      // 4xx other than 404/429
+      // 403 — account disabled or API key rejected.
+      // Non-retryable: every retry would return the same 403.
+      if (res.status === 403) {
+        console.error(`[API] DISABLED ${endpoint}: ${body.slice(0, 120)}`);
+        throw new ApiUnavailableError('disabled');
+      }
+
+      // 4xx other than 404/429/403
       console.error(`[API] ${res.status} ${endpoint}: ${body.slice(0, 200)}`);
       throw new ApiUnavailableError('http');
 
@@ -109,8 +116,8 @@ async function fetchFromAPI<T>(endpoint: string, revalidate: number): Promise<T>
       // Re-throw typed errors immediately — no further retries.
       if (err instanceof NotFoundError) throw err;
       if (err instanceof ApiUnavailableError) {
-        // Only re-throw on final attempt or non-retryable reasons.
-        if (attempt >= MAX_RETRIES || err.reason === 'rate_limit') throw err;
+        // Non-retryable: rate_limit (has its own back-off above), disabled (account/key issue).
+        if (attempt >= MAX_RETRIES || err.reason === 'rate_limit' || err.reason === 'disabled') throw err;
         await new Promise((r) => setTimeout(r, attempt * 1_000));
         continue;
       }
