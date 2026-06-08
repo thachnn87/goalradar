@@ -39,6 +39,24 @@ import type {
 } from './types';
 
 // ---------------------------------------------------------------------------
+// Config checks (read once at module load time)
+// ---------------------------------------------------------------------------
+
+const FD_KEY_CONFIGURED = typeof process.env.FOOTBALL_API_KEY === 'string' &&
+                          process.env.FOOTBALL_API_KEY.trim() !== '';
+
+const AF_KEY_CONFIGURED = typeof process.env.API_FOOTBALL_KEY === 'string' &&
+                          process.env.API_FOOTBALL_KEY.trim() !== '';
+
+// Startup log — emitted once when the module is first imported.
+console.log(
+  `[PROVIDER] football-data: ${FD_KEY_CONFIGURED ? 'enabled (FOOTBALL_API_KEY set)' : 'DISABLED — FOOTBALL_API_KEY missing'}`,
+);
+console.log(
+  `[PROVIDER] api-football: ${AF_KEY_CONFIGURED ? 'enabled (API_FOOTBALL_KEY set)' : 'disabled — API_FOOTBALL_KEY not set (failover unavailable)'}`,
+);
+
+// ---------------------------------------------------------------------------
 // Provider singletons
 // ---------------------------------------------------------------------------
 
@@ -231,12 +249,14 @@ export const providerManager = {
 
     return {
       activeProvider,
-      primary:         buildHealth('football-data'),
-      secondary:       buildHealth('api-football'),
+      footballDataConfigured: FD_KEY_CONFIGURED,
+      apiFootballConfigured:  AF_KEY_CONFIGURED,
+      primary:                buildHealth('football-data'),
+      secondary:              buildHealth('api-football'),
       lastFailover,
-      failoverCount:   failoverLog.length,
+      failoverCount:          failoverLog.length,
       recentFailovers,
-      generatedAt:     new Date().toISOString(),
+      generatedAt:            new Date().toISOString(),
     };
   },
 

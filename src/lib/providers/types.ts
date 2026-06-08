@@ -83,11 +83,15 @@ export interface ProviderHealth {
 // ---------------------------------------------------------------------------
 
 export interface ProvidersDebugResponse {
-  activeProvider:  ProviderName;
-  primary:         ProviderHealth;
-  secondary:       ProviderHealth;
-  lastFailover:    FailoverEvent | null;
-  failoverCount:   number;
-  recentFailovers: FailoverEvent[];
-  generatedAt:     string; // ISO
+  activeProvider:         ProviderName;
+  /** true when FOOTBALL_API_KEY env var is set and non-empty. */
+  footballDataConfigured: boolean;
+  /** true when API_FOOTBALL_KEY env var is set and non-empty. */
+  apiFootballConfigured:  boolean;
+  primary:                ProviderHealth;
+  secondary:              ProviderHealth;
+  lastFailover:           FailoverEvent | null;
+  failoverCount:          number;
+  recentFailovers:        FailoverEvent[];
+  generatedAt:            string; // ISO
 }
