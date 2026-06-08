@@ -1,0 +1,27 @@
+{
+  "note": "TV guide data is statically rendered in /world-cup-2026-tv-guide/page.tsx. This file is reserved for future structured broadcaster data.",
+  "updatedAt": "2026-06-08",
+  "broadcasters": {
+    "us": ["Fox Sports", "Telemundo"],
+    "uk": ["ITV", "BBC"],
+    "canada": ["CTV", "TSN", "RDS"],
+    "australia": ["SBS"],
+    "ireland": ["RTÉ", "Virgin Media"],
+    "india": ["Sports18", "JioCinema"],
+    "brazil": ["Globo", "SporTV"],
+    "argentina": ["TyC Sports", "TV Pública"],
+    "mexico": ["Televisa", "TV Azteca", "TUDN"],
+    "germany": ["ARD", "ZDF"],
+    "france": ["TF1", "beIN Sports"],
+    "spain": ["RTVE", "Mediaset"],
+    "italy": ["RAI", "Mediaset"],
+    "netherlands": ["NOS"],
+    "portugal": ["RTP", "Sport TV"],
+    "japan": ["NHK", "Fuji TV"],
+    "south-korea": ["KBS", "MBC", "SBS"],
+    "nigeria": ["SuperSport"],
+    "south-africa": ["SuperSport", "SABC"],
+    "saudi-arabia": ["beIN Sports"],
+    "qatar": ["beIN Sports"]
+  }
+}

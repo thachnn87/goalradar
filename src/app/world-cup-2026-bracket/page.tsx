@@ -9,6 +9,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getWCKnockoutMatches } from '@/lib/api';
 import { WC_KNOCKOUT_SLOTS } from '@/lib/wc-fixtures';
+import { isStaticMode, getStaticKnockoutSlots } from '@/data/worldcup/loader';
 import type { Match } from '@/lib/types';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -117,10 +118,12 @@ const FAQ = [
 export default async function WC2026BracketPage() {
   let knockoutMatches: Match[] = [];
 
-  try {
-    const data = await getWCKnockoutMatches();
-    knockoutMatches = data.matches;
-  } catch { /* static content only */ }
+  if (!isStaticMode()) {
+    try {
+      const data = await getWCKnockoutMatches();
+      knockoutMatches = data.matches;
+    } catch { /* static content only */ }
+  }
 
   const byStage = new Map<string, Match[]>();
   for (const m of knockoutMatches) {
@@ -129,10 +132,12 @@ export default async function WC2026BracketPage() {
     byStage.get(s)!.push(m);
   }
 
+  // Use static dataset when env=static OR when API returned nothing
+  const staticSlots = isStaticMode() ? getStaticKnockoutSlots() : WC_KNOCKOUT_SLOTS;
   const useLocalSlots = knockoutMatches.length === 0;
   const localByStage = new Map(
     ['LAST_32', 'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'THIRD_PLACE', 'FINAL'].map(
-      (round) => [round, WC_KNOCKOUT_SLOTS.filter((s) => s.round === round)]
+      (round) => [round, staticSlots.filter((s) => s.round === round)]
     )
   );
 

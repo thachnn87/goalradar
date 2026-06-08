@@ -1,0 +1,18 @@
+[
+  {"slug":"metlife-stadium","name":"MetLife Stadium","city":"East Rutherford","state":"NJ","country":"United States","capacity":82500},
+  {"slug":"azteca-stadium","name":"Estadio Azteca","city":"Mexico City","state":null,"country":"Mexico","capacity":87523},
+  {"slug":"dallas","name":"AT&T Stadium","city":"Arlington","state":"TX","country":"United States","capacity":80000},
+  {"slug":"miami","name":"Hard Rock Stadium","city":"Miami Gardens","state":"FL","country":"United States","capacity":65326},
+  {"slug":"los-angeles","name":"SoFi Stadium","city":"Inglewood","state":"CA","country":"United States","capacity":70240},
+  {"slug":"san-francisco","name":"Levi's Stadium","city":"Santa Clara","state":"CA","country":"United States","capacity":68500},
+  {"slug":"pasadena","name":"Rose Bowl Stadium","city":"Pasadena","state":"CA","country":"United States","capacity":88565},
+  {"slug":"philadelphia","name":"Lincoln Financial Field","city":"Philadelphia","state":"PA","country":"United States","capacity":69176},
+  {"slug":"kansas-city","name":"Arrowhead Stadium","city":"Kansas City","state":"MO","country":"United States","capacity":76416},
+  {"slug":"seattle","name":"Lumen Field","city":"Seattle","state":"WA","country":"United States","capacity":69000},
+  {"slug":"boston","name":"Gillette Stadium","city":"Foxborough","state":"MA","country":"United States","capacity":65878},
+  {"slug":"atlanta","name":"Mercedes-Benz Stadium","city":"Atlanta","state":"GA","country":"United States","capacity":71000},
+  {"slug":"guadalajara","name":"Estadio Akron","city":"Guadalajara","state":null,"country":"Mexico","capacity":46513},
+  {"slug":"monterrey","name":"Estadio BBVA","city":"Monterrey","state":null,"country":"Mexico","capacity":53500},
+  {"slug":"vancouver","name":"BC Place","city":"Vancouver","state":"BC","country":"Canada","capacity":54500},
+  {"slug":"toronto","name":"BMO Field","city":"Toronto","state":"ON","country":"Canada","capacity":45500}
+]

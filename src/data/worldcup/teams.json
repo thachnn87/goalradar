@@ -1,0 +1,61 @@
+[
+  {"slug":"usa","name":"United States","flag":"🇺🇸","group":"A","confederation":"CONCACAF","fifaRank":13},
+  {"slug":"france","name":"France","flag":"🇫🇷","group":"A","confederation":"UEFA","fifaRank":2},
+  {"slug":"japan","name":"Japan","flag":"🇯🇵","group":"A","confederation":"AFC","fifaRank":17},
+  {"slug":"switzerland","name":"Switzerland","flag":"🇨🇭","group":"A","confederation":"UEFA","fifaRank":19},
+
+  {"slug":"canada","name":"Canada","flag":"🇨🇦","group":"B","confederation":"CONCACAF","fifaRank":47},
+  {"slug":"england","name":"England","flag":"🏴󠁧󠁢󠁥󠁮󠁧󠁿","group":"B","confederation":"UEFA","fifaRank":4},
+  {"slug":"denmark","name":"Denmark","flag":"🇩🇰","group":"B","confederation":"UEFA","fifaRank":23},
+  {"slug":"south-korea","name":"South Korea","flag":"🇰🇷","group":"B","confederation":"AFC","fifaRank":24},
+
+  {"slug":"mexico","name":"Mexico","flag":"🇲🇽","group":"C","confederation":"CONCACAF","fifaRank":15},
+  {"slug":"spain","name":"Spain","flag":"🇪🇸","group":"C","confederation":"UEFA","fifaRank":8},
+  {"slug":"australia","name":"Australia","flag":"🇦🇺","group":"C","confederation":"AFC","fifaRank":25},
+  {"slug":"serbia","name":"Serbia","flag":"🇷🇸","group":"C","confederation":"UEFA","fifaRank":33},
+
+  {"slug":"germany","name":"Germany","flag":"🇩🇪","group":"D","confederation":"UEFA","fifaRank":12},
+  {"slug":"morocco","name":"Morocco","flag":"🇲🇦","group":"D","confederation":"CAF","fifaRank":14},
+  {"slug":"iran","name":"Iran","flag":"🇮🇷","group":"D","confederation":"AFC","fifaRank":22},
+  {"slug":"costa-rica","name":"Costa Rica","flag":"🇨🇷","group":"D","confederation":"CONCACAF","fifaRank":49},
+
+  {"slug":"portugal","name":"Portugal","flag":"🇵🇹","group":"E","confederation":"UEFA","fifaRank":6},
+  {"slug":"senegal","name":"Senegal","flag":"🇸🇳","group":"E","confederation":"CAF","fifaRank":20},
+  {"slug":"panama","name":"Panama","flag":"🇵🇦","group":"E","confederation":"CONCACAF","fifaRank":53},
+  {"slug":"saudi-arabia","name":"Saudi Arabia","flag":"🇸🇦","group":"E","confederation":"AFC","fifaRank":56},
+
+  {"slug":"netherlands","name":"Netherlands","flag":"🇳🇱","group":"F","confederation":"UEFA","fifaRank":7},
+  {"slug":"qatar","name":"Qatar","flag":"🇶🇦","group":"F","confederation":"AFC","fifaRank":37},
+  {"slug":"nigeria","name":"Nigeria","flag":"🇳🇬","group":"F","confederation":"CAF","fifaRank":40},
+  {"slug":"honduras","name":"Honduras","flag":"🇭🇳","group":"F","confederation":"CONCACAF","fifaRank":68},
+
+  {"slug":"argentina","name":"Argentina","flag":"🇦🇷","group":"G","confederation":"CONMEBOL","fifaRank":1},
+  {"slug":"italy","name":"Italy","flag":"🇮🇹","group":"G","confederation":"UEFA","fifaRank":10},
+  {"slug":"egypt","name":"Egypt","flag":"🇪🇬","group":"G","confederation":"CAF","fifaRank":34},
+  {"slug":"iraq","name":"Iraq","flag":"🇮🇶","group":"G","confederation":"AFC","fifaRank":63},
+
+  {"slug":"belgium","name":"Belgium","flag":"🇧🇪","group":"H","confederation":"UEFA","fifaRank":3},
+  {"slug":"brazil","name":"Brazil","flag":"🇧🇷","group":"H","confederation":"CONMEBOL","fifaRank":5},
+  {"slug":"cameroon","name":"Cameroon","flag":"🇨🇲","group":"H","confederation":"CAF","fifaRank":41},
+  {"slug":"jordan","name":"Jordan","flag":"🇯🇴","group":"H","confederation":"AFC","fifaRank":69},
+
+  {"slug":"colombia","name":"Colombia","flag":"🇨🇴","group":"I","confederation":"CONMEBOL","fifaRank":9},
+  {"slug":"poland","name":"Poland","flag":"🇵🇱","group":"I","confederation":"UEFA","fifaRank":26},
+  {"slug":"ivory-coast","name":"Ivory Coast","flag":"🇨🇮","group":"I","confederation":"CAF","fifaRank":29},
+  {"slug":"new-zealand","name":"New Zealand","flag":"🇳🇿","group":"I","confederation":"OFC","fifaRank":91},
+
+  {"slug":"croatia","name":"Croatia","flag":"🇭🇷","group":"J","confederation":"UEFA","fifaRank":11},
+  {"slug":"uruguay","name":"Uruguay","flag":"🇺🇾","group":"J","confederation":"CONMEBOL","fifaRank":14},
+  {"slug":"south-africa","name":"South Africa","flag":"🇿🇦","group":"J","confederation":"CAF","fifaRank":60},
+  {"slug":"peru","name":"Peru","flag":"🇵🇪","group":"J","confederation":"CONMEBOL","fifaRank":72},
+
+  {"slug":"ukraine","name":"Ukraine","flag":"🇺🇦","group":"K","confederation":"UEFA","fifaRank":21},
+  {"slug":"turkey","name":"Türkiye","flag":"🇹🇷","group":"K","confederation":"UEFA","fifaRank":22},
+  {"slug":"ecuador","name":"Ecuador","flag":"🇪🇨","group":"K","confederation":"CONMEBOL","fifaRank":44},
+  {"slug":"ghana","name":"Ghana","flag":"🇬🇭","group":"K","confederation":"CAF","fifaRank":55},
+
+  {"slug":"austria","name":"Austria","flag":"🇦🇹","group":"L","confederation":"UEFA","fifaRank":25},
+  {"slug":"venezuela","name":"Venezuela","flag":"🇻🇪","group":"L","confederation":"CONMEBOL","fifaRank":31},
+  {"slug":"algeria","name":"Algeria","flag":"🇩🇿","group":"L","confederation":"CAF","fifaRank":36},
+  {"slug":"bolivia","name":"Bolivia","flag":"🇧🇴","group":"L","confederation":"CONMEBOL","fifaRank":79}
+]

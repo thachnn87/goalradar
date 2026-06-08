@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { getUpcomingMatches } from '@/lib/api';
 import type { Match } from '@/lib/types';
 import { getUpcomingGroupFixtures, type WCGroupFixture } from '@/lib/wc-fixtures';
+import { isStaticMode, getStaticGroupFixtures } from '@/data/worldcup/loader';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCPageNav from '@/components/WCPageNav';
@@ -141,14 +142,19 @@ export default async function WC2026SchedulePage() {
   let upcoming: Match[] = [];
   let localUpcoming: WCGroupFixture[] = [];
 
-  try {
-    const data = await getUpcomingMatches('WC');
-    upcoming = data.matches.slice(0, 48); // first 48 upcoming
-  } catch { /* show static FAQ only */ }
+  if (isStaticMode()) {
+    // WORLD_CUP_DATA_SOURCE=static — bypass API, use JSON dataset directly
+    localUpcoming = getStaticGroupFixtures().slice(0, 48);
+  } else {
+    try {
+      const data = await getUpcomingMatches('WC');
+      upcoming = data.matches.slice(0, 48); // first 48 upcoming
+    } catch { /* show static FAQ only */ }
 
-  // If API returned nothing, serve local group-stage schedule
-  if (upcoming.length === 0) {
-    localUpcoming = getUpcomingGroupFixtures().slice(0, 48);
+    // If API returned nothing, serve local group-stage schedule
+    if (upcoming.length === 0) {
+      localUpcoming = getUpcomingGroupFixtures().slice(0, 48);
+    }
   }
 
   const byDay = groupByDay(upcoming);

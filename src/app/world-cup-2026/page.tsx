@@ -20,6 +20,7 @@ import WCRelatedLinks from '@/components/WCRelatedLinks';
 import AdSlot from '@/components/AdSlot';
 import NewsletterSignup from '@/components/NewsletterSignup';
 import { WC_ALL_TEAMS } from '@/lib/wc-all-teams';
+import { isStaticMode, getStaticUpcomingMatches } from '@/data/worldcup/loader';
 
 export const revalidate = 30;
 
@@ -273,13 +274,19 @@ function EmptyState({ message, sub }: { message: string; sub?: string }) {
 export default async function WorldCup2026Page() {
   const today = todayUTC();
 
+  const USE_STATIC = isStaticMode();
+
   const [liveResult, upcomingResult, recentResult, standingsResult, knockoutResult] =
     await Promise.allSettled([
-      getWCLiveMatches(),
-      getUpcomingMatches('WC'),
-      getRecentMatches('WC'),
-      getStandings('WC'),
-      getWCKnockoutMatches(),
+      getWCLiveMatches(),                       // always API — live matches only
+      USE_STATIC
+        ? Promise.resolve({ matches: getStaticUpcomingMatches(today), resultSet: { count: 72 } })
+        : getUpcomingMatches('WC'),
+      getRecentMatches('WC'),                   // always API — results only
+      getStandings('WC'),                       // always API — standings only
+      USE_STATIC
+        ? Promise.resolve({ matches: [] as Match[] })  // bracket rendered statically below
+        : getWCKnockoutMatches(),
     ]);
 
   // 1. Live matches
