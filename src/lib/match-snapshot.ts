@@ -74,6 +74,10 @@ const BENCH = process.env.MATCH_SNAPSHOT_BENCH === 'true';
 /** Snapshot TTL: 15 minutes.  Live matches bypass KV entirely. */
 const SNAPSHOT_TTL_SEC = 900;
 
+/** Disaster-recovery TTL: 30 days.  Written on every successful snapshot build.
+ *  Read when KV misses AND the API is unavailable (403/429/5xx). */
+const DR_TTL_SEC = 30 * 24 * 3_600; // 2 592 000 s
+
 // ---------------------------------------------------------------------------
 // Schema
 // ---------------------------------------------------------------------------
@@ -117,6 +121,10 @@ export interface MatchSnapshot {
 
 function kvKey(matchId: string): string {
   return `goalradar:match:${matchId}`;
+}
+
+function drKey(matchId: string): string {
+  return `goalradar:dr:match:${matchId}`;
 }
 
 /** Live matches must not be served from a 15-minute-old snapshot. */
@@ -239,6 +247,52 @@ async function writeKVSnapshot(matchId: string, snapshot: MatchSnapshot): Promis
   }
 }
 
+/**
+ * Read disaster-recovery snapshot.
+ * Returns null on miss or error.  Logs [DR] HIT on success, [DR] MISS on empty.
+ */
+async function readDRSnapshot(matchId: string): Promise<MatchSnapshot | null> {
+  if (!KV_ENABLED) return null;
+
+  try {
+    const raw = await kv.get<MatchSnapshot>(drKey(matchId));
+    if (!raw) {
+      console.warn(`[DR] MISS match:${matchId} — no disaster-recovery snapshot`);
+      return null;
+    }
+    const ageSeconds = Math.ceil((Date.now() - raw.generatedAt) / 1000);
+    console.warn(`[DR] HIT  match:${matchId} | age ${ageSeconds}s | status=${raw.match.status}`);
+    return raw;
+  } catch (err) {
+    console.error(
+      `[DR] read error for match:${matchId}:`,
+      err instanceof Error ? err.message : String(err),
+    );
+    return null;
+  }
+}
+
+/**
+ * Write disaster-recovery snapshot with 30-day TTL.
+ * Fire-and-forget.  Skipped for live matches.
+ * Logs [DR] SAVE on success.
+ */
+function writeDRSnapshot(matchId: string, snapshot: MatchSnapshot): void {
+  if (!KV_ENABLED) return;
+
+  // Never persist live snapshots — they'd be dangerously stale within minutes
+  if (isLiveStatus(snapshot.match.status)) return;
+
+  kv.set(drKey(matchId), snapshot, { ex: DR_TTL_SEC })
+    .then(() => console.log(`[DR] SAVE match:${matchId} | ttl=${DR_TTL_SEC}s`))
+    .catch((err) =>
+      console.error(
+        `[DR] write error for match:${matchId}:`,
+        err instanceof Error ? err.message : String(err),
+      ),
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Core fetch — memoised with React.cache()
 // ---------------------------------------------------------------------------
@@ -272,10 +326,23 @@ export const getOrBuildMatchSnapshot: (matchId: string) => Promise<MatchSnapshot
 
     // ── 2. Build from APIs ─────────────────────────────────────────────────
     console.log(`[Snapshot] MISS match:${matchId} — building snapshot`);
-    const snapshot = await buildSnapshot(matchId);
+    let snapshot: MatchSnapshot;
+    try {
+      snapshot = await buildSnapshot(matchId);
+    } catch (buildErr) {
+      // ── 3. API unavailable — try disaster-recovery key ─────────────────
+      console.error(
+        `[Snapshot] BUILD failed match:${matchId}: ${buildErr instanceof Error ? buildErr.message : String(buildErr)} | checking disaster-recovery key`,
+      );
+      const dr = await readDRSnapshot(matchId);
+      if (dr) return dr;
+      // No DR snapshot — propagate the original error
+      throw buildErr;
+    }
 
-    // Store to KV (fire-and-forget — don't block the response)
+    // Store to primary KV and disaster-recovery key (both fire-and-forget)
     writeKVSnapshot(matchId, snapshot).catch(() => undefined);
+    writeDRSnapshot(matchId, snapshot);
 
     return snapshot;
   },

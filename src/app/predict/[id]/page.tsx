@@ -19,10 +19,10 @@
 
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { cache } from 'react';
 import type { Metadata } from 'next';
 
-import { getMatchDetail, getHeadToHead, getTeamMatches } from '@/lib/api';
+import { getTeamMatches } from '@/lib/api';
+import { getOrBuildMatchSnapshot } from '@/lib/match-snapshot';
 import {
   extractForm,
   computeProbabilities,
@@ -49,10 +49,9 @@ type Params = { params: Promise<{ id: string }> };
 
 // ---------------------------------------------------------------------------
 // Per-request deduplication
-// React.cache() ensures generateMetadata and the page component share
-// a single getMatchDetail call per request lifecycle.
+// getOrBuildMatchSnapshot is already wrapped with React.cache() internally:
+// generateMetadata and the page component share a single snapshot fetch.
 // ---------------------------------------------------------------------------
-const getMatchDetailCached = cache(getMatchDetail);
 
 // ---------------------------------------------------------------------------
 // Metadata
@@ -64,7 +63,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   if (!numericId) return { title: 'Match Prediction | GoalRadar' };
 
   try {
-    const match = await getMatchDetailCached(numericId);
+    const { match } = await getOrBuildMatchSnapshot(numericId);
     const home  = match.homeTeam?.name ?? 'TBD';
     const away  = match.awayTeam?.name ?? 'TBD';
     const comp  = match.competition?.name ?? 'Football';
@@ -878,12 +877,15 @@ export default async function PredictionPage({ params }: Params) {
   const numericId = extractMatchId(slug);
   if (!numericId) notFound();
 
-  // Fetch match first — we need team IDs for the parallel requests below.
-  // getMatchDetailCached is React.cache()-wrapped: if generateMetadata already
-  // called it with the same ID this request, this returns the memoised result.
+  // Load the composite snapshot (React.cache() deduplicates with generateMetadata).
+  // The snapshot includes match detail, H2H, standings, and WC group matches.
+  // Falls back to the disaster-recovery key (30-day TTL) when the API is unavailable.
   let match: MatchDetail;
+  let h2h: HeadToHead | null = null;
   try {
-    match = await getMatchDetailCached(numericId);
+    const snapshot = await getOrBuildMatchSnapshot(numericId);
+    match = snapshot.match;
+    h2h   = snapshot.headToHead;
   } catch {
     notFound();
   }
@@ -900,16 +902,15 @@ export default async function PredictionPage({ params }: Params) {
   const isWC   = match.competition?.code === 'WC';
   const isPast = match.status === 'FINISHED';
 
-  // Parallel: H2H + team recent matches (for form)
-  const [h2hResult, homeMatchesResult, awayMatchesResult] = await Promise.allSettled([
-    getHeadToHead(numericId),
+  // Parallel: team recent matches (for form).
+  // H2H is already supplied by the snapshot above.
+  const [homeMatchesResult, awayMatchesResult] = await Promise.allSettled([
     getTeamMatches(String(match.homeTeam.id)),
     getTeamMatches(String(match.awayTeam.id)),
   ]);
 
-  const h2h         = h2hResult.status          === 'fulfilled' ? h2hResult.value          : null;
-  const homeMatches = homeMatchesResult.status   === 'fulfilled' ? homeMatchesResult.value.matches : [];
-  const awayMatches = awayMatchesResult.status   === 'fulfilled' ? awayMatchesResult.value.matches : [];
+  const homeMatches = homeMatchesResult.status === 'fulfilled' ? homeMatchesResult.value.matches : [];
+  const awayMatches = awayMatchesResult.status === 'fulfilled' ? awayMatchesResult.value.matches : [];
 
   // Compute prediction
   const homeForm = extractForm(homeMatches, match.homeTeam.id);
