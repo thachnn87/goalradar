@@ -1,11 +1,15 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import LocalTime from '@/components/LocalTime';
 import AddToCalendar from '@/components/AddToCalendar';
 
-import { NotFoundError } from '@/lib/api';
+import { NotFoundError, getMatchDetail } from '@/lib/api';
 import { getOrBuildMatchSnapshot, getGroupTable } from '@/lib/match-snapshot';
+import { getDataSourceStats } from '@/lib/data-source-tracker';
+import { recordMatchRender } from '@/lib/match-perf-tracker';
+import type { MatchRenderSource } from '@/lib/match-perf-tracker';
 import AnalyticsTracker from '@/components/AnalyticsTracker';
 import WCGroupTable from '@/components/WCGroupTable';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -42,8 +46,10 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   if (!numericId) return { title: 'Match Details | GoalRadar' };
 
   try {
-    // Snapshot read — React.cache() ensures this is deduplicated with the page component
-    const { match } = await getOrBuildMatchSnapshot(numericId);
+    // Fast path — only the match detail is needed to build metadata.
+    // Using getMatchDetail (KV SWR 60s/120s) avoids blocking on the full
+    // snapshot build (H2H + standings) which would delay the initial HTML.
+    const match = await getMatchDetail(numericId);
     const home  = match.homeTeam.name ?? 'TBD';
     const away  = match.awayTeam.name ?? 'TBD';
     const comp  = match.competition?.name ?? 'Football';
@@ -1819,6 +1825,132 @@ function MatchFaqSection({ faqs }: { faqs: Faq[] }) {
 }
 
 // ---------------------------------------------------------------------------
+// Suspense skeleton components
+// ---------------------------------------------------------------------------
+
+function HeadToHeadSkeleton() {
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 animate-pulse">
+      <div className="h-3 w-28 bg-gray-700 rounded mb-4" />
+      <div className="h-2 bg-gray-800 rounded mb-3" />
+      <div className="space-y-2">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div key={i} className="flex items-center gap-2">
+            <div className="h-5 w-12 bg-gray-800 rounded" />
+            <div className="h-5 flex-1 bg-gray-800 rounded" />
+            <div className="h-5 w-6 bg-gray-800 rounded" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WCGroupSectionSkeleton() {
+  return (
+    <div className="space-y-4">
+      {[0, 1].map((i) => (
+        <div key={i} className="bg-gray-900 border border-gray-800 rounded-2xl p-5 animate-pulse">
+          <div className="h-3 w-32 bg-gray-700 rounded mb-4" />
+          <div className="space-y-2">
+            {[0, 1, 2, 3].map((j) => (
+              <div key={j} className="h-8 bg-gray-800 rounded" />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Deferred async server components (rendered inside Suspense boundaries)
+// These call getOrBuildMatchSnapshot — which may trigger provider fetches.
+// They stream in AFTER the score hero renders from the fast-path getMatchDetail.
+// ---------------------------------------------------------------------------
+
+/**
+ * Streams in the Head-to-Head section once the snapshot resolves.
+ * React.cache() ensures getOrBuildMatchSnapshot is called only once per render
+ * even if WCGroupSectionDeferred also calls it.
+ */
+async function HeadToHeadDeferred({
+  matchId,
+  match,
+}: {
+  matchId: string;
+  match: MatchDetail;
+}) {
+  try {
+    const snapshot = await getOrBuildMatchSnapshot(matchId);
+    if (!snapshot.headToHead) return null;
+    return <HeadToHeadSection h2h={snapshot.headToHead} match={snapshot.match} />;
+  } catch {
+    return null; // graceful degradation — section omitted if snapshot unavailable
+  }
+}
+
+/**
+ * Streams in WC group-stage sections (standings preview, other group matches,
+ * related matches, next/prev navigation) once the snapshot resolves.
+ */
+async function WCGroupSectionDeferred({
+  matchId,
+  match,
+}: {
+  matchId: string;
+  match: MatchDetail;
+}) {
+  const isWC = match.competition?.code === 'WC';
+  if (!isWC) return null;
+
+  try {
+    const snapshot     = await getOrBuildMatchSnapshot(matchId);
+    const sm           = snapshot.match; // use snapshot's match for consistency
+    const hasGroup     = Boolean(sm.group);
+    const wcGroupTable = getGroupTable(snapshot);
+    const groupMatches = snapshot.wcGroupMatches;
+    const allMatches   = snapshot.wcAllMatches;
+    const groupSlug    = sm.group ? sm.group.toLowerCase().replace(/[\s_]+/g, '-') : null;
+    const groupLabel   = sm.group ? sm.group.replace('GROUP_', 'Group ') : null;
+
+    return (
+      <>
+        {hasGroup && wcGroupTable && groupSlug && groupLabel && (
+          <GroupStandingsPreview
+            table={wcGroupTable}
+            apiGroup={sm.group!}
+            groupSlug={groupSlug}
+            groupLabel={groupLabel}
+          />
+        )}
+        {hasGroup && (
+          <OtherGroupMatches
+            groupMatches={groupMatches}
+            currentId={sm.id}
+          />
+        )}
+        <RelatedMatches
+          homeTeamId={sm.homeTeam.id}
+          awayTeamId={sm.awayTeam.id}
+          competitionName={sm.competition?.name ?? 'World Cup 2026'}
+          matches={allMatches}
+          currentId={sm.id}
+        />
+        {hasGroup && (
+          <NextPrevNav
+            allGroupMatches={groupMatches}
+            currentId={sm.id}
+          />
+        )}
+      </>
+    );
+  } catch {
+    return null; // graceful degradation
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -1843,32 +1975,45 @@ export default async function MatchDetailPage({ params }: Params) {
     );
   }
 
-  // ── Snapshot fetch (React.cache deduplicates with generateMetadata call above)
-  // On warm KV: 1 single KV read, 0 API calls.
-  // On miss: parallel fetch of match + h2h + WC fixtures + standings.
+  // ── Fast path: match detail only (L1 → KV → provider) ─────────────────────
+  //
+  // Sequence diagram
+  // ────────────────
+  //   Browser → MatchDetailPage
+  //          → getMatchDetail()       L1 in-memory (~0 ms on hit)
+  //                                   L2 Vercel KV  (~10 ms on hit, SWR 60s/120s)
+  //                                   L3 Provider   (~200-7000 ms on miss)
+  //     → [renders score hero, events, report immediately]
+  //     → Suspense boundaries dispatch getOrBuildMatchSnapshot concurrently
+  //          → getOrBuildMatchSnapshot()  React.cache() deduplication
+  //               → KV snapshot read     (~10 ms on hit, TTL 900s)
+  //               → buildSnapshot()      [on miss] L1 HIT for match detail
+  //                                      + parallel: H2H, WC fixtures, standings
+  //     → H2H section streams in
+  //     → WC group sections stream in
+  //
+  // Goal: score hero renders in <50 ms (KV hit) or <500 ms (provider, no queue).
+  // Provider queue (RATE_LIMITER 7s/slot) blocks only providers, not the score hero.
+
   let match: MatchDetail | null = null;
   type MatchError = 'not_found' | 'unavailable' | null;
   let matchError: MatchError = null;
-  let snapshot: import('@/lib/match-snapshot').MatchSnapshot | null = null;
+
+  const _statsBefore = getDataSourceStats();
+  const _t0          = Date.now();
 
   try {
-    snapshot = await getOrBuildMatchSnapshot(numericId);
-    match    = snapshot.match;
+    match = await getMatchDetail(numericId);
 
-    if (!match) {
-      console.error(`[MatchPage] id=${numericId} snapshot returned null match`);
-      matchError = 'unavailable';
-    } else {
-      // Redirect old numeric-only URLs to the canonical slug URL.
-      const canonical = matchPath(match.id, match.homeTeam.name, match.awayTeam.name);
-      if (slug === numericId) {
-        redirect(canonical);
-      }
+    // Redirect old numeric-only URLs to the canonical slug URL.
+    const canonical = matchPath(match.id, match.homeTeam.name, match.awayTeam.name);
+    if (slug === numericId) {
+      redirect(canonical);
     }
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     if (err instanceof NotFoundError) {
-      console.error(`[MatchPage] id=${numericId} not found in football-data API`);
+      console.error(`[MatchPage] id=${numericId} not found`);
       matchError = 'not_found';
     } else {
       console.error(`[MatchPage] id=${numericId} temporarily unavailable:`, errMsg);
@@ -1876,7 +2021,19 @@ export default async function MatchDetailPage({ params }: Params) {
     }
   }
 
-  if (matchError || !match || !snapshot) {
+  // ── Performance logging ──────────────────────────────────────────────────
+  const _latencyMs   = Date.now() - _t0;
+  const _statsAfter  = getDataSourceStats();
+  const _renderSource: MatchRenderSource =
+    _statsAfter.footballDataHits > _statsBefore.footballDataHits ? 'football-data' :
+    _statsAfter.apiFootballHits  > _statsBefore.apiFootballHits  ? 'api-football'  :
+    _statsAfter.kvHits           > _statsBefore.kvHits           ? 'kv'            : 'l1';
+
+  console.log(`[MATCH_RENDER] ${_renderSource} | matchId=${numericId} | ms=${_latencyMs}`);
+  console.log(`[MATCH_LATENCY] ms=${_latencyMs} | matchId=${numericId} | source=${_renderSource}`);
+  recordMatchRender(_renderSource, _latencyMs);
+
+  if (matchError || !match) {
     const isNotFound = matchError === 'not_found';
     return (
       <div className="max-w-2xl mx-auto space-y-4 pb-10">
@@ -1907,16 +2064,11 @@ export default async function MatchDetailPage({ params }: Params) {
     );
   }
 
-  // ── Unpack snapshot ─────────────────────────────────────────────────────
+  // ── Fast-path data (available immediately from getMatchDetail) ──────────
   const isWC     = match.competition?.code === 'WC';
   const hasGroup = Boolean(match.group);
 
-  const h2h: HeadToHead | null       = snapshot.headToHead;
-  const allWCGroupMatches: Match[]   = snapshot.wcGroupMatches;
-  const allWCMatches: Match[]        = snapshot.wcAllMatches;
-  const wcGroupTable                 = getGroupTable(snapshot);
-
-  // Group slug/label for nav links
+  // Group slug/label derived from match detail — no snapshot needed
   const matchGroupSlug  = match.group ? match.group.toLowerCase().replace(/[\s_]+/g, '-') : null;
   const matchGroupLabel = match.group ? match.group.replace('GROUP_', 'Group ') : null;
 
@@ -1927,8 +2079,9 @@ export default async function MatchDetailPage({ params }: Params) {
 
   const showStats = ['IN_PLAY', 'PAUSED', 'FINISHED'].includes(match.status);
 
-  // Build FAQs once — used by both JSON-LD and the visible section
-  const faqs = buildFaqs(match, h2h);
+  // FAQs built from match detail only (no H2H — that data is in deferred Suspense).
+  // The H2H FAQ entry is excluded here; the H2H section itself streams in separately.
+  const faqs = buildFaqs(match, null);
 
   return (
     <>
@@ -1972,7 +2125,12 @@ export default async function MatchDetailPage({ params }: Params) {
 
         <LineupsSection />
 
-        {h2h && <HeadToHeadSection h2h={h2h} match={match} />}
+        {/* Head-to-head — deferred: streams in after snapshot resolves.
+            Renders immediately (from KV snapshot ~10ms) or after buildSnapshot (~200ms+).
+            Score hero is already painted before this boundary triggers. */}
+        <Suspense fallback={<HeadToHeadSkeleton />}>
+          <HeadToHeadDeferred matchId={numericId} match={match} />
+        </Suspense>
 
         {/* FAQ — visible Q&A section + FAQPage JSON-LD for rich snippets */}
         <MatchFaqSection faqs={faqs} />
@@ -1980,41 +2138,12 @@ export default async function MatchDetailPage({ params }: Params) {
         {/* Ad: mid-page — between FAQ and group content */}
         <AdSlot slotId="match-mid" variant="rectangle" className="mx-auto" />
 
-        {/* Group standings preview (WC group stage only) */}
-        {isWC && hasGroup && wcGroupTable && matchGroupSlug && matchGroupLabel && (
-          <GroupStandingsPreview
-            table={wcGroupTable}
-            apiGroup={match.group!}
-            groupSlug={matchGroupSlug}
-            groupLabel={matchGroupLabel}
-          />
-        )}
-
-        {/* Other matches in the same WC group */}
-        {isWC && hasGroup && (
-          <OtherGroupMatches
-            groupMatches={allWCGroupMatches}
-            currentId={match.id}
-          />
-        )}
-
-        {/* Related WC matches involving either team */}
+        {/* WC group sections — deferred: group standings, other matches, related, next/prev.
+            All resolved from the same getOrBuildMatchSnapshot call (React.cache dedup). */}
         {isWC && (
-          <RelatedMatches
-            homeTeamId={match.homeTeam.id}
-            awayTeamId={match.awayTeam.id}
-            competitionName={match.competition?.name ?? 'World Cup 2026'}
-            matches={allWCMatches}
-            currentId={match.id}
-          />
-        )}
-
-        {/* Next / Previous group match navigation */}
-        {isWC && hasGroup && (
-          <NextPrevNav
-            allGroupMatches={allWCGroupMatches}
-            currentId={match.id}
-          />
+          <Suspense fallback={<WCGroupSectionSkeleton />}>
+            <WCGroupSectionDeferred matchId={numericId} match={match} />
+          </Suspense>
         )}
 
         {/* WC navigation box (replaces generic CompetitionLinks for WC matches) */}

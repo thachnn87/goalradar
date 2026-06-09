@@ -47,6 +47,8 @@ class RateLimiter {
   private draining = false;
   /** Rolling window of dispatch timestamps for RPM telemetry. */
   private readonly recentMs: number[] = [];
+  /** Total number of acquire() calls that had to wait in the queue. */
+  private waitCount = 0;
 
   constructor(intervalMs: number) {
     this.intervalMs = intervalMs;
@@ -69,6 +71,7 @@ class RateLimiter {
         console.log(
           `[QUEUE] football-data | depth=${depth + 1} | waiting for slot`,
         );
+        this.waitCount++;
       }
       this.queue.push(resolve);
       if (!this.draining) void this.drain();
@@ -80,10 +83,11 @@ class RateLimiter {
    * Safe to call at any time — pure read, no side effects.
    */
   getSnapshot(): {
-    queuedRequests:    number;
-    lastRequestAt:     string | null;
+    queuedRequests:     number;
+    lastRequestAt:      string | null;
     requestsLastMinute: number;
-    intervalMs:        number;
+    intervalMs:         number;
+    totalWaits:         number;
   } {
     const now    = Date.now();
     const cutoff = now - 60_000;
@@ -95,6 +99,7 @@ class RateLimiter {
                             : null,
       requestsLastMinute: rpm,
       intervalMs:         this.intervalMs,
+      totalWaits:         this.waitCount,
     };
   }
 

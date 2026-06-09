@@ -32,6 +32,7 @@
 import type { Match, MatchDetail, StandingTable, HeadToHead, TeamDetail } from '@/lib/types';
 import { NotFoundError, ApiUnavailableError } from '@/lib/errors';
 import { footballDataLimiter } from '@/lib/rate-limiter';
+import { recordRetry } from '@/lib/match-perf-tracker';
 import type { MatchProvider } from './types';
 
 const BASE_URL    = 'https://api.football-data.org/v4';
@@ -119,6 +120,7 @@ async function fetchRaw<T>(endpoint: string): Promise<T> {
         `[RETRY_AFTER] football-data | endpoint=${endpoint}` +
         ` | waitMs=${waitMs} | attempt=${attempt}/${MAX_ATTEMPTS}`,
       );
+      recordRetry();
       if (attempt < MAX_ATTEMPTS) { await sleep(waitMs); continue; }
       throw new ApiUnavailableError('rate_limit');
     }
