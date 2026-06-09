@@ -72,7 +72,7 @@ interface KVEntry<T> {
   freshUntil: number;
 }
 
-interface RefreshResult {
+export interface RefreshResult {
   endpoint:    string;
   status:      'ok' | 'error';
   fetchedAt:   string;

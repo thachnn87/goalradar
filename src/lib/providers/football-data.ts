@@ -7,111 +7,138 @@
  * against the HTTP API without going through the cache tier, so the
  * ProviderManager can observe real failures (cache hits would hide them).
  *
- * Error handling mirrors api.ts: 3 retries, 10-s timeout, Retry-After
- * backoff on 429, immediate throw on 404/403.
+ * Rate limiting
+ * ─────────────
+ * Every HTTP attempt is gated through footballDataLimiter.acquire(), which
+ * enforces at most 1 request per 7 seconds (≈8.5 req/min). This keeps us
+ * well below the free-plan cap of 10 req/min and prevents the burst patterns
+ * that caused the manual account suspension.
+ *
+ * Retry policy (conservative — avoids hammering a limited API)
+ * ─────────────────────────────────────────────────────────────
+ *   403  → throw immediately, NEVER retry (account/key-level block)
+ *   429  → wait EXACTLY the Retry-After duration (default 60 s), then
+ *           ONE retry through the rate limiter; throw rate_limit on 2nd 429
+ *   5xx  → ONE retry after 1 s through the rate limiter
+ *   timeout / network → ONE retry after 1 s through the rate limiter
+ *   404  → throw NotFoundError immediately, never retry
  *
  * Throws:
  *   NotFoundError        — HTTP 404
- *   ApiUnavailableError  — 429, 403, 5xx, timeout, network error
+ *   ApiUnavailableError  — all other non-200 responses + network/timeout
  *     .reason: 'rate_limit' | 'disabled' | 'http' | 'timeout' | 'unknown'
  */
 
 import type { Match, MatchDetail, StandingTable, HeadToHead, TeamDetail } from '@/lib/types';
 import { NotFoundError, ApiUnavailableError } from '@/lib/errors';
+import { footballDataLimiter } from '@/lib/rate-limiter';
 import type { MatchProvider } from './types';
 
-const BASE_URL   = 'https://api.football-data.org/v4';
-const MAX_RETRIES = 3;
-const TIMEOUT_MS  = 10_000;
+const BASE_URL    = 'https://api.football-data.org/v4';
+const MAX_ATTEMPTS = 2;   // 1 initial + max 1 retry
+const TIMEOUT_MS   = 10_000;
 
 // ---------------------------------------------------------------------------
-// Raw HTTP fetch (no cache, no Next.js ISR — pure HTTP layer)
+// Helpers
 // ---------------------------------------------------------------------------
 
-function parseRetryAfter(headers: Headers): number {
-  const raw = headers.get('retry-after');
-  if (!raw) return 0;
-  const sec = parseInt(raw, 10);
-  if (!isNaN(sec)) return Math.min(sec, 60);
-  const date = Date.parse(raw);
-  if (!isNaN(date)) return Math.min(Math.ceil((date - Date.now()) / 1000), 60);
-  return 0;
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
 }
+
+/** Returns the Retry-After value in **milliseconds**. Defaults to 60 000. */
+function parseRetryAfterMs(headers: Headers): number {
+  const raw = headers.get('retry-after');
+  if (!raw) return 60_000;
+  const sec = parseInt(raw, 10);
+  if (!isNaN(sec) && sec > 0) return sec * 1_000;
+  const date = Date.parse(raw);
+  if (!isNaN(date)) return Math.max(1_000, date - Date.now());
+  return 60_000;
+}
+
+// ---------------------------------------------------------------------------
+// Raw HTTP fetch — rate-limited, single retry, strict error taxonomy
+// ---------------------------------------------------------------------------
 
 async function fetchRaw<T>(endpoint: string): Promise<T> {
   const apiKey = process.env.FOOTBALL_API_KEY ?? '';
 
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    // ── Gate through the global rate limiter before every HTTP attempt ──────
+    await footballDataLimiter.acquire();
+
     const controller = new AbortController();
     const timer      = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    let   res!: Response;
 
+    // ── Network layer (timeout + connection errors) ─────────────────────────
     try {
-      const res = await fetch(`${BASE_URL}${endpoint}`, {
+      res = await fetch(`${BASE_URL}${endpoint}`, {
         headers: { 'X-Auth-Token': apiKey },
         signal:  controller.signal,
-        // No next.revalidate — this is the raw provider layer.
-        // Caching is handled by the caller (cache.ts / kv-cache.ts).
+        // No next.revalidate — raw provider layer; caching handled by callers.
       });
-      clearTimeout(timer);
-
-      if (res.ok) return res.json() as Promise<T>;
-
-      const body = await res.text().catch(() => '');
-
-      if (res.status === 404) {
-        console.warn(`[FD] 404 ${endpoint}`);
-        throw new NotFoundError();
-      }
-
-      if (res.status === 429) {
-        const backoff = (parseRetryAfter(res.headers) || attempt * 5) * 1_000;
-        console.warn(`[FD] 429 ${endpoint} | attempt ${attempt}/${MAX_RETRIES} | backoff ${backoff}ms`);
-        if (attempt < MAX_RETRIES) {
-          await new Promise((r) => setTimeout(r, backoff));
-          continue;
-        }
-        throw new ApiUnavailableError('rate_limit');
-      }
-
-      if (res.status === 403) {
-        console.error(`[FD] 403 DISABLED ${endpoint}: ${body.slice(0, 120)}`);
-        throw new ApiUnavailableError('disabled');
-      }
-
-      if (res.status >= 500) {
-        console.error(`[FD] ${res.status} SERVER_ERROR ${endpoint} (attempt ${attempt}/${MAX_RETRIES})`);
-        if (attempt < MAX_RETRIES) {
-          await new Promise((r) => setTimeout(r, attempt * 1_000));
-          continue;
-        }
-        throw new ApiUnavailableError('http');
-      }
-
-      console.error(`[FD] ${res.status} ${endpoint}: ${body.slice(0, 200)}`);
-      throw new ApiUnavailableError('http');
-
     } catch (err) {
       clearTimeout(timer);
-
-      if (err instanceof NotFoundError)    throw err;
-      if (err instanceof ApiUnavailableError) {
-        if (attempt >= MAX_RETRIES || err.reason === 'rate_limit' || err.reason === 'disabled') throw err;
-        await new Promise((r) => setTimeout(r, attempt * 1_000));
-        continue;
-      }
-
       const isTimeout = err instanceof DOMException && err.name === 'AbortError';
       console.error(
-        `[FD] ${isTimeout ? 'TIMEOUT' : 'NETWORK'} ${endpoint} (attempt ${attempt}/${MAX_RETRIES}): ${isTimeout ? '10s exceeded' : (err instanceof Error ? err.message : String(err))}`,
+        `[FD] ${isTimeout ? 'TIMEOUT' : 'NETWORK'} ${endpoint}` +
+        ` (attempt ${attempt}/${MAX_ATTEMPTS}):` +
+        ` ${isTimeout ? `${TIMEOUT_MS / 1_000}s exceeded` : (err instanceof Error ? err.message : String(err))}`,
       );
-      if (attempt < MAX_RETRIES) {
-        await new Promise((r) => setTimeout(r, attempt * 1_000));
-        continue;
-      }
+      if (attempt < MAX_ATTEMPTS) { await sleep(1_000); continue; }
       throw new ApiUnavailableError(isTimeout ? 'timeout' : 'unknown');
     }
+    clearTimeout(timer);
+
+    // ── HTTP success ────────────────────────────────────────────────────────
+    if (res.ok) return res.json() as Promise<T>;
+
+    const body = await res.text().catch(() => '');
+
+    // ── 404 — resource does not exist; never retry ──────────────────────────
+    if (res.status === 404) {
+      console.warn(`[FD] 404 ${endpoint}`);
+      throw new NotFoundError();
+    }
+
+    // ── 403 — account disabled or API key invalid; NEVER retry ──────────────
+    if (res.status === 403) {
+      console.error(
+        `[PROVIDER_DISABLED] football-data | endpoint=${endpoint}` +
+        ` | ${body.slice(0, 160)}`,
+      );
+      throw new ApiUnavailableError('disabled');
+    }
+
+    // ── 429 — rate limited; respect Retry-After exactly ─────────────────────
+    if (res.status === 429) {
+      const waitMs = parseRetryAfterMs(res.headers);
+      console.warn(
+        `[RETRY_AFTER] football-data | endpoint=${endpoint}` +
+        ` | waitMs=${waitMs} | attempt=${attempt}/${MAX_ATTEMPTS}`,
+      );
+      if (attempt < MAX_ATTEMPTS) { await sleep(waitMs); continue; }
+      throw new ApiUnavailableError('rate_limit');
+    }
+
+    // ── 5xx — server error; one retry ───────────────────────────────────────
+    if (res.status >= 500) {
+      console.error(
+        `[FD] ${res.status} SERVER_ERROR ${endpoint}` +
+        ` (attempt ${attempt}/${MAX_ATTEMPTS}): ${body.slice(0, 200)}`,
+      );
+      if (attempt < MAX_ATTEMPTS) { await sleep(1_000); continue; }
+      throw new ApiUnavailableError('http');
+    }
+
+    // ── Other 4xx (400, 401, …) — never retry ───────────────────────────────
+    console.error(`[FD] ${res.status} ${endpoint}: ${body.slice(0, 200)}`);
+    throw new ApiUnavailableError('http');
   }
 
+  // Should never reach here — every loop branch returns, throws, or continues.
   throw new ApiUnavailableError();
 }
 

@@ -127,14 +127,10 @@ function KickoffRow({ match }: { match: Match }) {
         </p>
         <p className="text-[11px] text-gray-600 mt-0.5">{group ?? stage ?? 'World Cup 2026'}</p>
       </div>
-      {/* Watch pill */}
-      <Link
-        href="/world-cup-2026/watch-live"
-        onClick={(e) => e.stopPropagation()}
-        className="hidden sm:inline-flex items-center gap-1 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 text-[10px] font-bold px-2 py-1 rounded-full border border-yellow-500/20 transition-colors shrink-0"
-      >
+      {/* Watch pill — static badge; the outer Link handles navigation to the match page */}
+      <span className="hidden sm:inline-flex items-center gap-1 bg-yellow-500/10 text-yellow-400 text-[10px] font-bold px-2 py-1 rounded-full border border-yellow-500/20 shrink-0">
         📺 Watch
-      </Link>
+      </span>
       <span className="text-gray-700 group-hover:text-yellow-500 text-sm transition-colors shrink-0">→</span>
     </Link>
   );

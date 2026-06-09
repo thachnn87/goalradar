@@ -12,7 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { refreshEndpoint, isAuthorizedCronRequest } from '@/lib/refresh';
+import { refreshEndpoint, isAuthorizedCronRequest, type RefreshResult } from '@/lib/refresh';
 import { COMPETITIONS } from '@/lib/types';
 
 // Must match SWR.STANDINGS in kv-cache.ts.
@@ -27,16 +27,19 @@ export async function GET(req: NextRequest) {
   const started = Date.now();
   console.log('[Cron] standings refresh started');
 
-  // Refresh standings for every competition, including WC.
-  const results = await Promise.all(
-    COMPETITIONS.map(({ code }) =>
-      refreshEndpoint(
+  // Refresh standings sequentially — prevents concurrent requests that would
+  // burst through the rate limiter and trip the 10 req/min cap.
+  const results: RefreshResult[] = [];
+  for (const { code } of COMPETITIONS) {
+    console.log(`[QUEUE] standings | refreshing /competitions/${code}/standings`);
+    results.push(
+      await refreshEndpoint(
         `/competitions/${code}/standings`,
         STANDINGS_FRESH,
-        STANDINGS_STALE
-      )
-    )
-  );
+        STANDINGS_STALE,
+      ),
+    );
+  }
 
   const ok      = results.filter((r) => r.status === 'ok').length;
   const failed  = results.filter((r) => r.status === 'error').length;

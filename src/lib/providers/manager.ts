@@ -180,6 +180,14 @@ async function withFailover<T>(
   } catch (primaryErr) {
     recordError('football-data', primaryErr);
 
+    // 403 disabled — account/key blocked; log prominently before failing over.
+    if (primaryErr instanceof ApiUnavailableError && primaryErr.reason === 'disabled') {
+      console.error(
+        `[PROVIDER_DISABLED] football-data | account/key blocked (403)` +
+        ` | failing over to api-football | endpoint=${endpoint}`,
+      );
+    }
+
     if (!isFailoverTrigger(primaryErr)) {
       // Non-failover error (e.g. NotFoundError) — propagate immediately.
       throw primaryErr;

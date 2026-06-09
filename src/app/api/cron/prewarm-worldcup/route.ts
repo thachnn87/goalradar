@@ -187,8 +187,13 @@ export async function GET(req: NextRequest) {
 
   console.log(`[PREWARM] start  | WC | ${tasks.length} endpoints | triggered=${triggeredBy}`);
 
-  // All tasks run in parallel — independent, no ordering dependency.
-  const results  = await Promise.all(tasks.map(runTask));
+  // Run tasks sequentially — parallel execution would fire 6 requests
+  // simultaneously and burst through the 10 req/min rate limit.
+  const results: PrewarmTaskResult[] = [];
+  for (const task of tasks) {
+    console.log(`[QUEUE] prewarm | running ${task.label}`);
+    results.push(await runTask(task));
+  }
   const elapsed  = Date.now() - started;
   const ok       = results.filter((r) => r.status === 'ok').length;
   const failed   = results.filter((r) => r.status === 'fail').length;

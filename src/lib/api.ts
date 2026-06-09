@@ -36,97 +36,77 @@ function parseRetryAfter(headers: Headers): number {
 }
 
 async function fetchFromAPI<T>(endpoint: string, revalidate: number): Promise<T> {
-  const MAX_RETRIES = 3;
+  // NOTE: fetchFromAPI is legacy dead-code — all public api.ts functions now
+  // route through providerManager → FootballDataProvider (which uses its own
+  // rate-limited fetchRaw). Kept here for backward compatibility only.
+  // Retry policy mirrors football-data.ts: 403 never retried, 5xx/timeout max
+  // 1 retry, 429 waits exact Retry-After then 1 retry.
+  const MAX_ATTEMPTS = 2; // 1 initial + max 1 retry
 
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const controller  = new AbortController();
     const timeoutId   = setTimeout(() => controller.abort(), 10_000);
-    const _fetchStart = Date.now(); // API-1 network timing
+    const _fetchStart = Date.now();
+    let   res!: Response;
 
     try {
-      const res = await fetch(`${BASE_URL}${endpoint}`, {
+      res = await fetch(`${BASE_URL}${endpoint}`, {
         headers: { 'X-Auth-Token': process.env.FOOTBALL_API_KEY ?? '' },
         next:    { revalidate },
         signal:  controller.signal,
       });
-
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        // ── API-1 instrumentation — actual network call ──
-        recordAuditCall({
-          endpoint,
-          source:     'network',
-          durationMs: Date.now() - _fetchStart,
-        });
-        return res.json() as Promise<T>;
-      }
-
-      // ── Error responses ────────────────────────────────────────────────
-      const body = await res.text().catch(() => '');
-
-      if (res.status === 404) {
-        console.warn(`[API] 404 ${endpoint}`);
-        throw new NotFoundError();
-      }
-
-      if (res.status === 429) {
-        // Rate-limited. Back off according to Retry-After before retrying.
-        const backoff = (parseRetryAfter(res.headers) || (attempt * 5)) * 1_000;
-        console.warn(
-          `[API] 429 RATE_LIMIT ${endpoint} | attempt ${attempt}/${MAX_RETRIES} | backoff ${backoff}ms | ${body.slice(0, 120)}`,
-        );
-        if (attempt < MAX_RETRIES) {
-          await new Promise((r) => setTimeout(r, backoff));
-          continue;
-        }
-        throw new ApiUnavailableError('rate_limit');
-      }
-
-      if (res.status >= 500) {
-        console.error(
-          `[API] ${res.status} SERVER_ERROR ${endpoint} (attempt ${attempt}/${MAX_RETRIES}): ${body.slice(0, 200)}`,
-        );
-        if (attempt < MAX_RETRIES) {
-          await new Promise((r) => setTimeout(r, attempt * 1_000));
-          continue;
-        }
-        throw new ApiUnavailableError('http');
-      }
-
-      // 403 — account disabled or API key rejected.
-      // Non-retryable: every retry would return the same 403.
-      if (res.status === 403) {
-        console.error(`[API] DISABLED ${endpoint}: ${body.slice(0, 120)}`);
-        throw new ApiUnavailableError('disabled');
-      }
-
-      // 4xx other than 404/429/403
-      console.error(`[API] ${res.status} ${endpoint}: ${body.slice(0, 200)}`);
-      throw new ApiUnavailableError('http');
-
     } catch (err) {
       clearTimeout(timeoutId);
-
-      // Re-throw typed errors immediately — no further retries.
-      if (err instanceof NotFoundError) throw err;
-      if (err instanceof ApiUnavailableError) {
-        // Non-retryable: rate_limit (has its own back-off above), disabled (account/key issue).
-        if (attempt >= MAX_RETRIES || err.reason === 'rate_limit' || err.reason === 'disabled') throw err;
-        await new Promise((r) => setTimeout(r, attempt * 1_000));
-        continue;
-      }
-
       const isTimeout = err instanceof DOMException && err.name === 'AbortError';
       console.error(
-        `[API] ${isTimeout ? 'TIMEOUT' : 'FETCH_ERROR'} ${endpoint} (attempt ${attempt}/${MAX_RETRIES}): ${isTimeout ? '10s exceeded' : (err instanceof Error ? err.message : String(err))}`,
+        `[API] ${isTimeout ? 'TIMEOUT' : 'FETCH_ERROR'} ${endpoint}` +
+        ` (attempt ${attempt}/${MAX_ATTEMPTS}): ${isTimeout ? '10s exceeded' : (err instanceof Error ? err.message : String(err))}`,
       );
-      if (attempt < MAX_RETRIES) {
-        await new Promise((r) => setTimeout(r, attempt * 1_000));
-        continue;
-      }
+      if (attempt < MAX_ATTEMPTS) { await new Promise((r) => setTimeout(r, 1_000)); continue; }
       throw new ApiUnavailableError(isTimeout ? 'timeout' : 'unknown');
     }
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      recordAuditCall({ endpoint, source: 'network', durationMs: Date.now() - _fetchStart });
+      return res.json() as Promise<T>;
+    }
+
+    const body = await res.text().catch(() => '');
+
+    if (res.status === 404) {
+      console.warn(`[API] 404 ${endpoint}`);
+      throw new NotFoundError();
+    }
+
+    // 403 — account/key disabled; NEVER retry.
+    if (res.status === 403) {
+      console.error(`[PROVIDER_DISABLED] api.ts | endpoint=${endpoint} | ${body.slice(0, 120)}`);
+      throw new ApiUnavailableError('disabled');
+    }
+
+    // 429 — respect Retry-After exactly; one retry only.
+    if (res.status === 429) {
+      const retryAfterSec = parseRetryAfter(res.headers);
+      const waitMs        = retryAfterSec > 0 ? retryAfterSec * 1_000 : 60_000;
+      console.warn(
+        `[RETRY_AFTER] api.ts | endpoint=${endpoint} | waitMs=${waitMs}` +
+        ` | attempt=${attempt}/${MAX_ATTEMPTS}`,
+      );
+      if (attempt < MAX_ATTEMPTS) { await new Promise((r) => setTimeout(r, waitMs)); continue; }
+      throw new ApiUnavailableError('rate_limit');
+    }
+
+    // 5xx — one retry after 1 s.
+    if (res.status >= 500) {
+      console.error(`[API] ${res.status} SERVER_ERROR ${endpoint} (attempt ${attempt}/${MAX_ATTEMPTS}): ${body.slice(0, 200)}`);
+      if (attempt < MAX_ATTEMPTS) { await new Promise((r) => setTimeout(r, 1_000)); continue; }
+      throw new ApiUnavailableError('http');
+    }
+
+    // Other 4xx — never retry.
+    console.error(`[API] ${res.status} ${endpoint}: ${body.slice(0, 200)}`);
+    throw new ApiUnavailableError('http');
   }
 
   throw new ApiUnavailableError();

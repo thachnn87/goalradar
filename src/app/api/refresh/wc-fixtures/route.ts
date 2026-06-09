@@ -14,7 +14,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { refreshEndpoint, isAuthorizedCronRequest } from '@/lib/refresh';
+import { refreshEndpoint, isAuthorizedCronRequest, type RefreshResult } from '@/lib/refresh';
 
 // SWR timing constants must match SWR.FIXTURES / SWR.MATCH in kv-cache.ts
 // so the user-facing cache entries are overwritten with the same TTL.
@@ -55,10 +55,13 @@ export async function GET(req: NextRequest) {
 
   const all = [...ENDPOINTS, dateScoped];
 
-  // Refresh all endpoints in parallel.
-  const results = await Promise.all(
-    all.map(({ path, fresh, stale }) => refreshEndpoint(path, fresh, stale))
-  );
+  // Refresh endpoints sequentially — each waits for the previous to finish
+  // so we never fire concurrent requests that trip the rate limiter.
+  const results: RefreshResult[] = [];
+  for (const { path, fresh, stale } of all) {
+    console.log(`[QUEUE] wc-fixtures | refreshing ${path}`);
+    results.push(await refreshEndpoint(path, fresh, stale));
+  }
 
   const ok      = results.filter((r) => r.status === 'ok').length;
   const failed  = results.filter((r) => r.status === 'error').length;
