@@ -12,6 +12,7 @@
 import { kv }                from '@vercel/kv';
 import { providerManager }  from './providers/manager';
 import { ApiUnavailableError } from './errors';
+import { isRateSafeModeActive, logRateSafeSkip } from './rate-safe';
 
 const KV_PREFIX  = 'goalradar:';
 
@@ -22,7 +23,7 @@ const KV_PREFIX  = 'goalradar:';
 /** Result of a single warmed endpoint within a prewarm run. */
 export interface PrewarmTaskResult {
   label:     string;
-  status:    'ok' | 'fail';
+  status:    'ok' | 'fail' | 'skip';
   elapsedMs: number;
   error?:    string;
 }
@@ -83,7 +84,7 @@ interface KVEntry<T> {
 
 export interface RefreshResult {
   endpoint:    string;
-  status:      'ok' | 'error';
+  status:      'ok' | 'error' | 'skipped';
   fetchedAt:   string;
   freshUntil:  string;
   error?:      string;
@@ -160,6 +161,20 @@ export async function refreshEndpoint(
 ): Promise<RefreshResult> {
   const start = Date.now();
 
+  // ── Rate-safe mode guard ────────────────────────────────────────────────
+  // If football-data.org returned 429/403 in this process (or another
+  // instance set the KV flag), skip the provider call entirely.
+  if (isRateSafeModeActive()) {
+    logRateSafeSkip(endpoint);
+    return {
+      endpoint,
+      status:    'skipped',
+      fetchedAt: new Date(start).toISOString(),
+      freshUntil: '',
+      error:     'rate-safe mode active',
+    };
+  }
+
   let data: unknown;
   try {
     // Route through ProviderManager so failover to api-football is active
@@ -210,6 +225,14 @@ export async function refreshEndpoint(
 export async function refreshLiveMatches(): Promise<RefreshResult> {
   const start    = Date.now();
   const endpoint = '/matches?status=IN_PLAY,PAUSED';
+
+  // Live matches bypass rate-safe mode: even during a rate-limit event we
+  // still want the cached live data served.  But we must not call the
+  // provider when we're throttled — return immediately if active.
+  if (isRateSafeModeActive()) {
+    logRateSafeSkip(endpoint);
+    return { endpoint, status: 'skipped', fetchedAt: new Date(start).toISOString(), freshUntil: '', error: 'rate-safe mode active' };
+  }
 
   let result: Awaited<ReturnType<typeof providerManager.getLiveMatches>>;
   try {

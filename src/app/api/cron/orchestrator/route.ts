@@ -24,6 +24,7 @@ import {
   type PrewarmRecord,
 } from '@/lib/refresh';
 import { prewarmWorldCup, type WorldCupPrewarmResult } from '@/lib/prewarm/worldcup';
+import { readRateSafeFromKV, isRateSafeModeActive, getRateSafeState } from '@/lib/rate-safe';
 import { COMPETITIONS } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -121,6 +122,19 @@ export async function GET(req: NextRequest) {
   const started = Date.now();
   console.log('[Cron] orchestrator started');
 
+  // ── RATE-SAFE MODE: sync in-process flag from KV before any provider calls ─
+  // This picks up 429/403 events that fired in OTHER serverless instances since
+  // the last time this process ran.  Zero-I/O checks within the run use the
+  // synced in-process flag — no per-task KV reads needed.
+  const rateSafeState = await readRateSafeFromKV();
+  if (rateSafeState) {
+    const expiresIn = Math.round((rateSafeState.expiresAt - Date.now()) / 1000);
+    console.warn(
+      `[Cron] orchestrator: RATE-SAFE mode active | reason=${rateSafeState.reason}` +
+      ` | expiresIn=${expiresIn}s | all refresh tasks will be skipped`,
+    );
+  }
+
   // Capture auth method for the run record
   const triggeredBy: PrewarmRecord['triggeredBy'] =
     req.headers.get('authorization')?.startsWith('Bearer ') ? 'header'
@@ -140,17 +154,20 @@ export async function GET(req: NextRequest) {
     refreshResults.push(result);
     taskResults.push({
       label:     task.label,
-      status:    result.status === 'ok' ? 'ok' : 'fail',
+      status:    result.status === 'ok'      ? 'ok'
+               : result.status === 'skipped' ? 'skip'
+               : 'fail',
       elapsedMs,
       ...(result.error !== undefined ? { error: result.error } : {}),
     });
   }
 
   const ok      = refreshResults.filter((r) => r.status === 'ok').length;
+  const skipped = refreshResults.filter((r) => r.status === 'skipped').length;
   const failed  = refreshResults.filter((r) => r.status === 'error').length;
   const elapsed = Date.now() - started;
 
-  console.log(`[Cron] orchestrator tasks done | ok=${ok} failed=${failed} total=${tasks.length} | ${elapsed}ms`);
+  console.log(`[Cron] orchestrator tasks done | ok=${ok} skipped=${skipped} failed=${failed} total=${tasks.length} | ${elapsed}ms`);
 
   // ── PERF-3: Seed all 104 WC match KV entries from bulk data ──────────────
   // Runs after the standard tasks so it can reuse the KV-cached responses.
@@ -194,23 +211,30 @@ export async function GET(req: NextRequest) {
   });
 
   return NextResponse.json({
-    job:     'orchestrator',
+    job:      'orchestrator',
     ok,
+    skipped,
     failed,
-    total:   tasks.length,
-    elapsed: `${elapsed}ms`,
+    total:    tasks.length,
+    elapsed:  `${elapsed}ms`,
+    rateSafeMode: isRateSafeModeActive()
+      ? { active: true, ...getRateSafeState() }
+      : { active: false },
     results: refreshResults,
-    // PERF-3
+    // PERF-3 + RATE-SAFE
     seed: seedResult ? {
       seededMatchDetail: seedResult.seededMatchDetail,
       seededSnapshots:   seedResult.seededSnapshots,
       skippedFresh:      seedResult.skippedFresh,
+      skippedLive:       seedResult.skippedLive,
       totalWCMatches:    seedResult.totalWCMatches,
       coveragePercent:   seedResult.coveragePercent,
       priorityMatches:   seedResult.priorityMatches,
       priorityRefreshed: seedResult.priorityRefreshed,
       fetchCalls:        seedResult.fetchCalls,
       durationMs:        seedResult.durationMs,
+      rateSafeMode:      seedResult.rateSafeMode,
+      tierBreakdown:     seedResult.tierBreakdown,
       errors:            seedResult.errors,
     } : null,
     timestamp: new Date().toISOString(),

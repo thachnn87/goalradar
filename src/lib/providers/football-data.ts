@@ -33,6 +33,7 @@ import type { Match, MatchDetail, StandingTable, HeadToHead, TeamDetail } from '
 import { NotFoundError, ApiUnavailableError } from '@/lib/errors';
 import { footballDataLimiter } from '@/lib/rate-limiter';
 import { recordRetry } from '@/lib/match-perf-tracker';
+import { enableRateSafeMode } from '@/lib/rate-safe';
 import type { MatchProvider } from './types';
 
 const BASE_URL    = 'https://api.football-data.org/v4';
@@ -110,6 +111,8 @@ async function fetchRaw<T>(endpoint: string): Promise<T> {
         `[PROVIDER_DISABLED] football-data | endpoint=${endpoint}` +
         ` | ${body.slice(0, 160)}`,
       );
+      // Activate rate-safe mode: suspend all background refresh for 1 h.
+      enableRateSafeMode('disabled', 3_600_000);
       throw new ApiUnavailableError('disabled');
     }
 
@@ -120,6 +123,9 @@ async function fetchRaw<T>(endpoint: string): Promise<T> {
         `[RETRY_AFTER] football-data | endpoint=${endpoint}` +
         ` | waitMs=${waitMs} | attempt=${attempt}/${MAX_ATTEMPTS}`,
       );
+      // Activate rate-safe mode: suspend all background refresh for the
+      // Retry-After window so the orchestrator stops hammering the API.
+      enableRateSafeMode('rate_limit', waitMs);
       recordRetry();
       if (attempt < MAX_ATTEMPTS) { await sleep(waitMs); continue; }
       throw new ApiUnavailableError('rate_limit');

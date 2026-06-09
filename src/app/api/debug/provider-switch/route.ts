@@ -27,6 +27,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { providerManager }           from '@/lib/providers/manager';
+import { getRateSafeState }          from '@/lib/rate-safe';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,6 +59,8 @@ export async function GET(req: NextRequest) {
     ? 'api-football is active as automatic failover. Set ENABLE_API_FOOTBALL=false to remove it from the normal request path.'
     : 'api-football is DISABLED (ENABLE_API_FOOTBALL=false). Only use FORCE_PROVIDER=api-football for emergency manual override.';
 
+  const rsState = getRateSafeState();
+
   return NextResponse.json({
     primary:            'football-data',
     emergencyProvider:  'api-football',
@@ -66,6 +69,15 @@ export async function GET(req: NextRequest) {
     note,
     footballDataConfigured: snapshot.footballDataConfigured,
     apiFootballConfigured:  snapshot.apiFootballConfigured,
+    rateSafeMode: rsState
+      ? {
+          active:       true,
+          reason:       rsState.reason,
+          enabledAt:    new Date(rsState.enabledAt).toISOString(),
+          expiresAt:    new Date(rsState.expiresAt).toISOString(),
+          expiresInSec: Math.max(0, Math.round((rsState.expiresAt - Date.now()) / 1000)),
+        }
+      : { active: false },
     generatedAt: new Date().toISOString(),
   });
 }
