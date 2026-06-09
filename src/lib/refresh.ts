@@ -186,6 +186,55 @@ export async function refreshEndpoint(
 }
 
 // ---------------------------------------------------------------------------
+// Refresh live matches — writes to the canonical live-cache KV key
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetches live match data via ProviderManager and writes directly to the
+ * canonical KV key used by live-cache.ts (goalradar:live:matches).
+ *
+ * Bypasses live-cache.ts's L1/freshness checks on purpose — cron jobs must
+ * always push fresh data regardless of whether the in-process cache is warm.
+ *
+ * Also updates the disaster-recovery key (7-day TTL) on every successful fetch.
+ */
+export async function refreshLiveMatches(): Promise<RefreshResult> {
+  const start    = Date.now();
+  const endpoint = '/matches?status=IN_PLAY,PAUSED';
+
+  let result: Awaited<ReturnType<typeof providerManager.getLiveMatches>>;
+  try {
+    result = await providerManager.getLiveMatches();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[Refresh] FAIL  ${endpoint}: ${msg}${err instanceof ApiUnavailableError ? ' [both providers failed]' : ''}`);
+    return { endpoint, status: 'error', fetchedAt: new Date(start).toISOString(), freshUntil: '', error: msg };
+  }
+
+  const now   = Date.now();
+  const entry = { matches: result.matches, fetchedAt: now };
+
+  if (KV_ENABLED) {
+    // Mirror the exact KVEntry format and TTLs used by live-cache.ts
+    kv.set('goalradar:live:matches', entry, { ex: 30 }).catch((err) =>
+      console.error('[Refresh] KV live write failed:', err instanceof Error ? err.message : String(err)),
+    );
+    // Disaster-recovery key: 7-day TTL, fire-and-forget
+    kv.set('goalradar:dr:live:matches', entry, { ex: 7 * 24 * 3_600 }).catch(() => {});
+  }
+
+  const elapsed = Date.now() - start;
+  console.log(`[Refresh] OK    ${endpoint} | live | count=${result.matches.length} | ${elapsed}ms`);
+
+  return {
+    endpoint,
+    status:     'ok',
+    fetchedAt:  new Date(now).toISOString(),
+    freshUntil: new Date(now + 30_000).toISOString(),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Auth helpers — shared by all cron / refresh route handlers
 // ---------------------------------------------------------------------------
 

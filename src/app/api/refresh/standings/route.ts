@@ -1,58 +1,31 @@
 /**
  * GET /api/refresh/standings
  *
- * Proactively refreshes all competition standings in Vercel KV.
- * Called by Vercel Cron every 30 minutes so users always read from cache.
+ * @deprecated Merged into /api/cron/orchestrator (RATE-3).
  *
- * Endpoints refreshed:
- *   - WC standings (all 12 group tables)
- *   - PL, PD, BL1, SA, FL1, CL standings
+ * This endpoint is kept as a tombstone so existing external scheduler configs
+ * continue to return HTTP 200 and don't trigger alerts. The cron orchestrator
+ * now handles all standings refresh tasks sequentially.
  *
- * Cron schedule: "* /30 * * * *"  (every 30 minutes)
+ * Update your scheduler to call /api/cron/orchestrator instead.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { refreshEndpoint, isAuthorizedCronRequest, type RefreshResult } from '@/lib/refresh';
-import { COMPETITIONS } from '@/lib/types';
+import { isAuthorizedCronRequest } from '@/lib/refresh';
 
-// Must match SWR.STANDINGS in kv-cache.ts.
-const STANDINGS_FRESH = 1800;  // 30 min
-const STANDINGS_STALE = 3600;  // 60 min (Redis TTL)
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   if (!isAuthorizedCronRequest(req.headers.get('authorization'))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const started = Date.now();
-  console.log('[Cron] standings refresh started');
-
-  // Refresh standings sequentially — prevents concurrent requests that would
-  // burst through the rate limiter and trip the 10 req/min cap.
-  const results: RefreshResult[] = [];
-  for (const { code } of COMPETITIONS) {
-    console.log(`[QUEUE] standings | refreshing /competitions/${code}/standings`);
-    results.push(
-      await refreshEndpoint(
-        `/competitions/${code}/standings`,
-        STANDINGS_FRESH,
-        STANDINGS_STALE,
-      ),
-    );
-  }
-
-  const ok      = results.filter((r) => r.status === 'ok').length;
-  const failed  = results.filter((r) => r.status === 'error').length;
-  const elapsed = Date.now() - started;
-
-  console.log(`[Cron] standings done | ok=${ok} failed=${failed} | ${elapsed}ms`);
+  console.warn('[Cron] standings is deprecated — use /api/cron/orchestrator');
 
   return NextResponse.json({
-    job:      'standings',
-    ok,
-    failed,
-    elapsed:  `${elapsed}ms`,
-    results,
-    timestamp: new Date().toISOString(),
+    deprecated: true,
+    message:    'This endpoint has been merged into /api/cron/orchestrator (RATE-3). Please update your scheduler.',
+    redirect:   '/api/cron/orchestrator',
+    timestamp:  new Date().toISOString(),
   });
 }
