@@ -51,12 +51,33 @@ const FD_KEY_CONFIGURED = typeof process.env.FOOTBALL_API_KEY === 'string' &&
 const AF_KEY_CONFIGURED = typeof process.env.API_FOOTBALL_KEY === 'string' &&
                           process.env.API_FOOTBALL_KEY.trim() !== '';
 
+/**
+ * Feature flag: ENABLE_API_FOOTBALL
+ *
+ * When set to "false", api-football is removed from the normal request path:
+ *   - No automatic failover from football-data to api-football
+ *   - No rate-limiter slot consumed for api-football
+ *   - KV disaster-recovery key is the sole fallback before static WC data
+ *
+ * Set ENABLE_API_FOOTBALL=false to reduce operational complexity and keep
+ * api-football as an emergency-only provider.
+ *
+ * Default: "true" (enabled) — omitting the variable keeps existing behaviour.
+ */
+const API_FOOTBALL_ENABLED = process.env.ENABLE_API_FOOTBALL !== 'false';
+
 // Startup log — emitted once when the module is first imported.
 console.log(
   `[PROVIDER] football-data: ${FD_KEY_CONFIGURED ? 'enabled (FOOTBALL_API_KEY set)' : 'DISABLED — FOOTBALL_API_KEY missing'}`,
 );
 console.log(
-  `[PROVIDER] api-football: ${AF_KEY_CONFIGURED ? 'enabled (API_FOOTBALL_KEY set)' : 'disabled — API_FOOTBALL_KEY not set (failover unavailable)'}`,
+  `[PROVIDER] api-football: ${
+    !API_FOOTBALL_ENABLED
+      ? 'DISABLED — ENABLE_API_FOOTBALL=false (emergency-only)'
+      : AF_KEY_CONFIGURED
+        ? 'enabled (API_FOOTBALL_KEY set)'
+        : 'disabled — API_FOOTBALL_KEY not set (failover unavailable)'
+  }`,
 );
 
 // ---------------------------------------------------------------------------
@@ -196,7 +217,18 @@ async function withFailover<T>(
       throw primaryErr;
     }
 
-    // ── 2. Log failover ───────────────────────────────────────────────────
+    // ── 2. Check feature flag before attempting failover ─────────────────
+    if (!API_FOOTBALL_ENABLED) {
+      const reason = primaryErr.reason ?? 'unknown';
+      console.warn(
+        `[PROVIDER] api-football disabled (ENABLE_API_FOOTBALL=false)` +
+        ` | skipping failover | reason=${reason} | endpoint=${endpoint}` +
+        ` | KV disaster-recovery key is next fallback`,
+      );
+      throw primaryErr; // propagate to withKVCache → disaster-recovery path
+    }
+
+    // ── 3. Log failover ───────────────────────────────────────────────────
     const reason = primaryErr.reason ?? 'unknown';
     const event: FailoverEvent = {
       fromProvider: 'football-data',
@@ -353,6 +385,7 @@ export const providerManager = {
       secondaryHealthy,
       footballDataConfigured: FD_KEY_CONFIGURED,
       apiFootballConfigured:  AF_KEY_CONFIGURED,
+      apiFootballEnabled:     API_FOOTBALL_ENABLED,
       primary:                buildHealth('football-data'),
       secondary:              buildHealth('api-football'),
       lastFailover:           failoverLog[failoverLog.length - 1]  ?? null,

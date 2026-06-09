@@ -123,6 +123,8 @@ export interface ProvidersDebugResponse {
   footballDataConfigured: boolean;
   /** true when API_FOOTBALL_KEY env var is set and non-empty. */
   apiFootballConfigured:  boolean;
+  /** true when ENABLE_API_FOOTBALL !== 'false' (default: true). */
+  apiFootballEnabled:     boolean;
   primary:                ProviderHealth;
   secondary:              ProviderHealth;
   lastFailover:           FailoverEvent | null;

@@ -9,13 +9,15 @@
  * production.
  *
  * Sources:
- *   kv           — Vercel KV (L2 SWR cache), either FRESH or STALE hit.
- *   snapshot     — match-snapshot KV composite (goalradar:match:{id}).
+ *   kv            — Vercel KV (L2 SWR cache), either FRESH or STALE hit.
+ *   snapshot      — match-snapshot KV composite (goalradar:match:{id}).
  *   football-data — football-data.org provider (L3, primary).
  *   api-football  — api-football provider (L3, secondary / failover).
+ *   static        — bundled static WC fixtures dataset (last-resort fallback
+ *                   when provider + KV + DR are all unavailable).
  */
 
-export type DataSource = 'kv' | 'snapshot' | 'football-data' | 'api-football';
+export type DataSource = 'kv' | 'snapshot' | 'football-data' | 'api-football' | 'static';
 
 // ---------------------------------------------------------------------------
 // In-process counters (module-level singletons)
@@ -25,6 +27,7 @@ let _kvHits           = 0;
 let _snapshotHits     = 0;
 let _footballDataHits = 0;
 let _apiFootballHits  = 0;
+let _staticHits       = 0;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -38,6 +41,7 @@ let _apiFootballHits  = 0;
  *   [DATA_SOURCE] snapshot
  *   [DATA_SOURCE] football-data
  *   [DATA_SOURCE] api-football
+ *   [DATA_SOURCE] static
  */
 export function recordDataSource(source: DataSource): void {
   switch (source) {
@@ -45,6 +49,7 @@ export function recordDataSource(source: DataSource): void {
     case 'snapshot':      _snapshotHits++;     break;
     case 'football-data': _footballDataHits++; break;
     case 'api-football':  _apiFootballHits++;  break;
+    case 'static':        _staticHits++;       break;
   }
   console.log(`[DATA_SOURCE] ${source}`);
 }
@@ -56,7 +61,7 @@ export function recordDataSource(source: DataSource): void {
 export function getDataSourceStats() {
   const kvTotal       = _kvHits + _snapshotHits;
   const providerTotal = _footballDataHits + _apiFootballHits;
-  const total         = kvTotal + providerTotal;
+  const total         = kvTotal + providerTotal + _staticHits;
   const kvRatio       = total > 0 ? Math.round((kvTotal / total) * 100) : 0;
 
   return {
@@ -64,6 +69,7 @@ export function getDataSourceStats() {
     snapshotHits:     _snapshotHits,
     footballDataHits: _footballDataHits,
     apiFootballHits:  _apiFootballHits,
+    staticHits:       _staticHits,
     // Derived
     kvTotal,
     providerTotal,
@@ -80,4 +86,5 @@ export function _resetDataSourceStats(): void {
   _snapshotHits     = 0;
   _footballDataHits = 0;
   _apiFootballHits  = 0;
+  _staticHits       = 0;
 }

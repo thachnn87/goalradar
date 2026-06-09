@@ -20,7 +20,7 @@ import WCRelatedLinks from '@/components/WCRelatedLinks';
 import AdSlot from '@/components/AdSlot';
 import NewsletterSignup from '@/components/NewsletterSignup';
 import { WC_ALL_TEAMS } from '@/lib/wc-all-teams';
-import { isStaticMode, getStaticUpcomingMatches } from '@/data/worldcup/loader';
+import { getStaticUpcomingMatches } from '@/data/worldcup/loader';
 import PushNotificationButton from '@/components/PushNotificationButton';
 
 export const revalidate = 30;
@@ -275,24 +275,19 @@ function EmptyState({ message, sub }: { message: string; sub?: string }) {
 export default async function WorldCup2026Page() {
   const today = todayUTC();
 
-  const USE_STATIC = isStaticMode();
-
   const [liveResult, upcomingResult, recentResult, standingsResult, knockoutResult] =
     await Promise.allSettled([
       getWCLiveMatches(),                       // always API — live matches only
       // Always try the API first so real match IDs are used (required for clickable MatchCards).
-      // Fall back to synthetic static fixtures only when the API is unavailable; static fixtures
-      // carry negative IDs which intentionally render as non-linkable display tiles.
-      getUpcomingMatches('WC').catch(() =>
-        USE_STATIC
-          ? { matches: getStaticUpcomingMatches(today), resultSet: { count: 72 } }
-          : { matches: [] as Match[], resultSet: { count: 0 } },
-      ),
+      // Fall back to bundled static fixtures when the API + KV + DR are all unavailable.
+      // Static fixtures carry negative IDs which intentionally render as non-linkable display tiles.
+      getUpcomingMatches('WC').catch(() => ({
+        matches:   getStaticUpcomingMatches(today),
+        resultSet: { count: 72 },
+      })),
       getRecentMatches('WC'),                   // always API — results only
       getStandings('WC'),                       // always API — standings only
-      getWCKnockoutMatches().catch(() =>
-        ({ matches: [] as Match[] }),
-      ),
+      getWCKnockoutMatches(),                   // static fallback now wired inside getWCKnockoutMatches
     ]);
 
   // 1. Live matches

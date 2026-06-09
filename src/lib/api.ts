@@ -4,6 +4,8 @@ import { withKVCache, SWR } from './kv-cache';
 import { recordAuditCall } from './api-audit';
 import { getCachedLiveMatches, getCachedWCLiveMatches } from './live-cache';
 import { providerManager } from './providers/manager';
+import { recordDataSource } from './data-source-tracker';
+import { getStaticGroupMatches } from '@/data/worldcup/loader';
 
 const BASE_URL = 'https://api.football-data.org/v4';
 
@@ -248,6 +250,7 @@ export function getWCResults(): Promise<{ matches: Match[] }> {
 
 export function getWCKnockoutMatches(): Promise<{ matches: Match[] }> {
   // All 104 WC matches — routes through providerManager for failover.
+  // Static WC fixtures are the final fallback when provider + KV + DR all fail.
   return withCache(
     '/competitions/WC/matches',
     TTL.WC,
@@ -256,7 +259,11 @@ export function getWCKnockoutMatches(): Promise<{ matches: Match[] }> {
       SWR.WC,
       () => providerManager.getAllMatches('WC'),
     ),
-  );
+  ).catch(() => {
+    console.warn('[DATA_SOURCE] static | getWCKnockoutMatches fallback to bundled fixtures');
+    recordDataSource('static');
+    return { matches: getStaticGroupMatches() };
+  });
 }
 
 // ── KV-cached: Standings (1 hour) ────────────────────────────────────────────
