@@ -85,10 +85,12 @@ interface KVEntry<T> {
 // Hit/miss counters (per-process, resets on cold start)
 // ---------------------------------------------------------------------------
 
-let _hits      = 0;
-let _stale     = 0;
-let _misses    = 0;
-let _disasters = 0;
+let _hits          = 0;
+let _stale         = 0;
+let _misses        = 0;
+let _disasters     = 0;
+/** Requests served from KV (fresh OR stale) that never touched the provider queue. */
+let _queueBypassed = 0;
 
 function logRatio() {
   const total = _hits + _stale + _misses;
@@ -133,9 +135,10 @@ export async function withKVCache<T>(
   // ── 2. FRESH hit ────────────────────────────────────────────────────────
   if (entry && now < entry.freshUntil) {
     _hits++;
+    _queueBypassed++;
     const remaining = Math.ceil((entry.freshUntil - now) / 1000);
     console.log(
-      `[KV] HIT   ${key} | fresh ${remaining}s more | ratio ${logRatio()} (${_hits}+${_stale}/${_hits + _stale + _misses})`,
+      `[SWR] cache-hit ${key} | fresh ${remaining}s more | ratio ${logRatio()} (${_hits}+${_stale}/${_hits + _stale + _misses})`,
     );
     recordDataSource('kv');
     return entry.data;
@@ -144,8 +147,9 @@ export async function withKVCache<T>(
   // ── 3. STALE hit — serve immediately, revalidate in background ──────────
   if (entry) {
     _stale++;
+    _queueBypassed++;
     const staleAge = Math.ceil((now - entry.freshUntil) / 1000);
-    console.log(`[STALE] SERVED ${key} | ${staleAge}s past fresh | bg-revalidate triggered | ratio ${logRatio()}`);
+    console.log(`[SWR] stale-hit ${key} | ${staleAge}s past fresh | provider queue bypassed | ratio ${logRatio()}`);
     recordDataSource('kv');
     revalidateInBackground(kvKey, disasterKey, key, swr, fetcher);
     return entry.data;
@@ -200,6 +204,7 @@ function revalidateInBackground<T>(
   swr:         { fresh: number; stale: number },
   fetcher:     () => Promise<T>,
 ): void {
+  console.log(`[SWR] refresh-start ${logKey}`);
   Promise.resolve()
     .then(() => fetcher())
     .then((data) =>
@@ -208,11 +213,10 @@ function revalidateInBackground<T>(
         storeDisasterKey<T>(disasterKey, logKey, data),
       ]),
     )
-    .then(() => console.log(`[KV] REVALIDATED ${logKey}`))
+    .then(() => console.log(`[SWR] refresh-complete ${logKey}`))
     .catch((err) =>
       console.error(
-        `[KV] BG-REVALIDATE failed on ${logKey}:`,
-        err instanceof Error ? err.message : String(err),
+        `[SWR] refresh-failed ${logKey}: ${err instanceof Error ? err.message : String(err)}`,
       ),
     );
 }
@@ -257,14 +261,18 @@ export function getKVCacheStats() {
   const total     = _hits + _stale + _misses;
   const effective = _hits + _stale;
   return {
-    hits:           _hits,
-    stale:          _stale,
-    misses:         _misses,
-    disasters:      _disasters,
+    hits:              _hits,
+    stale:             _stale,
+    misses:            _misses,
+    disasters:         _disasters,
     total,
-    effectiveHits:  effective,
-    hitRatio:       total > 0 ? Math.round((effective / total) * 100) : 0,
-    kvEnabled:      KV_ENABLED,
+    effectiveHits:     effective,
+    hitRatio:          total > 0 ? Math.round((effective / total) * 100) : 0,
+    kvEnabled:         KV_ENABLED,
+    /** Count of requests served from KV (fresh or stale) that never entered the provider queue. */
+    queueBypassed:     _queueBypassed,
+    /** Requests served from stale KV entry (user saw no wait; bg-refresh triggered). */
+    staleServed:       _stale,
   };
 }
 

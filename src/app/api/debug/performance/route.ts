@@ -80,6 +80,9 @@ export async function GET(req: NextRequest) {
     rateLimiter: {
       queueDepth:          rlSnapshot.queuedRequests,
       totalWaits:          rlSnapshot.totalWaits,
+      totalWaitMs:         rlSnapshot.totalWaitMs,
+      /** Average ms each caller spent waiting in the rate-limiter queue. */
+      avgProviderWaitMs:   rlSnapshot.avgWaitMs,
       requestsLastMinute:  rlSnapshot.requestsLastMinute,
       intervalMs:          rlSnapshot.intervalMs,
       lastRequestAt:       rlSnapshot.lastRequestAt,
@@ -93,6 +96,12 @@ export async function GET(req: NextRequest) {
       disasters:        kvStats.disasters,
       hitRatioPercent:  kvStats.hitRatio,
       kvEnabled:        kvStats.kvEnabled,
+      /** Requests that were served from KV (fresh or stale) and never entered the provider queue. */
+      queueBypassedCount:    kvStats.queueBypassed,
+      /** Requests served from a stale KV entry; user saw no wait, bg-refresh was fired. */
+      staleServedCount:      kvStats.staleServed,
+      /** Alias for queueBypassedCount — provider calls that were avoided entirely. */
+      providerCallsAvoided:  kvStats.queueBypassed,
     },
 
     /** Cross-tier data source attribution (from RATE-4 tracker). */
@@ -101,6 +110,7 @@ export async function GET(req: NextRequest) {
       snapshotHits:       dsStats.snapshotHits,
       footballDataHits:   dsStats.footballDataHits,
       apiFootballHits:    dsStats.apiFootballHits,
+      staticHits:         dsStats.staticHits,
       kvTotal:            dsStats.kvTotal,
       providerTotal:      dsStats.providerTotal,
       kvHitRatioPercent:  dsStats.kvHitRatioPercent,

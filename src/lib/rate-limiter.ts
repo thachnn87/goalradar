@@ -41,14 +41,16 @@ class RateLimiter {
   private readonly intervalMs: number;
   /** Epoch ms of the last dispatched request. 0 = never dispatched. */
   private lastDispatchAt = 0;
-  /** Pending acquire() resolvers, in arrival order. */
-  private readonly queue: Array<() => void> = [];
+  /** Pending acquire() resolvers with enqueue timestamp (for wait-time tracking). */
+  private readonly queue: Array<{ resolve: () => void; enqueuedAt: number }> = [];
   /** Whether the drain loop is currently running. */
   private draining = false;
   /** Rolling window of dispatch timestamps for RPM telemetry. */
   private readonly recentMs: number[] = [];
   /** Total number of acquire() calls that had to wait in the queue. */
   private waitCount = 0;
+  /** Cumulative ms spent waiting in the queue across all waiters. */
+  private totalWaitMs = 0;
 
   constructor(intervalMs: number) {
     this.intervalMs = intervalMs;
@@ -73,7 +75,7 @@ class RateLimiter {
         );
         this.waitCount++;
       }
-      this.queue.push(resolve);
+      this.queue.push({ resolve, enqueuedAt: Date.now() });
       if (!this.draining) void this.drain();
     });
   }
@@ -88,6 +90,8 @@ class RateLimiter {
     requestsLastMinute: number;
     intervalMs:         number;
     totalWaits:         number;
+    totalWaitMs:        number;
+    avgWaitMs:          number;
   } {
     const now    = Date.now();
     const cutoff = now - 60_000;
@@ -100,6 +104,8 @@ class RateLimiter {
       requestsLastMinute: rpm,
       intervalMs:         this.intervalMs,
       totalWaits:         this.waitCount,
+      totalWaitMs:        this.totalWaitMs,
+      avgWaitMs:          this.waitCount > 0 ? Math.round(this.totalWaitMs / this.waitCount) : 0,
     };
   }
 
@@ -120,10 +126,14 @@ class RateLimiter {
         await sleep(waitMs);
       }
 
-      const resolve = this.queue.shift();
-      if (!resolve) continue; // defensive; shouldn't happen
+      const item = this.queue.shift();
+      if (!item) continue; // defensive; shouldn't happen
 
       this.lastDispatchAt = Date.now();
+      // Record how long this caller waited from enqueue to dispatch.
+      const callerWaitMs = this.lastDispatchAt - item.enqueuedAt;
+      if (callerWaitMs > 0) this.totalWaitMs += callerWaitMs;
+      const resolve = item.resolve;
 
       // Update rolling window (prune entries older than 60 s)
       const cutoff = this.lastDispatchAt - 60_000;
