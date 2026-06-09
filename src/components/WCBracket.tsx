@@ -76,18 +76,24 @@ function BracketMatchCard({ match, isFinal = false }: { match: Match; isFinal?: 
   const aWins = score.winner === 'AWAY_TEAM';
   const isTbd = !match.homeTeam?.name && !match.awayTeam?.name;
 
-  return (
-    <Link
-      href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}
-      style={{ width: CARD_W, height: CARD_H }}
-      className={`
-        flex flex-col justify-between rounded-lg border transition-all overflow-hidden
-        ${isFinal
-          ? 'bg-gradient-to-br from-yellow-950/60 to-gray-900 border-yellow-700/40 hover:border-yellow-600/60'
-          : 'bg-gray-900 border-gray-700 hover:border-gray-500'}
-        ${isLive ? 'border-red-500/60' : ''}
-      `}
-    >
+  // Only link when the match has a real API id — synthetic / static fixtures
+  // (id ≤ 0) must not produce clickable cards that silently navigate elsewhere.
+  const isLinkable = Number.isFinite(match.id) && match.id > 0;
+
+  const cardClassName = `
+    flex flex-col justify-between rounded-lg border overflow-hidden
+    ${isLinkable ? 'transition-all' : 'cursor-default'}
+    ${isFinal
+      ? `bg-gradient-to-br from-yellow-950/60 to-gray-900 border-yellow-700/40 ${isLinkable ? 'hover:border-yellow-600/60' : ''}`
+      : `bg-gray-900 border-gray-700 ${isLinkable ? 'hover:border-gray-500' : ''}`}
+    ${isLive ? 'border-red-500/60' : ''}
+  `;
+
+  const cardStyle = { width: CARD_W, height: CARD_H };
+
+  // Shared inner content — rendered inside either <Link> or <div>
+  const inner = (
+    <>
       {/* Home team */}
       <div className={`flex items-center justify-between px-2.5 py-1.5 ${hWins ? 'bg-gray-800/60' : ''}`}>
         <div className="flex items-center gap-1.5 min-w-0">
@@ -132,7 +138,25 @@ function BracketMatchCard({ match, isFinal = false }: { match: Match; isFinal?: 
           {showScore ? (score.fullTime.away ?? 0) : '–'}
         </span>
       </div>
-    </Link>
+    </>
+  );
+
+  if (isLinkable) {
+    return (
+      <Link
+        href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}
+        style={cardStyle}
+        className={cardClassName}
+      >
+        {inner}
+      </Link>
+    );
+  }
+
+  return (
+    <div style={cardStyle} className={cardClassName}>
+      {inner}
+    </div>
   );
 }
 
