@@ -36,6 +36,15 @@ export interface PrewarmRecord {
   total:       number;
   results:     PrewarmTaskResult[];
   triggeredBy: 'header' | 'queryparam' | 'unknown';
+  // PERF-3 enrichment — populated when worldcup seeding runs
+  seededMatches?:    number;
+  seededStandings?:  boolean;
+  seededGroups?:     boolean;
+  seededResults?:    boolean;
+  coveragePercent?:  number;
+  seedErrors?:       string[];
+  seedDurationMs?:   number;
+  priorityMatches?:  number;
 }
 
 /** KV key where the last prewarm run result is stored. TTL: 7 days. */

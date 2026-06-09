@@ -232,5 +232,17 @@ export async function GET(req: NextRequest) {
       total:   cacheEntries.length,
     },
     cacheEntries,
+    // PERF-3 enrichment — populated after prewarmWorldCup() runs in orchestrator
+    seed: lastRun ? {
+      seededMatches:   lastRun.seededMatches   ?? null,
+      seededStandings: lastRun.seededStandings ?? null,
+      seededGroups:    lastRun.seededGroups    ?? null,
+      seededResults:   lastRun.seededResults   ?? null,
+      coveragePercent: lastRun.coveragePercent ?? null,
+      seedErrors:      lastRun.seedErrors      ?? [],
+      seedDurationMs:  lastRun.seedDurationMs  ?? null,
+      priorityMatches: lastRun.priorityMatches ?? null,
+      durationMs:      lastRun.elapsedMs,
+    } : null,
   });
 }

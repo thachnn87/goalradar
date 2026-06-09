@@ -23,6 +23,7 @@ import {
   type PrewarmTaskResult,
   type PrewarmRecord,
 } from '@/lib/refresh';
+import { prewarmWorldCup, type WorldCupPrewarmResult } from '@/lib/prewarm/worldcup';
 import { COMPETITIONS } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -149,27 +150,69 @@ export async function GET(req: NextRequest) {
   const failed  = refreshResults.filter((r) => r.status === 'error').length;
   const elapsed = Date.now() - started;
 
-  console.log(`[Cron] orchestrator done | ok=${ok} failed=${failed} total=${tasks.length} | ${elapsed}ms`);
+  console.log(`[Cron] orchestrator tasks done | ok=${ok} failed=${failed} total=${tasks.length} | ${elapsed}ms`);
+
+  // ── PERF-3: Seed all 104 WC match KV entries from bulk data ──────────────
+  // Runs after the standard tasks so it can reuse the KV-cached responses.
+  let seedResult: WorldCupPrewarmResult | null = null;
+  try {
+    console.log('[Cron] orchestrator: starting WC match seeding (PERF-3)');
+    seedResult = await prewarmWorldCup();
+    console.log(
+      `[Cron] orchestrator: WC seeding done | ` +
+      `seededDetail=${seedResult.seededMatchDetail} ` +
+      `seededSnap=${seedResult.seededSnapshots} ` +
+      `coverage=${seedResult.coveragePercent}% | ${seedResult.durationMs}ms`,
+    );
+  } catch (err) {
+    console.error('[Cron] orchestrator: WC seeding threw', err instanceof Error ? err.message : String(err));
+  }
+
+  const totalElapsed = Date.now() - started;
+  console.log(`[Cron] orchestrator done | total=${totalElapsed}ms`);
 
   // Persist run record — backward-compatible with /api/debug/prewarm-status
-  // which reads PREWARM_RECORD_KEY from KV.
+  // which reads PREWARM_RECORD_KEY from KV.  PERF-3 enrichment fields are
+  // optional so existing callers that only read the base fields continue to work.
   savePrewarmRecord({
     timestamp:   new Date().toISOString(),
-    elapsedMs:   elapsed,
+    elapsedMs:   totalElapsed,
     ok,
     failed,
     total:       tasks.length,
     results:     taskResults,
     triggeredBy,
+    // PERF-3 seed stats
+    seededMatches:   seedResult?.seededMatchDetail ?? 0,
+    seededStandings: ok > 0, // standings tasks ran as part of the main batch
+    seededGroups:    ok > 0,
+    seededResults:   ok > 0,
+    coveragePercent: seedResult?.coveragePercent ?? 0,
+    seedErrors:      seedResult?.errors ?? [],
+    seedDurationMs:  seedResult?.durationMs ?? 0,
+    priorityMatches: seedResult?.priorityMatches ?? 0,
   });
 
   return NextResponse.json({
-    job:       'orchestrator',
+    job:     'orchestrator',
     ok,
     failed,
-    total:     tasks.length,
-    elapsed:   `${elapsed}ms`,
-    results:   refreshResults,
+    total:   tasks.length,
+    elapsed: `${elapsed}ms`,
+    results: refreshResults,
+    // PERF-3
+    seed: seedResult ? {
+      seededMatchDetail: seedResult.seededMatchDetail,
+      seededSnapshots:   seedResult.seededSnapshots,
+      skippedFresh:      seedResult.skippedFresh,
+      totalWCMatches:    seedResult.totalWCMatches,
+      coveragePercent:   seedResult.coveragePercent,
+      priorityMatches:   seedResult.priorityMatches,
+      priorityRefreshed: seedResult.priorityRefreshed,
+      fetchCalls:        seedResult.fetchCalls,
+      durationMs:        seedResult.durationMs,
+      errors:            seedResult.errors,
+    } : null,
     timestamp: new Date().toISOString(),
   });
 }
