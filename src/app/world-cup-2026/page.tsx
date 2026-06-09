@@ -280,14 +280,19 @@ export default async function WorldCup2026Page() {
   const [liveResult, upcomingResult, recentResult, standingsResult, knockoutResult] =
     await Promise.allSettled([
       getWCLiveMatches(),                       // always API — live matches only
-      USE_STATIC
-        ? Promise.resolve({ matches: getStaticUpcomingMatches(today), resultSet: { count: 72 } })
-        : getUpcomingMatches('WC'),
+      // Always try the API first so real match IDs are used (required for clickable MatchCards).
+      // Fall back to synthetic static fixtures only when the API is unavailable; static fixtures
+      // carry negative IDs which intentionally render as non-linkable display tiles.
+      getUpcomingMatches('WC').catch(() =>
+        USE_STATIC
+          ? { matches: getStaticUpcomingMatches(today), resultSet: { count: 72 } }
+          : { matches: [] as Match[], resultSet: { count: 0 } },
+      ),
       getRecentMatches('WC'),                   // always API — results only
       getStandings('WC'),                       // always API — standings only
-      USE_STATIC
-        ? Promise.resolve({ matches: [] as Match[] })  // bracket rendered statically below
-        : getWCKnockoutMatches(),
+      getWCKnockoutMatches().catch(() =>
+        ({ matches: [] as Match[] }),
+      ),
     ]);
 
   // 1. Live matches
