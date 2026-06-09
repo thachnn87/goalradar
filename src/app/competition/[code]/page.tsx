@@ -14,11 +14,6 @@ export const revalidate = 300;
 
 type Params = { params: Promise<{ code: string }> };
 
-// Pre-render all known competition pages at build time
-export function generateStaticParams() {
-  return COMPETITIONS.map((c) => ({ code: c.code }));
-}
-
 // ---------------------------------------------------------------------------
 // Metadata
 // ---------------------------------------------------------------------------

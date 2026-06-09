@@ -26,6 +26,10 @@ import { WC_VENUE_SLUGS } from '@/lib/wc-venues';
 import { WC_ALL_TEAM_SLUGS } from '@/lib/wc-all-teams';
 
 export const revalidate = 3600;
+// Never pre-generate sitemaps at build time — the API is unavailable during
+// `next build` and the timeout (60s) is shorter than the full fetch chain.
+// Sitemaps are generated on first request and cached by ISR (revalidate=3600).
+export const dynamic = 'force-dynamic';
 
 const BASE_URL = 'https://goalradar.org';
 
