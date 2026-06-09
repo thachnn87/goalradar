@@ -28,6 +28,7 @@
  */
 
 import { kv } from '@vercel/kv';
+import { recordDataSource } from './data-source-tracker';
 
 // ---------------------------------------------------------------------------
 // Availability guard
@@ -136,6 +137,7 @@ export async function withKVCache<T>(
     console.log(
       `[KV] HIT   ${key} | fresh ${remaining}s more | ratio ${logRatio()} (${_hits}+${_stale}/${_hits + _stale + _misses})`,
     );
+    recordDataSource('kv');
     return entry.data;
   }
 
@@ -144,6 +146,7 @@ export async function withKVCache<T>(
     _stale++;
     const staleAge = Math.ceil((now - entry.freshUntil) / 1000);
     console.log(`[STALE] SERVED ${key} | ${staleAge}s past fresh | bg-revalidate triggered | ratio ${logRatio()}`);
+    recordDataSource('kv');
     revalidateInBackground(kvKey, disasterKey, key, swr, fetcher);
     return entry.data;
   }

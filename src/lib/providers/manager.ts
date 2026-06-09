@@ -39,6 +39,7 @@ import type {
   ProviderHealth,
   ProvidersDebugResponse,
 } from './types';
+import { recordDataSource } from '../data-source-tracker';
 
 // ---------------------------------------------------------------------------
 // Config checks (read once at module load time)
@@ -160,6 +161,7 @@ async function withFailover<T>(
   if (FORCE_PROVIDER === 'api-football') {
     stats['api-football'].requestCount++;
     console.log(`[PROVIDER_CALL] provider=api-football | endpoint=${endpoint} | forced`);
+    recordDataSource('api-football');
     try {
       const result = await secondaryFn();
       recordSuccess('api-football', endpoint);
@@ -173,6 +175,7 @@ async function withFailover<T>(
   // ── 1. Try primary ────────────────────────────────────────────────────────
   stats['football-data'].requestCount++;
   console.log(`[PROVIDER_CALL] provider=football-data | endpoint=${endpoint}`);
+  recordDataSource('football-data');
   try {
     const result = await primaryFn();
     recordSuccess('football-data', endpoint);
@@ -211,6 +214,7 @@ async function withFailover<T>(
     // ── 3. Try secondary ──────────────────────────────────────────────────
     stats['api-football'].requestCount++;
     console.log(`[PROVIDER_CALL] provider=api-football | endpoint=${endpoint}`);
+    recordDataSource('api-football');
     try {
       const result = await secondaryFn();
       recordSuccess('api-football', endpoint);

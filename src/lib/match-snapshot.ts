@@ -43,6 +43,7 @@
 
 import { cache } from 'react';
 import { kv }   from '@vercel/kv';
+import { recordDataSource } from './data-source-tracker';
 
 import {
   getMatchDetail,
@@ -215,6 +216,7 @@ async function readKVSnapshot(matchId: string): Promise<MatchSnapshot | null> {
 
     const ageSeconds = Math.ceil((Date.now() - raw.generatedAt) / 1000);
     console.log(`[Snapshot] HIT  match:${matchId} | age ${ageSeconds}s | status=${raw.match.status}`);
+    recordDataSource('snapshot');
     return raw;
   } catch (err) {
     console.error(
@@ -262,6 +264,7 @@ async function readDRSnapshot(matchId: string): Promise<MatchSnapshot | null> {
     }
     const ageSeconds = Math.ceil((Date.now() - raw.generatedAt) / 1000);
     console.warn(`[DR] HIT  match:${matchId} | age ${ageSeconds}s | status=${raw.match.status}`);
+    recordDataSource('snapshot');
     return raw;
   } catch (err) {
     console.error(
