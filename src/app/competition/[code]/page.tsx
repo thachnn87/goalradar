@@ -28,7 +28,12 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
   const title       = `${comp.name} Standings, Fixtures & Results | GoalRadar`;
   const description = `Follow the ${comp.name} with live scores, results, upcoming fixtures and the full league table on GoalRadar.`;
-  const canonical   = `${BASE_URL}/competition/${normCode}`;
+  // SITEMAP-3: /competition/WC defers canonical authority to the WC hub page.
+  // This prevents a duplicate-content split between /competition/WC and
+  // /world-cup-2026 — the hub carries all WC signals at a single canonical URL.
+  const canonical   = normCode === 'WC'
+    ? `${BASE_URL}/world-cup-2026`
+    : `${BASE_URL}/competition/${normCode}`;
 
   return {
     title,

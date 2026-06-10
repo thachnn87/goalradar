@@ -5,13 +5,21 @@
  *   /sitemap/0.xml  — core & static pages
  *   /sitemap/1.xml  — WC flat-URL SEO pages
  *   /sitemap/2.xml  — WC hub pages (groups, teams, venues, watch-live, tv)
- *   /sitemap/3.xml  — competition & league pages
+ *   /sitemap/3.xml  — competition & league pages (non-WC only)
  *   /sitemap/4.xml  — match pages (recent + upcoming, dynamic)
+ *   /sitemap/5.xml  — team pages (built from standings, dynamic)
  *
  * Splitting by section keeps each child under 50 k URLs (Google's limit)
  * and lets Googlebot crawl high-priority WC pages on a separate budget.
  *
- * Revalidates every hour so match pages stay fresh without a full rebuild.
+ * Notes:
+ *   - `force-dynamic` prevents build-time generation (API unavailable at build).
+ *   - Sitemaps are server-rendered on demand; Vercel CDN edge caches the response.
+ *   - `revalidate` is intentionally removed: it is silently ignored when
+ *     `force-dynamic` is set.  CDN caching handles repeat-request efficiency.
+ *   - SITEMAP-3: removed /world-cup-2026/results (301 redirect) and all
+ *     query-parameter URLs (/schedule?competition=X, /standings?competition=X).
+ *     /competition/WC also removed — canonical authority is /world-cup-2026.
  */
 
 import { MetadataRoute } from 'next';
@@ -25,10 +33,11 @@ import { WC_TV_COUNTRY_SLUGS } from '@/lib/wc-tv-countries';
 import { WC_VENUE_SLUGS } from '@/lib/wc-venues';
 import { WC_ALL_TEAM_SLUGS } from '@/lib/wc-all-teams';
 
-export const revalidate = 3600;
 // Never pre-generate sitemaps at build time — the API is unavailable during
 // `next build` and the timeout (60s) is shorter than the full fetch chain.
-// Sitemaps are generated on first request and cached by ISR (revalidate=3600).
+// force-dynamic means the sitemap is server-rendered on demand; Vercel CDN
+// caches it at the edge.  `revalidate` would be silently ignored alongside
+// force-dynamic (they are mutually exclusive in Next.js 15), so it is omitted.
 export const dynamic = 'force-dynamic';
 
 const BASE_URL = 'https://goalradar.org';
@@ -258,14 +267,12 @@ function wcHubSitemap(): MetadataRoute.Sitemap {
       priority: 0.95,
     },
     // Live sub-pages
+    // NOTE: /world-cup-2026/results is intentionally omitted — it 301-redirects
+    // to /world-cup-2026-results (sitemap/1).  Listing a redirect URL in the
+    // sitemap causes Google Search Console to flag it; the canonical destination
+    // is already covered in sitemap/1.
     {
       url: `${BASE_URL}/world-cup-2026/fixtures`,
-      lastModified: new Date(),
-      changeFrequency: 'hourly',
-      priority: 0.90,
-    },
-    {
-      url: `${BASE_URL}/world-cup-2026/results`,
       lastModified: new Date(),
       changeFrequency: 'hourly',
       priority: 0.90,
@@ -417,30 +424,22 @@ function competitionSitemap(): MetadataRoute.Sitemap {
   const leagueComps = COMPETITIONS.filter((c) => c.code !== 'WC');
 
   return [
-    // /competition/[code] — combined standings + fixtures + results per competition
-    ...COMPETITIONS.map((comp) => ({
+    // /competition/[code] — combined standings + fixtures + results per competition.
+    // SITEMAP-3: /competition/WC is excluded — its canonical authority is
+    // /world-cup-2026 (sitemap/2).  Listing /competition/WC here would create
+    // a duplicate-content signal; Google would have to choose between the two
+    // and might demote both.  The WC hub page already appears in sitemap/2 at
+    // priority 0.95.
+    ...leagueComps.map((comp) => ({
       url: `${BASE_URL}/competition/${comp.code}`,
       lastModified: new Date(),
-      changeFrequency: (comp.code === 'WC' ? 'always' : 'hourly') as
-        | 'always'
-        | 'hourly',
-      priority: comp.code === 'WC' ? 0.92 : 0.82,
+      changeFrequency: 'hourly' as const,
+      priority: 0.82,
     })),
-    // /schedule?competition=X — supplemental crawl-discovery entries
-    // Canonical for each is /competition/[code] — kept here to help discovery
-    ...leagueComps.map((comp) => ({
-      url: `${BASE_URL}/schedule?competition=${comp.code}`,
-      lastModified: new Date(),
-      changeFrequency: 'daily' as const,
-      priority: 0.70,
-    })),
-    // /standings?competition=X — supplemental crawl-discovery entries
-    ...leagueComps.map((comp) => ({
-      url: `${BASE_URL}/standings?competition=${comp.code}`,
-      lastModified: new Date(),
-      changeFrequency: 'daily' as const,
-      priority: 0.70,
-    })),
+    // NOTE: /schedule?competition=X and /standings?competition=X were removed
+    // in SITEMAP-3.  Query-parameter URLs are not crawlable canonical pages;
+    // Google typically ignores them in sitemaps and they inflated the URL count
+    // without adding indexable surface area.
   ];
 }
 
