@@ -34,7 +34,7 @@ import {
   getUpcomingMatchesCached as getUpcomingMatches,
   getStandingsCached       as getStandings,
 } from '@/lib/api';
-import { matchPath, predictPath, teamPath } from '@/lib/url';
+import { matchPath, predictPath, teamPath, slugify } from '@/lib/url';
 import { WC_TEAM_SLUGS } from '@/lib/wc-teams';
 import { WC_WATCH_COUNTRY_SLUGS } from '@/lib/wc-watch-countries';
 import { WC_TV_COUNTRY_SLUGS } from '@/lib/wc-tv-countries';
@@ -347,6 +347,20 @@ function wcHubSitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'always',
       priority: 0.92,
     },
+    // GROWTH-2A — knockout round landing pages.  The Final carries the
+    // highest query volume of the tournament; rounds peak sequentially.
+    {
+      url: `${BASE_URL}/world-cup-2026/final`,
+      lastModified: new Date(),
+      changeFrequency: 'hourly',
+      priority: 0.93,
+    },
+    ...['round-of-32', 'round-of-16', 'quarter-finals', 'semi-finals', 'third-place'].map((slug) => ({
+      url: `${BASE_URL}/world-cup-2026/${slug}`,
+      lastModified: new Date(),
+      changeFrequency: 'hourly' as const,
+      priority: 0.90,
+    })),
     {
       url: `${BASE_URL}/world-cup-2026/matches-tomorrow`,
       lastModified: new Date(),
@@ -508,6 +522,19 @@ async function matchSitemap(): Promise<MetadataRoute.Sitemap> {
           changeFrequency: isLive ? ('hourly' as const) : ('daily' as const),
           priority: isWC ? 0.82 : 0.65,
         });
+
+        // GROWTH-2A: prediction alias (/{home}-vs-{away}-prediction).
+        // 308 redirect + canonical → /predict/{id}; listed here as a discovery
+        // URL so "X vs Y prediction" queries find an exact-match slug.
+        // WC only — alias route only resolves WC fixtures.
+        if (isWC && match.homeTeam?.name && match.awayTeam?.name) {
+          entries.push({
+            url: `${BASE_URL}/${slugify(match.homeTeam.name)}-vs-${slugify(match.awayTeam.name)}-prediction`,
+            lastModified: match.lastUpdated ? new Date(match.lastUpdated) : new Date(),
+            changeFrequency: 'daily' as const,
+            priority: 0.78,
+          });
+        }
       }
     }
 

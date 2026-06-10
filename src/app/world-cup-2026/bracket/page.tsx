@@ -23,14 +23,15 @@ const KNOCKOUT_STAGES = new Set([
   'LAST_32', 'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'THIRD_PLACE', 'FINAL',
 ]);
 
-// Rounds in display order for the list view and JSON-LD
+// Rounds in display order for the list view and JSON-LD.
+// slug → per-round landing page (GROWTH-2A): /world-cup-2026/{slug}
 const ROUND_ORDER = [
-  { stage: 'LAST_32',       label: 'Round of 32',    short: 'R32' },
-  { stage: 'LAST_16',       label: 'Round of 16',    short: 'R16' },
-  { stage: 'QUARTER_FINALS',label: 'Quarter-finals', short: 'QF'  },
-  { stage: 'SEMI_FINALS',   label: 'Semi-finals',    short: 'SF'  },
-  { stage: 'THIRD_PLACE',   label: 'Third Place',    short: '3rd' },
-  { stage: 'FINAL',         label: 'Final',          short: 'F'   },
+  { stage: 'LAST_32',       label: 'Round of 32',    short: 'R32', slug: 'round-of-32'    },
+  { stage: 'LAST_16',       label: 'Round of 16',    short: 'R16', slug: 'round-of-16'    },
+  { stage: 'QUARTER_FINALS',label: 'Quarter-finals', short: 'QF',  slug: 'quarter-finals' },
+  { stage: 'SEMI_FINALS',   label: 'Semi-finals',    short: 'SF',  slug: 'semi-finals'    },
+  { stage: 'THIRD_PLACE',   label: 'Third Place',    short: '3rd', slug: 'third-place'    },
+  { stage: 'FINAL',         label: 'Final',          short: 'F',   slug: 'final'          },
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -401,15 +402,17 @@ export default async function WCBracketPage() {
         {/* Cross-page navigation */}
         <WCPageNav />
 
-        {/* ── Round progress pills ───────────────────────────────────── */}
-        <div className="flex flex-wrap gap-2">
+        {/* ── Round progress pills — link to per-round pages (GROWTH-2A) ── */}
+        <nav aria-label="Knockout rounds" className="flex flex-wrap gap-2">
           {roundSummary.map((r) => {
             const complete = r.total > 0 && r.played === r.total;
             const started  = r.played > 0;
             return (
-              <div
+              <Link
                 key={r.stage}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${
+                href={`/world-cup-2026/${r.slug}`}
+                title={`World Cup 2026 ${r.label} — fixtures & results`}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors hover:border-yellow-500/50 ${
                   complete
                     ? 'bg-green-500/20 text-green-400 border-green-500/30'
                     : started
@@ -421,16 +424,18 @@ export default async function WCBracketPage() {
                 {r.total > 0 && (
                   <span className="ml-1 opacity-70">{r.played}/{r.total}</span>
                 )}
-              </div>
+              </Link>
             );
           })}
-        </div>
+        </nav>
 
         {/* ── Round of 32 ────────────────────────────────────────────── */}
         <section aria-labelledby="r32-heading">
           <div className="flex items-baseline gap-3 mb-4">
             <h2 id="r32-heading" className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
-              Round of 32
+              <Link href="/world-cup-2026/round-of-32" className="hover:text-yellow-400 transition-colors">
+                Round of 32 →
+              </Link>
             </h2>
             <span className="text-gray-700 text-xs">16 matches · 2–9 July 2026</span>
           </div>

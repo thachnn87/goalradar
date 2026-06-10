@@ -15,6 +15,8 @@ const LINKS = [
   { href: '/world-cup-2026-standings',        label: '📊 Standings'  },
   { href: '/world-cup-2026-groups',           label: '🗂️ Groups'     },
   { href: '/world-cup-2026-bracket',          label: '🔗 Bracket'    },
+  { href: '/world-cup-2026/round-of-32',      label: '🎯 Round of 32'},
+  { href: '/world-cup-2026/final',            label: '🥇 Final'      },
   { href: '/world-cup-2026-live-stream',      label: '📡 Watch Live' },
   { href: '/world-cup-2026-tv-guide',         label: '📺 TV Guide'   },
   { href: '/world-cup-2026/streaming-guide',  label: '💻 Streaming'  },

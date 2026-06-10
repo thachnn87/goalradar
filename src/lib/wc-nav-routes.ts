@@ -54,6 +54,13 @@ export const WC_HUB_ROUTES = [
   '/world-cup-2026/matches-today',
   '/world-cup-2026/matches-tomorrow',
   '/world-cup-2026/host-cities',
+  // GROWTH-2A: knockout round landing pages
+  '/world-cup-2026/round-of-32',
+  '/world-cup-2026/round-of-16',
+  '/world-cup-2026/quarter-finals',
+  '/world-cup-2026/semi-finals',
+  '/world-cup-2026/third-place',
+  '/world-cup-2026/final',
 ] as const;
 
 // ---------------------------------------------------------------------------
