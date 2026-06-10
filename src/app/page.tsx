@@ -108,9 +108,10 @@ function WCHero({ liveCount, wcActive }: { liveCount: number; wcActive: boolean 
       <div className="absolute inset-0 bg-gradient-to-br from-yellow-950/70 via-gray-900 to-gray-950" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_top_left,_rgba(234,179,8,0.12),_transparent)]" />
 
-      <div className="relative px-6 py-8 sm:px-10 sm:py-10">
+      {/* UI-2: mobile = tight padding; tablet = minor reduction; desktop (lg) unchanged */}
+      <div className="relative px-4 py-4 md:px-6 md:py-8 lg:px-10 lg:py-10">
         {/* Tournament badge */}
-        <div className="inline-flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/25 rounded-full px-4 py-1.5 mb-5">
+        <div className="inline-flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/25 rounded-full px-4 py-1.5 mb-3 md:mb-5">
           <span className="text-sm">🏆</span>
           <span className="text-yellow-400 text-xs font-semibold uppercase tracking-wider">
             FIFA World Cup 2026
@@ -127,44 +128,51 @@ function WCHero({ liveCount, wcActive }: { liveCount: number; wcActive: boolean 
         </div>
 
         {/* Headline */}
-        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white leading-tight mb-3">
+        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white leading-tight mb-2 md:mb-3">
           GoalRadar
         </h1>
-        <p className="text-gray-300 text-base sm:text-lg mb-1 max-w-xl">
+        {/* UI-2: descriptive copy hidden on mobile — content surfaces sooner */}
+        <p className="hidden md:block text-gray-300 text-base sm:text-lg mb-1 max-w-xl">
           {wcActive
             ? 'The FIFA World Cup 2026 is live. Follow every match.'
             : 'Your home for FIFA World Cup 2026 live scores, fixtures and standings.'}
         </p>
-        <p className="text-gray-500 text-sm mb-7">
+        <p className="hidden md:block text-gray-500 text-sm mb-7">
           USA · Canada · Mexico &nbsp;·&nbsp; 11 Jun – 19 Jul 2026 &nbsp;·&nbsp; 48 teams
         </p>
 
-        {/* CTA buttons */}
-        <div className="flex flex-wrap gap-3">
+        {/* CTA buttons — 2×2 grid on mobile, original flex row at md+ */}
+        <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:gap-3 mt-3 md:mt-0">
           {/* Primary */}
           <Link
             href="/world-cup-2026"
-            className="bg-yellow-500 hover:bg-yellow-400 active:bg-yellow-600 text-black px-5 py-2.5 rounded-xl font-bold transition-colors text-sm flex items-center gap-2 shadow-lg shadow-yellow-500/20"
+            className="bg-yellow-500 hover:bg-yellow-400 active:bg-yellow-600 text-black px-3 py-2 md:px-5 md:py-2.5 rounded-xl font-bold transition-colors text-sm flex items-center justify-center md:justify-start gap-2 shadow-lg shadow-yellow-500/20 whitespace-nowrap"
           >
-            🏆 World Cup Hub
+            🏆 <span className="hidden md:inline">World Cup Hub</span><span className="md:hidden">WC26</span>
           </Link>
 
           {/* Secondary CTAs */}
           <Link
             href="/world-cup-2026"
-            className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded-xl font-semibold transition-colors text-sm border border-gray-700"
+            className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 md:px-5 md:py-2.5 rounded-xl font-semibold transition-colors text-sm border border-gray-700 text-center md:text-left whitespace-nowrap"
           >
-            📅 WC Fixtures
+            📅 <span className="hidden md:inline">WC Fixtures</span><span className="md:hidden">Schedule</span>
           </Link>
           <Link
             href="/world-cup-2026#standings"
-            className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded-xl font-semibold transition-colors text-sm border border-gray-700"
+            className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 md:px-5 md:py-2.5 rounded-xl font-semibold transition-colors text-sm border border-gray-700 text-center md:text-left whitespace-nowrap"
           >
-            📊 Group Standings
+            📊 <span className="hidden md:inline">Group </span>Standings
+          </Link>
+          <Link
+            href={liveCount > 0 ? '/live' : '/world-cup-2026/bracket'}
+            className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 md:px-5 md:py-2.5 rounded-xl font-semibold transition-colors text-sm border border-gray-700 text-center md:text-left whitespace-nowrap md:hidden"
+          >
+            {liveCount > 0 ? `🔴 ${liveCount} Live` : '🔗 Bracket'}
           </Link>
           <Link
             href="/world-cup-2026/bracket"
-            className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded-xl font-semibold transition-colors text-sm border border-gray-700"
+            className="hidden md:block bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded-xl font-semibold transition-colors text-sm border border-gray-700"
           >
             🔗 Bracket
           </Link>
@@ -173,7 +181,7 @@ function WCHero({ liveCount, wcActive }: { liveCount: number; wcActive: boolean 
           {liveCount > 0 && (
             <Link
               href="/live"
-              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 px-5 py-2.5 rounded-xl font-semibold transition-colors text-sm flex items-center gap-2"
+              className="hidden md:flex bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 px-5 py-2.5 rounded-xl font-semibold transition-colors text-sm items-center gap-2"
             >
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
@@ -506,29 +514,31 @@ function HomepageEvergreen() {
 // ---------------------------------------------------------------------------
 
 function StandardHero() {
+  // UI-2: mobile (<768px) = compact — no paragraph, 2×2 CTA grid, tight padding.
+  // Tablet (768–1024px) = minor spacing reduction. Desktop (≥1024px) unchanged.
   return (
-    <div className="relative bg-gradient-to-br from-green-950/60 to-gray-900 rounded-2xl p-8 border border-green-900/30 overflow-hidden">
+    <div className="relative bg-gradient-to-br from-green-950/60 to-gray-900 rounded-2xl p-4 md:p-6 lg:p-8 border border-green-900/30 overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(34,197,94,0.08),_transparent_60%)] pointer-events-none" />
       <div className="relative">
-        <div className="flex items-center gap-3 mb-2">
-          <span className="text-4xl">⚽</span>
-          <h1 className="text-4xl font-black text-white tracking-tight">GoalRadar</h1>
+        <div className="flex items-center gap-3 mb-3 md:mb-2">
+          <span className="text-3xl md:text-4xl">⚽</span>
+          <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight">GoalRadar</h1>
         </div>
-        <p className="text-gray-400 text-lg mb-6 max-w-xl">
+        <p className="hidden md:block text-gray-400 text-lg mb-6 max-w-xl">
           Live scores, standings, and schedules from Europe&apos;s top football leagues.
         </p>
-        <div className="flex flex-wrap gap-3">
-          <Link href="/live" className="bg-green-500 hover:bg-green-400 text-white px-5 py-2.5 rounded-xl font-semibold transition-colors flex items-center gap-2 text-sm">
+        <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:gap-3">
+          <Link href="/live" className="bg-green-500 hover:bg-green-400 text-white px-3 py-2 md:px-5 md:py-2.5 rounded-xl font-semibold transition-colors flex items-center justify-center md:justify-start gap-2 text-sm whitespace-nowrap">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
             </span>
-            Live Scores
+            Live<span className="hidden md:inline">&nbsp;Scores</span>
           </Link>
-          <Link href="/schedule"  className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded-xl font-semibold transition-colors text-sm border border-gray-700">Schedule</Link>
-          <Link href="/standings" className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded-xl font-semibold transition-colors text-sm border border-gray-700">Standings</Link>
-          <Link href="/world-cup-2026" className="bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-400 border border-yellow-600/30 px-5 py-2.5 rounded-xl font-semibold transition-colors text-sm">
-            🏆 World Cup 2026
+          <Link href="/schedule"  className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 md:px-5 md:py-2.5 rounded-xl font-semibold transition-colors text-sm border border-gray-700 text-center md:text-left whitespace-nowrap">Schedule</Link>
+          <Link href="/standings" className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 md:px-5 md:py-2.5 rounded-xl font-semibold transition-colors text-sm border border-gray-700 text-center md:text-left whitespace-nowrap">Standings</Link>
+          <Link href="/world-cup-2026" className="bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-400 border border-yellow-600/30 px-3 py-2 md:px-5 md:py-2.5 rounded-xl font-semibold transition-colors text-sm text-center md:text-left whitespace-nowrap">
+            🏆 <span className="hidden md:inline">World Cup 2026</span><span className="md:hidden">WC26</span>
           </Link>
         </div>
       </div>
@@ -642,7 +652,8 @@ export default async function HomePage() {
       '@type': 'BreadcrumbList',
       itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: 'https://goalradar.org' }],
     }) }} />
-    <div className="space-y-10">
+    {/* UI-2: tighter block spacing on mobile/tablet; desktop unchanged */}
+    <div className="space-y-5 md:space-y-8 lg:space-y-10">
 
       {/* ── Countdown banner — sits above everything, slim strip ─────────── */}
       <WCCountdownBanner />

@@ -76,8 +76,9 @@ export default function WCCountdownBanner() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
             </span>
-            <span className="text-red-400 text-xs font-bold uppercase tracking-wider">
-              FIFA World Cup 2026 — LIVE NOW
+            <span className="text-red-400 text-xs font-bold uppercase tracking-wider whitespace-nowrap">
+              <span className="hidden md:inline">FIFA World Cup 2026 — LIVE NOW</span>
+              <span className="md:hidden">WC26 LIVE NOW</span>
             </span>
           </div>
 
@@ -96,25 +97,40 @@ export default function WCCountdownBanner() {
   // Upcoming — show countdown
   const { days, hours, minutes } = timeLeft(OPENING_MATCH_UTC);
 
+  // UI-2: compact inline countdown for mobile — "🏆 WC26 starts in 1d 4h"
+  const compact = days > 0 ? `${days}d ${hours}h` : `${hours}h ${minutes}m`;
+
   return (
     <div className="w-full bg-gradient-to-r from-yellow-950 via-gray-900 to-yellow-950 border-b border-yellow-700/30">
-      <div className="max-w-5xl mx-auto px-4 py-2.5 flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
+      {/* ── Mobile (<768px) — single compact line, no wrapping ──────────── */}
+      <div className="md:hidden max-w-5xl mx-auto px-4 py-1.5 flex items-center justify-between gap-3">
+        <span className="text-yellow-500 text-xs font-semibold whitespace-nowrap truncate">
+          <span aria-hidden>🏆</span> WC26 starts in{' '}
+          <span className="text-white font-black tabular-nums">{compact}</span>
+        </span>
+        <Link
+          href="/world-cup-2026"
+          className="text-xs font-semibold text-yellow-400 hover:text-yellow-200 transition-colors shrink-0 whitespace-nowrap"
+        >
+          Explore <span aria-hidden>→</span>
+        </Link>
+      </div>
+
+      {/* ── Tablet / desktop (≥768px) — original chip layout ────────────── */}
+      <div className="hidden md:flex max-w-5xl mx-auto px-4 py-2 lg:py-2.5 items-center justify-between gap-4">
 
         {/* Left — label + countdown */}
-        <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap min-w-0">
+        <div className="flex items-center gap-3 min-w-0">
           {/* Trophy + label */}
           <div className="flex items-center gap-1.5 shrink-0">
             <span className="text-base leading-none" aria-hidden>🏆</span>
-            <span className="text-yellow-500 text-xs font-semibold uppercase tracking-wider whitespace-nowrap hidden sm:inline">
+            <span className="text-yellow-500 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
               FIFA World Cup 2026
-            </span>
-            <span className="text-yellow-500 text-xs font-semibold uppercase tracking-wider whitespace-nowrap sm:hidden">
-              WC 2026
             </span>
           </div>
 
           {/* Divider */}
-          <span className="text-gray-700 text-xs select-none hidden sm:inline">|</span>
+          <span className="text-gray-700 text-xs select-none">|</span>
 
           {/* Countdown chips */}
           <div className="flex items-center gap-2 sm:gap-3">
@@ -126,7 +142,7 @@ export default function WCCountdownBanner() {
           </div>
 
           {/* Pre-tournament label */}
-          <span className="text-gray-600 text-[10px] sm:text-xs whitespace-nowrap hidden md:inline">
+          <span className="text-gray-600 text-xs whitespace-nowrap">
             until kick-off
           </span>
         </div>
