@@ -25,7 +25,15 @@
 import { MetadataRoute } from 'next';
 import { kv } from '@vercel/kv';
 import { COMPETITIONS } from '@/lib/types';
-import { getRecentMatches, getUpcomingMatches, getStandings } from '@/lib/api';
+// PERF-6 Phase 5: Sitemap isolation — use *Cached variants exclusively.
+// These read L1 in-memory → Vercel KV (readKVOnly) → static/empty fallback.
+// They NEVER call football-data.org, so sitemap generation can never add
+// to the rate-limiter queue regardless of when Googlebot crawls.
+import {
+  getRecentMatchesCached   as getRecentMatches,
+  getUpcomingMatchesCached as getUpcomingMatches,
+  getStandingsCached       as getStandings,
+} from '@/lib/api';
 import { matchPath, predictPath, teamPath } from '@/lib/url';
 import { WC_TEAM_SLUGS } from '@/lib/wc-teams';
 import { WC_WATCH_COUNTRY_SLUGS } from '@/lib/wc-watch-countries';

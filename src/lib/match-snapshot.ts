@@ -51,9 +51,10 @@ import { getStaticGroupMatches } from '@/data/worldcup/loader';
 import {
   getMatchDetail,
   getHeadToHead,
-  getUpcomingMatches,
-  getRecentMatches,
-  getStandings,
+  // PERF-6: use *Cached variants — read KV only, never trigger provider calls
+  getUpcomingMatchesCached,
+  getRecentMatchesCached,
+  getStandingsCached,
 } from './api';
 import type {
   MatchDetail,
@@ -351,13 +352,15 @@ async function buildSnapshot(matchId: string): Promise<MatchSnapshot> {
   const isWC    = match.competition?.code === 'WC';
   const hasGroup = Boolean(match.group);
 
-  // ── 2. Parallel: H2H + WC group data (all via KV-backed caches) ───────────
+  // ── 2. Parallel: H2H + WC group data ────────────────────────────────────
+  // PERF-6: use *Cached variants (L1 → readKVOnly → static fallback).
+  // These NEVER call the provider — snapshot builds must not add to the queue.
   const [h2hResult, upcomingResult, recentResult, standingsResult] =
     await Promise.allSettled([
       getHeadToHead(matchId),
-      isWC && hasGroup ? getUpcomingMatches('WC') : Promise.resolve(null),
-      isWC && hasGroup ? getRecentMatches('WC')   : Promise.resolve(null),
-      isWC && hasGroup ? getStandings('WC')       : Promise.resolve(null),
+      isWC && hasGroup ? getUpcomingMatchesCached('WC') : Promise.resolve(null),
+      isWC && hasGroup ? getRecentMatchesCached('WC')   : Promise.resolve(null),
+      isWC && hasGroup ? getStandingsCached('WC')       : Promise.resolve(null),
     ]);
 
   const parallelMs = Date.now() - t0;
@@ -458,12 +461,35 @@ export const getOrBuildMatchSnapshot: (matchId: string) => Promise<MatchSnapshot
       return kvHit;
     }
 
-    // ── 2. Cross-request inflight dedup (Phase 4) ──────────────────────────
+    // ── 2. Cross-request inflight dedup (within-instance, Phase 4) ──────────
     console.log(`[Snapshot] MISS match:${matchId} — building snapshot`);
     const existing = _buildInflight.get(matchId);
     if (existing) {
       console.log(`[Snapshot] DEDUP match:${matchId} — coalescing with in-flight build`);
       return existing;
+    }
+
+    // ── 2b. Cross-INSTANCE KV lock (PERF-6 Phase 4) ───────────────────────
+    // Prevents multiple Vercel function instances from building the same
+    // snapshot in parallel (each would make independent provider calls).
+    // Lock TTL = 60 s — long enough for a full build to complete.
+    if (KV_ENABLED) {
+      const lockKey  = `goalradar:lock:snapshot:${matchId}`;
+      const acquired = await kv.set(lockKey, '1', { nx: true, ex: 60 }).catch(() => null);
+      if (!acquired) {
+        // Another instance is already building — wait briefly then re-read KV.
+        console.log(`[Snapshot] LOCK-MISS match:${matchId} — another instance building, waiting 3s`);
+        await new Promise<void>((r) => setTimeout(r, 3_000));
+        const raceHit = await readKVSnapshot(matchId);
+        if (raceHit) {
+          console.log(`[Snapshot] LOCK-MISS match:${matchId} — found snapshot after wait`);
+          return raceHit;
+        }
+        // Snapshot still not there (build may have failed) — fall through and build anyway.
+        console.warn(`[Snapshot] LOCK-MISS match:${matchId} — no snapshot after wait, building anyway`);
+      } else {
+        console.log(`[Snapshot] KV-LOCK match:${matchId} — acquired build lock`);
+      }
     }
 
     // ── 3. Build (KV detail first, provider fallback) ──────────────────────

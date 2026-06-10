@@ -55,7 +55,7 @@ const KV_ENABLED =
 // State shape
 // ---------------------------------------------------------------------------
 
-export type RateSafeReason = 'rate_limit' | 'disabled' | 'manual';
+export type RateSafeReason = 'rate_limit' | 'disabled' | 'manual' | 'timeout';
 
 export interface RateSafeState {
   reason:       RateSafeReason;
@@ -144,10 +144,15 @@ export function enableRateSafeMode(
   reason:       RateSafeReason,
   retryAfterMs: number = 5 * 60_000,
 ): void {
-  // Clamp: never suspend for less than 60 s or more than 1 hour (unless disabled).
+  // Clamp durations per reason:
+  //   disabled → at least 1 h (account-level block; manual clearance needed)
+  //   timeout  → 15–60 min  (transient outage; auto-recover after backoff)
+  //   rate_limit / manual → 60 s–1 h
   const clampedMs = reason === 'disabled'
-    ? Math.max(retryAfterMs, 3_600_000)   // disabled → at least 1 h
-    : Math.min(Math.max(retryAfterMs, 60_000), 3_600_000);
+    ? Math.max(retryAfterMs, 3_600_000)
+    : reason === 'timeout'
+      ? Math.min(Math.max(retryAfterMs, 15 * 60_000), 60 * 60_000)
+      : Math.min(Math.max(retryAfterMs, 60_000), 3_600_000);
 
   const now     = Date.now();
   _state  = { reason, enabledAt: now, expiresAt: now + clampedMs, retryAfterMs: clampedMs };

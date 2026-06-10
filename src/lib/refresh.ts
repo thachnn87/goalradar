@@ -150,19 +150,27 @@ async function dispatchToProvider(endpoint: string): Promise<unknown> {
  * Fetches fresh data via ProviderManager (with failover) and stores it in Vercel KV.
  * Maps endpoint paths to the appropriate providerManager method.
  *
- * @param endpoint  API path, e.g. "/competitions/WC/matches?status=SCHEDULED,TIMED"
- * @param freshSec  How long (seconds) the entry is considered fully fresh.
- * @param staleSec  KV TTL — entry auto-expires after this many seconds.
+ * @param endpoint        API path, e.g. "/competitions/WC/matches?status=SCHEDULED,TIMED"
+ * @param freshSec        How long (seconds) the entry is considered fully fresh.
+ * @param staleSec        KV TTL — entry auto-expires after this many seconds.
+ * @param options.minIntervalSec  Skip the provider call if the existing KV entry
+ *                                was fetched less than this many seconds ago.
+ *                                Prevents redundant refreshes when cron fires more
+ *                                often than data actually changes.
+ * @param options.caller  Logical caller name for logging (e.g. 'cron/orchestrator').
  */
 export async function refreshEndpoint(
   endpoint: string,
   freshSec: number,
   staleSec: number,
+  options?: { minIntervalSec?: number; caller?: string },
 ): Promise<RefreshResult> {
-  const start = Date.now();
+  const start  = Date.now();
+  const caller = options?.caller ?? 'cron';
+  const minIntervalSec = options?.minIntervalSec;
 
   // ── Rate-safe mode guard ────────────────────────────────────────────────
-  // If football-data.org returned 429/403 in this process (or another
+  // If football-data.org returned 429/403/timeout in this process (or another
   // instance set the KV flag), skip the provider call entirely.
   if (isRateSafeModeActive()) {
     logRateSafeSkip(endpoint);
@@ -175,6 +183,36 @@ export async function refreshEndpoint(
     };
   }
 
+  // ── Skip-if-fresh guard ─────────────────────────────────────────────────
+  // When a minimum refresh interval is specified, check the existing KV entry.
+  // If the data is younger than minIntervalSec, skip the provider call to avoid
+  // redundant fetches that inflate queue depth.
+  if (minIntervalSec !== undefined && KV_ENABLED) {
+    try {
+      const existing = await kv.get<KVEntry<unknown>>(`${KV_PREFIX}${endpoint}`);
+      if (existing?.fetchedAt) {
+        const ageMs  = start - existing.fetchedAt;
+        const ageSec = Math.round(ageMs / 1000);
+        if (ageMs < minIntervalSec * 1_000) {
+          console.log(
+            `[Refresh] SKIP-FRESH ${endpoint}` +
+            ` | age=${ageSec}s < minInterval=${minIntervalSec}s | caller=${caller}`,
+          );
+          return {
+            endpoint,
+            status:     'skipped',
+            fetchedAt:  new Date(existing.fetchedAt).toISOString(),
+            freshUntil: new Date(existing.freshUntil).toISOString(),
+          };
+        }
+      }
+    } catch {
+      // KV error — proceed with the provider refresh rather than blocking
+    }
+  }
+
+  console.log(`[Refresh] START ${endpoint} | caller=${caller}`);
+
   let data: unknown;
   try {
     // Route through ProviderManager so failover to api-football is active
@@ -182,7 +220,7 @@ export async function refreshEndpoint(
     data = await dispatchToProvider(endpoint);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[Refresh] FAIL  ${endpoint}: ${msg}${err instanceof ApiUnavailableError ? ' [both providers failed]' : ''}`);
+    console.error(`[Refresh] FAIL  ${endpoint} | caller=${caller}: ${msg}${err instanceof ApiUnavailableError ? ' [both providers failed]' : ''}`);
     return { endpoint, status: 'error', fetchedAt: new Date(start).toISOString(), freshUntil: '', error: msg };
   }
 
@@ -199,7 +237,7 @@ export async function refreshEndpoint(
   }
 
   const elapsed = Date.now() - start;
-  console.log(`[Refresh] OK    ${endpoint} | fresh ${freshSec}s | stale ${staleSec}s | ${elapsed}ms`);
+  console.log(`[Refresh] OK    ${endpoint} | fresh ${freshSec}s | stale ${staleSec}s | caller=${caller} | ${elapsed}ms`);
 
   return {
     endpoint,

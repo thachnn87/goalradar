@@ -33,12 +33,20 @@ import type { Match, MatchDetail, StandingTable, HeadToHead, TeamDetail } from '
 import { NotFoundError, ApiUnavailableError } from '@/lib/errors';
 import { footballDataLimiter } from '@/lib/rate-limiter';
 import { recordRetry } from '@/lib/match-perf-tracker';
-import { enableRateSafeMode } from '@/lib/rate-safe';
+import { enableRateSafeMode, isRateSafeModeActive } from '@/lib/rate-safe';
 import type { MatchProvider } from './types';
 
 const BASE_URL    = 'https://api.football-data.org/v4';
 const MAX_ATTEMPTS = 2;   // 1 initial + max 1 retry
 const TIMEOUT_MS   = 10_000;
+
+// Duration to open the circuit breaker after all retry attempts timeout.
+// Reads CIRCUIT_BREAKER_TIMEOUT_MINS env var (default 15 min).
+function timeoutCircuitMs(): number {
+  const raw = parseInt(process.env.CIRCUIT_BREAKER_TIMEOUT_MINS ?? '15', 10);
+  const mins = isNaN(raw) || raw < 1 ? 15 : Math.min(raw, 60);
+  return mins * 60_000;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -64,6 +72,14 @@ function parseRetryAfterMs(headers: Headers): number {
 // ---------------------------------------------------------------------------
 
 async function fetchRaw<T>(endpoint: string): Promise<T> {
+  // ── Circuit-breaker: if rate-safe mode is active, reject without queuing ────
+  // This prevents new requests from piling into the rate-limiter queue during
+  // a 429 / 403 / timeout window.  Callers should serve KV / static fallback.
+  if (isRateSafeModeActive()) {
+    console.log(`[FD] CIRCUIT-OPEN — rate-safe active, discarding ${endpoint}`);
+    throw new ApiUnavailableError('rate_limit');
+  }
+
   const apiKey = process.env.FOOTBALL_API_KEY ?? '';
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -90,6 +106,15 @@ async function fetchRaw<T>(endpoint: string): Promise<T> {
         ` ${isTimeout ? `${TIMEOUT_MS / 1_000}s exceeded` : (err instanceof Error ? err.message : String(err))}`,
       );
       if (attempt < MAX_ATTEMPTS) { await sleep(1_000); continue; }
+      // All attempts exhausted — open circuit breaker so no further requests queue.
+      if (isTimeout) {
+        const cbMs = timeoutCircuitMs();
+        console.warn(
+          `[FD] TIMEOUT ${endpoint} — all ${MAX_ATTEMPTS} attempts failed` +
+          ` | opening circuit breaker for ${cbMs / 60_000}min`,
+        );
+        enableRateSafeMode('timeout', cbMs);
+      }
       throw new ApiUnavailableError(isTimeout ? 'timeout' : 'unknown');
     }
     clearTimeout(timer);

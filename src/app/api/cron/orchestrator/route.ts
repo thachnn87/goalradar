@@ -39,6 +39,22 @@ const FIXTURES_STALE  =  1_800; // 30 min — SWR.FIXTURES.stale
 const STANDINGS_FRESH =  3_600; // 1 h   — SWR.STANDINGS.fresh
 const STANDINGS_STALE =  7_200; // 2 h   — SWR.STANDINGS.stale
 
+// ── PERF-6 Phase 3: minimum refresh intervals (skip-if-fresh guard) ──────────
+// refreshEndpoint() checks KV entry age before calling the provider.  If the
+// data is younger than MIN_* seconds the task is logged as SKIP-FRESH and no
+// provider call is made.  This eliminates redundant fetches when the cron fires
+// more often than the underlying data changes.
+//
+//   WC fixtures  → skip if < 30 min old  (spec: max every 30 min)
+//   Standings    → skip if < 30 min old  (spec: max every 30 min)
+//   Today matches → skip if < 55 s old   (near-real-time; freshSec=60)
+//   Live matches → NOT throttled (live data must always refresh)
+const WC_MIN_INTERVAL_SEC        = 1_800; // 30 min
+const STANDINGS_MIN_INTERVAL_SEC = 1_800; // 30 min
+const TODAY_MIN_INTERVAL_SEC     =    55; // ~1 min
+
+const CALLER = 'cron/orchestrator';
+
 // ---------------------------------------------------------------------------
 // Task list
 // ---------------------------------------------------------------------------
@@ -63,9 +79,12 @@ function buildTasks(): OrchestratorTask[] {
 
   return [
     // ── Phase 1: WC Fixtures ─────────────────────────────────────────────────
+    // PERF-6: minIntervalSec guards prevent re-fetching data that is still
+    // within the 30-min freshness window even though the cron fires every 30 min.
     {
       label: 'wc-all-matches',
-      run:   () => refreshEndpoint('/competitions/WC/matches', WC_FRESH, WC_STALE),
+      run:   () => refreshEndpoint('/competitions/WC/matches', WC_FRESH, WC_STALE,
+        { minIntervalSec: WC_MIN_INTERVAL_SEC, caller: CALLER }),
     },
     {
       label: 'wc-upcoming',
@@ -73,6 +92,7 @@ function buildTasks(): OrchestratorTask[] {
         '/competitions/WC/matches?status=SCHEDULED,TIMED',
         FIXTURES_FRESH,
         FIXTURES_STALE,
+        { minIntervalSec: WC_MIN_INTERVAL_SEC, caller: CALLER },
       ),
     },
     {
@@ -81,6 +101,7 @@ function buildTasks(): OrchestratorTask[] {
         '/competitions/WC/matches?status=FINISHED',
         FIXTURES_FRESH,
         FIXTURES_STALE,
+        { minIntervalSec: WC_MIN_INTERVAL_SEC, caller: CALLER },
       ),
     },
     {
@@ -89,33 +110,39 @@ function buildTasks(): OrchestratorTask[] {
         `/competitions/WC/matches?dateFrom=${from}&dateTo=${today}`,
         FIXTURES_FRESH,
         FIXTURES_STALE,
+        { minIntervalSec: WC_MIN_INTERVAL_SEC, caller: CALLER },
       ),
     },
     // ── Phase 1b: Today's cross-competition matches ───────────────────────────
     // PERF-4.5: getTodayMatches() now has KV backing.  Seed the KV key so
     // page-safe getTodayMatchesCached() never needs to call the provider.
+    // PERF-6: 55s minimum interval keeps queue depth low between cron runs.
     {
       label: 'today-matches',
       run:   () => refreshEndpoint(
         `/matches?dateFrom=${today}&dateTo=${today}`,
         60,    // fresh 60s (live page-level data)
         120,   // stale 120s (matches SWR window)
+        { minIntervalSec: TODAY_MIN_INTERVAL_SEC, caller: CALLER },
       ),
     },
     // ── Phase 2: Live ─────────────────────────────────────────────────────────
     // Writes to goalradar:live:matches (30 s TTL) — NOT handled by refreshEndpoint.
+    // Live matches are NOT throttled — always refresh every run.
     {
       label: 'live-matches',
       run:   refreshLiveMatches,
     },
     // ── Phase 3: Standings ────────────────────────────────────────────────────
     // COMPETITIONS includes WC, PL, PD, BL1, SA, FL1, CL (7 total)
+    // PERF-6: standings skip if already refreshed within 30 min.
     ...COMPETITIONS.map(({ code }) => ({
       label: `standings-${code.toLowerCase()}`,
       run:   () => refreshEndpoint(
         `/competitions/${code}/standings`,
         STANDINGS_FRESH,
         STANDINGS_STALE,
+        { minIntervalSec: STANDINGS_MIN_INTERVAL_SEC, caller: CALLER },
       ),
     })),
   ];
