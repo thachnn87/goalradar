@@ -14,7 +14,8 @@
  * Resets on cold start / process restart.
  */
 
-export type MatchRenderSource = 'l1' | 'kv' | 'football-data' | 'api-football';
+export type MatchRenderSource  = 'l1' | 'kv' | 'football-data' | 'api-football';
+export type SnapshotFetchSource = 'kv' | 'build-kv' | 'build-provider' | 'dr';
 
 // ---------------------------------------------------------------------------
 // In-process counters
@@ -30,6 +31,18 @@ let _retryCount  = 0; // 429 retries (incremented by football-data provider)
 
 const _recentLatencies: number[] = [];
 const MAX_RECENT = 100;
+
+// ---------------------------------------------------------------------------
+// Snapshot-level latency counters (accurate: recorded inside getOrBuildMatchSnapshot)
+// ---------------------------------------------------------------------------
+
+let _snapTotal          = 0;
+let _snapKvHits         = 0;
+let _snapBuildKv        = 0;
+let _snapBuildProvider  = 0;
+let _snapDrHits         = 0;
+
+const _snapLatencies: number[] = [];
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -55,21 +68,58 @@ export function recordRetry(): void {
   _retryCount++;
 }
 
+/**
+ * Record a snapshot fetch inside getOrBuildMatchSnapshot.
+ * This is the accurate latency measurement — called on the first (real) invocation
+ * of the React.cache()-wrapped function, not the deduplicated second call from the
+ * page component.
+ */
+export function recordSnapshotFetch(latencyMs: number, source: SnapshotFetchSource): void {
+  _snapTotal++;
+  _snapLatencies.push(latencyMs);
+  if (_snapLatencies.length > MAX_RECENT) _snapLatencies.shift();
+  switch (source) {
+    case 'kv':             _snapKvHits++;        break;
+    case 'build-kv':       _snapBuildKv++;       break;
+    case 'build-provider': _snapBuildProvider++; break;
+    case 'dr':             _snapDrHits++;        break;
+  }
+}
+
+export function getSnapshotPerfStats() {
+  const sorted = [..._snapLatencies].sort((a, b) => a - b);
+  const n = sorted.length;
+  const p = (pct: number) =>
+    n > 0 ? (sorted[Math.floor(n * pct)] ?? sorted[n - 1]) : 0;
+  return {
+    total:           _snapTotal,
+    kvHits:          _snapKvHits,
+    buildKvHits:     _snapBuildKv,
+    buildProvHits:   _snapBuildProvider,
+    drHits:          _snapDrHits,
+    kvHitRate:       _snapTotal > 0 ? Math.round((_snapKvHits / _snapTotal) * 100) : 0,
+    p50:             p(0.50),
+    p95:             p(0.95),
+    p99:             p(0.99),
+    recentLatencies: _snapLatencies.slice(-20),
+  };
+}
+
 export function getMatchPerfStats() {
   const avgLatency  = _renders > 0 ? Math.round(_totalMs / _renders) : 0;
   const cacheHits   = _l1Hits + _kvHits;
   const cacheRate   = _renders > 0 ? Math.round((cacheHits / _renders) * 100) : 0;
 
-  // p95 from recent window
   const sorted = [..._recentLatencies].sort((a, b) => a - b);
-  const p95 = sorted.length > 0
-    ? sorted[Math.floor(sorted.length * 0.95)] ?? sorted[sorted.length - 1]
-    : 0;
+  const pct = (p: number) =>
+    sorted.length > 0 ? (sorted[Math.floor(sorted.length * p)] ?? sorted[sorted.length - 1]) : 0;
 
   return {
     renders:           _renders,
     avgMatchLatency:   avgLatency,
-    p95MatchLatency:   p95,
+    p50MatchLatency:   pct(0.50),
+    p95MatchLatency:   pct(0.95),
+    p99MatchLatency:   pct(0.99),
     // per-source breakdown
     l1Hits:            _l1Hits,
     kvHits:            _kvHits,
@@ -95,5 +145,11 @@ export function _resetMatchPerfStats(): void {
   _fdHits     = 0;
   _afHits     = 0;
   _retryCount = 0;
-  _recentLatencies.length = 0;
+  _recentLatencies.length  = 0;
+  _snapTotal         = 0;
+  _snapKvHits        = 0;
+  _snapBuildKv       = 0;
+  _snapBuildProvider = 0;
+  _snapDrHits        = 0;
+  _snapLatencies.length    = 0;
 }

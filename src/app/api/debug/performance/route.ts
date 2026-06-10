@@ -29,7 +29,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getMatchPerfStats }         from '@/lib/match-perf-tracker';
+import { getMatchPerfStats, getSnapshotPerfStats } from '@/lib/match-perf-tracker';
 import { getKVCacheStats }           from '@/lib/kv-cache';
 import { getDataSourceStats }        from '@/lib/data-source-tracker';
 import { footballDataLimiter }       from '@/lib/rate-limiter';
@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
   }
 
   const matchStats   = getMatchPerfStats();
+  const snapStats    = getSnapshotPerfStats();
   const kvStats      = getKVCacheStats();
   const dsStats      = getDataSourceStats();
   const rlSnapshot   = footballDataLimiter.getSnapshot();
@@ -63,7 +64,9 @@ export async function GET(req: NextRequest) {
     match: {
       renders:           matchStats.renders,
       avgMatchLatency:   matchStats.avgMatchLatency,
+      p50MatchLatency:   matchStats.p50MatchLatency,
       p95MatchLatency:   matchStats.p95MatchLatency,
+      p99MatchLatency:   matchStats.p99MatchLatency,
       l1Hits:            matchStats.l1Hits,
       kvHits:            matchStats.kvHits,
       footballDataHits:  matchStats.footballDataHits,
@@ -115,6 +118,26 @@ export async function GET(req: NextRequest) {
       providerTotal:      dsStats.providerTotal,
       kvHitRatioPercent:  dsStats.kvHitRatioPercent,
       goalMet:            dsStats.goalMet,
+    },
+
+    /**
+     * Accurate snapshot fetch latency — recorded inside getOrBuildMatchSnapshot
+     * (first call, before React.cache memoisation hides the real duration).
+     * p95 < 500 ms is the PERF-7B success criterion.
+     */
+    snapshotPerf: {
+      total:           snapStats.total,
+      kvHits:          snapStats.kvHits,
+      buildKvHits:     snapStats.buildKvHits,
+      buildProvHits:   snapStats.buildProvHits,
+      drHits:          snapStats.drHits,
+      kvHitRate:       snapStats.kvHitRate,
+      p50:             snapStats.p50,
+      p95:             snapStats.p95,
+      p99:             snapStats.p99,
+      recentLatencies: snapStats.recentLatencies,
+      /** PERF-7B success criterion. */
+      goalMet:         snapStats.total === 0 || snapStats.p95 < 500,
     },
 
     generatedAt: new Date().toISOString(),

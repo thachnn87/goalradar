@@ -69,22 +69,41 @@ const KV_ENABLED =
  */
 const WC_BULK_MAX_AGE_SEC = 3_600; // 1 h
 
+/**
+ * Orchestrator cron interval in seconds. KV TTLs for short-lived tiers must
+ * exceed this so entries never expire between two consecutive cron runs.
+ * 1920 s = 32 min > 30-min cron interval + 2-min safety margin.
+ */
+const CRON_INTERVAL_SEC    = 1_800; // 30 min
+const CRON_OVERLAP_SEC     =   120; // 2 min safety margin
+const CRON_SAFE_TTL        = CRON_INTERVAL_SEC + CRON_OVERLAP_SEC; // 1920 s
+
+/**
+ * How many matches to seed in parallel per batch.
+ * Each match does up to 4 KV writes; 10 × 4 = 40 concurrent ops is safe for
+ * Upstash (default connection limit 100).
+ */
+const SEED_BATCH_SIZE = 10;
+
 /** TTL for seeded match detail entries per tier. */
 const DETAIL_STALE_SEC: Record<MatchTier, number> = {
   'live':     60,
-  'today':    TIER_REFRESH_SEC['today'],
-  'next-3d':  TIER_REFRESH_SEC['next-3d'],
-  'future':   TIER_REFRESH_SEC['future'],
-  'finished': TIER_REFRESH_SEC['finished'],
+  // today / next-3d: must exceed the cron interval so entries never expire
+  // between two consecutive prewarm runs (previously 5 min / 15 min, which
+  // caused ~14-24 min cold windows per 30-min cycle).
+  'today':    CRON_SAFE_TTL,                // 32 min (was 5 min)
+  'next-3d':  CRON_SAFE_TTL,               // 32 min (was 15 min)
+  'future':   TIER_REFRESH_SEC['future'],   // 6 h (unchanged)
+  'finished': TIER_REFRESH_SEC['finished'], // 24 h (unchanged)
 };
 
 /** Snapshot KV TTL per tier. */
 const SNAPSHOT_STALE_SEC: Record<MatchTier, number> = {
   'live':     60,
-  'today':    TIER_REFRESH_SEC['today']  + 60,
-  'next-3d':  TIER_REFRESH_SEC['next-3d'] + 60,
-  'future':   TIER_REFRESH_SEC['future'],
-  'finished': TIER_REFRESH_SEC['finished'],
+  'today':    CRON_SAFE_TTL,                // 32 min (was 6 min)
+  'next-3d':  CRON_SAFE_TTL,               // 32 min (was 16 min)
+  'future':   TIER_REFRESH_SEC['future'],   // 6 h (unchanged)
+  'finished': TIER_REFRESH_SEC['finished'], // 24 h (unchanged)
 };
 
 /** DR copy TTLs — long-lived safety net. */
@@ -222,11 +241,12 @@ async function readBulkFromKV(): Promise<{
 // ---------------------------------------------------------------------------
 
 async function seedMatch(
-  match:     Match,
-  allMatches: Match[],
-  standings: { standings: StandingTable[]; competition: { name: string; emblem: string } } | null,
-  now:       number,
-  errors:    string[],
+  match:           Match,
+  existingSnapshot: MatchSnapshot | null,  // pre-fetched via mget — avoids per-match kv.get
+  allMatches:      Match[],
+  standings:       { standings: StandingTable[]; competition: { name: string; emblem: string } } | null,
+  now:             number,
+  errors:          string[],
 ): Promise<{ seededDetail: boolean; seededSnapshot: boolean; skipped: boolean; live: boolean }> {
 
   const isLive = match.status === 'IN_PLAY' || match.status === 'PAUSED';
@@ -236,19 +256,12 @@ async function seedMatch(
     return { seededDetail: false, seededSnapshot: false, skipped: false, live: true };
   }
 
-  const tier       = getMatchTier(match);
-  const tierTtlMs  = TIER_REFRESH_SEC[tier] * 1000;
+  const tier      = getMatchTier(match);
+  const tierTtlMs = TIER_REFRESH_SEC[tier] * 1000;
 
-  // ── Skip if the existing snapshot is still fresh for this tier ───────────
-  if (KV_ENABLED) {
-    try {
-      const existing = await kv.get<MatchSnapshot>(snapshotKey(match.id));
-      if (existing && (now - existing.generatedAt) < tierTtlMs) {
-        return { seededDetail: false, seededSnapshot: false, skipped: true, live: false };
-      }
-    } catch {
-      // Continue — write new entry
-    }
+  // ── Skip if the existing snapshot is still fresh for this tier ──────────
+  if (existingSnapshot && (now - existingSnapshot.generatedAt) < tierTtlMs) {
+    return { seededDetail: false, seededSnapshot: false, skipped: true, live: false };
   }
 
   const matchDetail    = toMatchDetail(match);
@@ -405,16 +418,35 @@ export async function prewarmWorldCup(): Promise<WorldCupPrewarmResult> {
     Object.entries(tierBreakdown).map(([t, n]) => `${t}=${n}`).join(' '),
   );
 
-  // ── 3. Tier-aware seeding — skip still-fresh entries ─────────────────────
+  // ── 3. Tier-aware seeding — batch freshness check + parallel writes ───────
+  // Batch-read all existing snapshots in one round trip (104 → 1 KV call),
+  // then seed stale/missing entries in parallel batches of SEED_BATCH_SIZE.
   console.log('[Prewarm] worldcup: seeding match entries (tier-aware skip-if-fresh)');
-  for (const match of allMatches) {
-    const { seededDetail, seededSnapshot, skipped, live } = await seedMatch(
-      match, allMatches, standings, now, errors,
+
+  let existingSnaps: (MatchSnapshot | null)[] = allMatches.map(() => null);
+  if (KV_ENABLED && allMatches.length > 0) {
+    try {
+      existingSnaps = await kv.mget<(MatchSnapshot | null)[]>(
+        ...allMatches.map((m) => snapshotKey(m.id)),
+      );
+    } catch {
+      // On mget failure, fall through — existingSnaps remain null (seed all)
+    }
+  }
+
+  for (let i = 0; i < allMatches.length; i += SEED_BATCH_SIZE) {
+    const batch = allMatches.slice(i, i + SEED_BATCH_SIZE);
+    const results = await Promise.all(
+      batch.map((match, j) =>
+        seedMatch(match, existingSnaps[i + j] ?? null, allMatches, standings, now, errors),
+      ),
     );
-    if (live)           skippedLive++;
-    else if (skipped)   skippedFresh++;
-    if (seededDetail)   seededMatchDetail++;
-    if (seededSnapshot) seededSnapshots++;
+    for (const { seededDetail, seededSnapshot, skipped, live } of results) {
+      if (live)           skippedLive++;
+      else if (skipped)   skippedFresh++;
+      if (seededDetail)   seededMatchDetail++;
+      if (seededSnapshot) seededSnapshots++;
+    }
   }
 
   // ── 4. Priority tier: individually refresh next-24-h with full detail ─────

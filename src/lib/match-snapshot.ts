@@ -45,7 +45,8 @@
 
 import { cache } from 'react';
 import { kv }   from '@vercel/kv';
-import { recordDataSource }  from './data-source-tracker';
+import { recordDataSource, getDataSourceStats } from './data-source-tracker';
+import { recordSnapshotFetch }                  from './match-perf-tracker';
 import { getStaticGroupMatches } from '@/data/worldcup/loader';
 
 import {
@@ -457,7 +458,9 @@ export const getOrBuildMatchSnapshot: (matchId: string) => Promise<MatchSnapshot
     // ── 1. KV snapshot ─────────────────────────────────────────────────────
     const kvHit = await readKVSnapshot(matchId);
     if (kvHit) {
-      if (BENCH) console.log(`[Snapshot] BENCH match:${matchId} | source=kv | total=${Date.now() - t0}ms`);
+      const kvMs = Date.now() - t0;
+      if (BENCH) console.log(`[Snapshot] BENCH match:${matchId} | source=kv | kvMs=${kvMs}`);
+      recordSnapshotFetch(kvMs, 'kv');
       return kvHit;
     }
 
@@ -498,6 +501,7 @@ export const getOrBuildMatchSnapshot: (matchId: string) => Promise<MatchSnapshot
       .finally(() => _buildInflight.delete(matchId));
     _buildInflight.set(matchId, buildPromise);
 
+    const statsBefore = getDataSourceStats();
     try {
       snapshot = await buildPromise;
     } catch (buildErr) {
@@ -507,9 +511,18 @@ export const getOrBuildMatchSnapshot: (matchId: string) => Promise<MatchSnapshot
         ` | checking disaster-recovery key`,
       );
       const dr = await readDRSnapshot(matchId);
-      if (dr) return dr;
+      if (dr) {
+        recordSnapshotFetch(Date.now() - t0, 'dr');
+        return dr;
+      }
       throw buildErr;
     }
+
+    const statsAfter = getDataSourceStats();
+    const usedProvider =
+      statsAfter.footballDataHits > statsBefore.footballDataHits ||
+      statsAfter.apiFootballHits  > statsBefore.apiFootballHits;
+    recordSnapshotFetch(Date.now() - t0, usedProvider ? 'build-provider' : 'build-kv');
 
     // Write snapshot with tier-aware TTL (Phase 5) + DR key
     writeKVSnapshot(matchId, snapshot).catch(() => undefined);
