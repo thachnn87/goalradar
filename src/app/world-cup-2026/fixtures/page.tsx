@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
-import { getUpcomingMatches } from '@/lib/api';
+// PERF-4.5
+import { getUpcomingMatchesCached } from '@/lib/api';
 import type { Match } from '@/lib/types';
 import { matchPath } from '@/lib/url';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -147,7 +148,7 @@ function JsonLd({ matches }: { matches: Match[] }) {
 export default async function WCFixturesPage() {
   let fixtures: Match[] = [];
   try {
-    const data = await getUpcomingMatches('WC');
+    const data = await getUpcomingMatchesCached('WC');
     fixtures = [...data.matches].sort(
       (a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()
     );

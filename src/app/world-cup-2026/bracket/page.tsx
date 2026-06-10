@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
-import { getWCKnockoutMatches } from '@/lib/api';
+// PERF-4.5
+import { getWCKnockoutMatchesCached } from '@/lib/api';
 import { matchPath } from '@/lib/url';
 import AdSlot from '@/components/AdSlot';
 import WCPageNav from '@/components/WCPageNav';
@@ -327,7 +328,7 @@ export default async function WCBracketPage() {
   // getWCKnockoutMatches returns ALL WC matches — filter to knockout stages
   let allWCMatches: Match[] = [];
   try {
-    const data = await getWCKnockoutMatches();
+    const data = await getWCKnockoutMatchesCached();
     allWCMatches = data.matches;
   } catch {
     // graceful degradation — fall back to local slot schedule below

@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
-import { getUpcomingMatches, getRecentMatches } from '@/lib/api';
+// PERF-4.5
+import { getUpcomingMatchesCached, getRecentMatchesCached } from '@/lib/api';
 import MatchCard from '@/components/MatchCard';
 import CompetitionSelector from '@/components/CompetitionSelector';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -125,14 +126,14 @@ async function ScheduleContent({
 
   try {
     const upcoming =
-      await getUpcomingMatches(competition);
+      await getUpcomingMatchesCached(competition);
 
     if (upcoming.resultSet.count > 0) {
       matches = upcoming.matches;
       mode = 'upcoming';
     } else {
       const recent =
-        await getRecentMatches(competition);
+        await getRecentMatchesCached(competition);
 
       matches = [...recent.matches]
         .sort((a, b) =>
@@ -150,7 +151,7 @@ async function ScheduleContent({
 
     try {
       const recent =
-        await getRecentMatches(competition);
+        await getRecentMatchesCached(competition);
 
       matches = [...recent.matches]
         .sort((a, b) =>

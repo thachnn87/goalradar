@@ -91,6 +91,17 @@ function buildTasks(): OrchestratorTask[] {
         FIXTURES_STALE,
       ),
     },
+    // ── Phase 1b: Today's cross-competition matches ───────────────────────────
+    // PERF-4.5: getTodayMatches() now has KV backing.  Seed the KV key so
+    // page-safe getTodayMatchesCached() never needs to call the provider.
+    {
+      label: 'today-matches',
+      run:   () => refreshEndpoint(
+        `/matches?dateFrom=${today}&dateTo=${today}`,
+        60,    // fresh 60s (live page-level data)
+        120,   // stale 120s (matches SWR window)
+      ),
+    },
     // ── Phase 2: Live ─────────────────────────────────────────────────────────
     // Writes to goalradar:live:matches (30 s TTL) — NOT handled by refreshEndpoint.
     {

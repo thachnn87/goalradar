@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
-import { getStandings } from '@/lib/api';
+// PERF-4.5
+import { getStandingsCached } from '@/lib/api';
 import StandingsTable from '@/components/StandingsTable';
 import CompetitionSelector from '@/components/CompetitionSelector';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -36,7 +37,7 @@ async function StandingsContent({ competition }: { competition: string }) {
   let error = false;
 
   try {
-    const data = await getStandings(competition);
+    const data = await getStandingsCached(competition);
     standings = data.standings;
     competitionName = data.competition.name;
     competitionEmblem = data.competition.emblem;

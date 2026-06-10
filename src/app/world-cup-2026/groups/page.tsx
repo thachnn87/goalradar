@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
-import { getStandings } from '@/lib/api';
+// PERF-4.5
+import { getStandingsCached } from '@/lib/api';
 import type { StandingTable } from '@/lib/types';
 import { getStaticWCGroupTables } from '@/lib/wc-static-groups';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -76,7 +77,7 @@ export default async function WCGroupsPage() {
   let groupTables: StandingTable[] = [];
   let apiError = false;
   try {
-    const data = await getStandings('WC');
+    const data = await getStandingsCached('WC');
     groupTables = data.standings.filter(s => s.type === 'TOTAL');
   } catch {
     apiError = true;

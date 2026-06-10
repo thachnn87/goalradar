@@ -8,7 +8,8 @@
 
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { getWCResults, getWCLiveMatches, getUpcomingMatches } from '@/lib/api';
+// PERF-4.5
+import { getWCResultsCached, getWCLiveMatchesCached, getUpcomingMatchesCached } from '@/lib/api';
 import type { Match } from '@/lib/types';
 import { matchPath } from '@/lib/url';
 import AdSlot from '@/components/AdSlot';
@@ -310,17 +311,17 @@ export default async function MatchesTodayPage() {
 
   // All three calls are prewarmed by /api/cron/prewarm-worldcup → KV hits.
   // Replaced getTodayMatches() (fetchDirect, all-competitions, unprewarmed) with
-  // getWCResults() (prewarmed, WC-only finished) + filter getUpcomingMatches to today.
+  // getWCResultsCached() (prewarmed, WC-only finished) + filter getUpcomingMatches to today.
   const [resultsResult, liveResult, upcomingResult] = await Promise.allSettled([
-    getWCResults(),           // prewarmed → goalradar:/competitions/WC/matches?status=FINISHED
-    getWCLiveMatches(),       // prewarmed → goalradar:live:wc-matches
-    getUpcomingMatches('WC'), // prewarmed → goalradar:/competitions/WC/matches?status=SCHEDULED,TIMED
+    getWCResultsCached(),           // prewarmed → goalradar:/competitions/WC/matches?status=FINISHED
+    getWCLiveMatchesCached(),       // prewarmed → goalradar:live:wc-matches
+    getUpcomingMatchesCached('WC'), // prewarmed → goalradar:/competitions/WC/matches?status=SCHEDULED,TIMED
   ]);
 
   // Build today's WC match list from prewarmed data:
-  //   finished  = getWCResults() filtered to today's date
-  //   scheduled = getUpcomingMatches('WC') filtered to today's date
-  // Live matches are handled separately via getWCLiveMatches() below.
+  //   finished  = getWCResultsCached() filtered to today's date
+  //   scheduled = getUpcomingMatchesCached('WC') filtered to today's date
+  // Live matches are handled separately via getWCLiveMatchesCached() below.
   const allToday: Match[] = [
     ...(resultsResult.status === 'fulfilled'
       ? resultsResult.value.matches.filter((m) => m.utcDate.startsWith(today))

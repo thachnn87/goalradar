@@ -7,7 +7,8 @@
 
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { getRecentMatches, getWCLiveMatches } from '@/lib/api';
+// PERF-4.5
+import { getRecentMatchesCached, getWCLiveMatchesCached } from '@/lib/api';
 import type { Match } from '@/lib/types';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -85,8 +86,8 @@ export default async function WC2026ResultsPage() {
   // allSettled — each source fails independently so a live-data 403 does not
   // also wipe out the results list (and vice versa).
   const [rResult, lResult] = await Promise.allSettled([
-    getRecentMatches('WC'),
-    getWCLiveMatches(),
+    getRecentMatchesCached('WC'),
+    getWCLiveMatchesCached(),
   ]);
   if (rResult.status === 'fulfilled') results = rResult.value.matches;
   if (lResult.status === 'fulfilled') live    = lResult.value.matches;

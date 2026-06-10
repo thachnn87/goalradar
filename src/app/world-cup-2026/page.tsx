@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
+// PERF-4.5: page-safe *Cached variants — zero provider calls during page render.
 import {
-  getWCLiveMatches,
-  getWCKnockoutMatches,
-  getUpcomingMatches,
-  getRecentMatches,
-  getStandings,
+  getWCLiveMatchesCached,
+  getWCKnockoutMatchesCached,
+  getUpcomingMatchesCached,
+  getRecentMatchesCached,
+  getStandingsCached,
 } from '@/lib/api';
 import type { Match, StandingTable } from '@/lib/types';
 import { matchPath } from '@/lib/url';
@@ -20,7 +21,7 @@ import WCRelatedLinks from '@/components/WCRelatedLinks';
 import AdSlot from '@/components/AdSlot';
 import NewsletterSignup from '@/components/NewsletterSignup';
 import { WC_ALL_TEAMS } from '@/lib/wc-all-teams';
-import { getStaticUpcomingMatches } from '@/data/worldcup/loader';
+// getStaticUpcomingMatches is no longer needed here — fallback is handled inside getUpcomingMatchesCached
 import PushNotificationButton from '@/components/PushNotificationButton';
 
 export const revalidate = 30;
@@ -275,19 +276,15 @@ function EmptyState({ message, sub }: { message: string; sub?: string }) {
 export default async function WorldCup2026Page() {
   const today = todayUTC();
 
+  // PERF-4.5: all five calls use page-safe *Cached variants.
+  // Static WC fallbacks are wired inside each *Cached function — no provider call possible.
   const [liveResult, upcomingResult, recentResult, standingsResult, knockoutResult] =
     await Promise.allSettled([
-      getWCLiveMatches(),                       // always API — live matches only
-      // Always try the API first so real match IDs are used (required for clickable MatchCards).
-      // Fall back to bundled static fixtures when the API + KV + DR are all unavailable.
-      // Static fixtures carry negative IDs which intentionally render as non-linkable display tiles.
-      getUpcomingMatches('WC').catch(() => ({
-        matches:   getStaticUpcomingMatches(today),
-        resultSet: { count: 72 },
-      })),
-      getRecentMatches('WC'),                   // always API — results only
-      getStandings('WC'),                       // always API — standings only
-      getWCKnockoutMatches(),                   // static fallback now wired inside getWCKnockoutMatches
+      getWCLiveMatchesCached(),
+      getUpcomingMatchesCached('WC'),
+      getRecentMatchesCached('WC'),
+      getStandingsCached('WC'),
+      getWCKnockoutMatchesCached(),
     ]);
 
   // 1. Live matches

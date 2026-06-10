@@ -7,7 +7,8 @@
 
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { getStandings } from '@/lib/api';
+// PERF-4.5
+import { getStandingsCached } from '@/lib/api';
 import type { StandingTable } from '@/lib/types';
 import { isStaticMode, STATIC_GROUPS, STATIC_TEAMS } from '@/data/worldcup/loader';
 import AdSlot from '@/components/AdSlot';
@@ -73,7 +74,7 @@ export default async function WC2026GroupsPage() {
 
   if (!isStaticMode()) {
     try {
-      const data = await getStandings('WC');
+      const data = await getStandingsCached('WC');
       standingTables = (data.standings ?? []).filter((s) => s.type === 'TOTAL');
     } catch { /* static only */ }
   }

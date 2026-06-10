@@ -7,7 +7,8 @@
 
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { getWCKnockoutMatches } from '@/lib/api';
+// PERF-4.5
+import { getWCKnockoutMatchesCached } from '@/lib/api';
 import { WC_KNOCKOUT_SLOTS } from '@/lib/wc-fixtures';
 import { isStaticMode, getStaticKnockoutSlots } from '@/data/worldcup/loader';
 import type { Match } from '@/lib/types';
@@ -121,7 +122,7 @@ export default async function WC2026BracketPage() {
 
   if (!isStaticMode()) {
     try {
-      const data = await getWCKnockoutMatches();
+      const data = await getWCKnockoutMatchesCached();
       knockoutMatches = data.matches;
     } catch { /* static content only */ }
   }

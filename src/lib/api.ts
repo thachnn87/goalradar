@@ -1,11 +1,12 @@
 import { Match, MatchDetail, HeadToHead, StandingTable, TeamDetail } from './types';
 import { withCache, TTL } from './cache';
-import { withKVCache, SWR } from './kv-cache';
+import { withKVCache, SWR, readKVOnly } from './kv-cache';
 import { recordAuditCall } from './api-audit';
 import { getCachedLiveMatches, getCachedWCLiveMatches } from './live-cache';
 import { providerManager } from './providers/manager';
 import { recordDataSource } from './data-source-tracker';
-import { getStaticGroupMatches } from '@/data/worldcup/loader';
+import { getStaticGroupMatches, getStaticUpcomingMatches } from '@/data/worldcup/loader';
+import { getStaticWCGroupTables } from '@/lib/wc-static-groups';
 
 const BASE_URL = 'https://api.football-data.org/v4';
 
@@ -163,11 +164,17 @@ function fetchDirect<T>(endpoint: string, memTtl: number): Promise<T> {
 
 export function getTodayMatches(): Promise<{ matches: Match[] }> {
   const today = new Date().toISOString().split('T')[0];
-  // Routes through providerManager — cache wraps the provider call.
+  const key   = `/matches?dateFrom=${today}&dateTo=${today}`;
+  // L1 → L2 KV (SWR) → provider.  KV layer added in PERF-4.5 so page-safe
+  // variant (getTodayMatchesCached) can read from KV without calling provider.
   return withCache(
-    `/matches?dateFrom=${today}&dateTo=${today}`,
+    key,
     TTL.MATCH,
-    () => providerManager.getTodayMatches(),
+    () => withKVCache(
+      key,
+      SWR.MATCH,
+      () => providerManager.getTodayMatches(),
+    ),
   );
 }
 
@@ -321,4 +328,194 @@ export function getHeadToHead(id: string): Promise<HeadToHead> {
       () => providerManager.getHeadToHead(id),
     ),
   );
+}
+
+// ============================================================================
+// Page-safe API functions — PERF-4.5
+//
+// These variants NEVER call providerManager.  They read from:
+//   1. L1 in-memory (withCache, same TTL as the live counterpart)
+//   2. L2 KV read-only (readKVOnly — no SWR trigger, no bg-revalidation)
+//   3. Static WC bundled data (last resort for WC endpoints)
+//
+// Provider calls are the exclusive responsibility of the cron orchestrator.
+// All page renders must use these functions for the browsed endpoints.
+// ============================================================================
+
+/**
+ * Page-safe upcoming matches.
+ * Falls back to bundled static WC fixtures for WC; empty array for leagues.
+ */
+export async function getUpcomingMatchesCached(
+  competition: string,
+): Promise<{ matches: Match[]; resultSet: { count: number } }> {
+  const key = `/competitions/${competition}/matches?status=SCHEDULED,TIMED`;
+  try {
+    return await withCache(key, TTL.FIXTURES, async () => {
+      const data = await readKVOnly<{ matches: Match[]; resultSet: { count: number } }>(key);
+      if (data) return data;
+      // KV miss — use static fallback for WC, empty for leagues
+      if (competition === 'WC') {
+        const today = new Date().toISOString().split('T')[0];
+        return { matches: getStaticUpcomingMatches(today), resultSet: { count: 72 } };
+      }
+      return { matches: [], resultSet: { count: 0 } };
+    });
+  } catch {
+    if (competition === 'WC') {
+      const today = new Date().toISOString().split('T')[0];
+      return { matches: getStaticUpcomingMatches(today), resultSet: { count: 72 } };
+    }
+    return { matches: [], resultSet: { count: 0 } };
+  }
+}
+
+/**
+ * Page-safe recent matches.
+ * Falls back to bundled static WC matches filtered to FINISHED for WC.
+ */
+export async function getRecentMatchesCached(
+  competition: string,
+): Promise<{ matches: Match[] }> {
+  const today    = new Date().toISOString().split('T')[0];
+  const from     = new Date(Date.now() - 30 * 86_400_000).toISOString().split('T')[0];
+  const key      = `/competitions/${competition}/matches?dateFrom=${from}&dateTo=${today}`;
+  try {
+    return await withCache(key, TTL.FIXTURES, async () => {
+      const data = await readKVOnly<{ matches: Match[] }>(key);
+      if (data) return data;
+      if (competition === 'WC') {
+        return { matches: getStaticGroupMatches().filter((m) => m.status === 'FINISHED') };
+      }
+      return { matches: [] };
+    });
+  } catch {
+    if (competition === 'WC') {
+      return { matches: getStaticGroupMatches().filter((m) => m.status === 'FINISHED') };
+    }
+    return { matches: [] };
+  }
+}
+
+/**
+ * Page-safe WC finished results.
+ * Falls back to static WC FINISHED matches.
+ */
+export async function getWCResultsCached(): Promise<{ matches: Match[] }> {
+  const key = '/competitions/WC/matches?status=FINISHED';
+  try {
+    return await withCache(key, TTL.FIXTURES, async () => {
+      const data = await readKVOnly<{ matches: Match[] }>(key);
+      if (data) return data;
+      return { matches: getStaticGroupMatches().filter((m) => m.status === 'FINISHED') };
+    });
+  } catch {
+    return { matches: getStaticGroupMatches().filter((m) => m.status === 'FINISHED') };
+  }
+}
+
+/**
+ * Page-safe standings.
+ * Falls back to bundled static WC group tables for WC; empty for leagues.
+ */
+export async function getStandingsCached(competition: string): Promise<{
+  standings:   StandingTable[];
+  competition: { name: string; emblem: string };
+}> {
+  const key = `/competitions/${competition}/standings`;
+  const wcMeta = { name: 'FIFA World Cup 2026', emblem: '' };
+  const empty  = { standings: [] as StandingTable[], competition: { name: '', emblem: '' } };
+  try {
+    return await withCache(key, TTL.STANDINGS, async () => {
+      const data = await readKVOnly<{ standings: StandingTable[]; competition: { name: string; emblem: string } }>(key);
+      if (data) return data;
+      if (competition === 'WC') {
+        return { standings: getStaticWCGroupTables(), competition: wcMeta };
+      }
+      return empty;
+    });
+  } catch {
+    if (competition === 'WC') {
+      return { standings: getStaticWCGroupTables(), competition: wcMeta };
+    }
+    return empty;
+  }
+}
+
+/**
+ * Page-safe all WC matches (bracket / knockout).
+ * Falls back to bundled static fixtures.
+ */
+export async function getWCKnockoutMatchesCached(): Promise<{ matches: Match[] }> {
+  const key = '/competitions/WC/matches';
+  try {
+    return await withCache(key, TTL.WC, async () => {
+      const data = await readKVOnly<{ matches: Match[] }>(key);
+      if (data) return data;
+      return { matches: getStaticGroupMatches() };
+    });
+  } catch {
+    return { matches: getStaticGroupMatches() };
+  }
+}
+
+/**
+ * Page-safe live WC matches.
+ * Live data routes through live-cache.ts which is already KV-backed (30s TTL).
+ * This is an alias that makes the page-safe intent explicit.
+ */
+export function getWCLiveMatchesCached(): Promise<{ matches: Match[] }> {
+  // live-cache.ts already reads from KV and only calls the provider when KV misses.
+  // It uses the same pattern as readKVOnly but with a 30s TTL.
+  // Re-exporting under the *Cached name for consistency.
+  return getWCLiveMatches();
+}
+
+/**
+ * Page-safe live matches (all competitions).
+ * Same as getWCLiveMatchesCached but for all competitions.
+ */
+export function getLiveMatchesCached(): Promise<{ matches: Match[] }> {
+  return getLiveMatches();
+}
+
+/**
+ * Page-safe today's matches.
+ *
+ * getTodayMatches() previously had no KV layer (fetchDirect).  This variant
+ * adds KV read-only access so the provider is never called from a page render.
+ * Falls back to empty (all-competition "today" has no static dataset).
+ */
+export async function getTodayMatchesCached(): Promise<{ matches: Match[] }> {
+  const today = new Date().toISOString().split('T')[0];
+  const key   = `/matches?dateFrom=${today}&dateTo=${today}`;
+  try {
+    return await withCache(key, TTL.MATCH, async () => {
+      const data = await readKVOnly<{ matches: Match[] }>(key);
+      if (data) return data;
+      // No static fallback for cross-competition today view — return empty
+      // (cron will populate this on next run via refreshEndpoint)
+      console.warn('[API] getTodayMatchesCached: KV miss, returning empty');
+      return { matches: [] };
+    });
+  } catch {
+    return { matches: [] };
+  }
+}
+
+/**
+ * Page-safe match detail — reads from KV without SWR trigger.
+ * Used inside buildSnapshot fallback path only.
+ */
+export async function getMatchDetailCached(id: string): Promise<MatchDetail | null> {
+  const key  = `/matches/${id}`;
+  try {
+    return await withCache(key, TTL.MATCH, async () => {
+      const data = await readKVOnly<MatchDetail>(key);
+      if (data) return data;
+      throw new Error(`[CACHE] match ${id} not in KV`);
+    });
+  } catch {
+    return null;
+  }
 }

@@ -7,7 +7,8 @@
 
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { getStandings } from '@/lib/api';
+// PERF-4.5
+import { getStandingsCached } from '@/lib/api';
 import { getStaticWCGroupTables } from '@/lib/wc-static-groups';
 import type { StandingTable, StandingEntry } from '@/lib/types';
 import AdSlot from '@/components/AdSlot';
@@ -123,7 +124,7 @@ export default async function WC2026StandingsPage() {
   let isStaticData = false;
 
   try {
-    const data = await getStandings('WC');
+    const data = await getStandingsCached('WC');
     standingTables = (data.standings ?? []).filter((s) => s.type === 'TOTAL');
   } catch {
     // API unavailable — serve static pre-tournament group tables

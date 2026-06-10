@@ -91,6 +91,8 @@ let _misses        = 0;
 let _disasters     = 0;
 /** Requests served from KV (fresh OR stale) that never touched the provider queue. */
 let _queueBypassed = 0;
+/** Background revalidations skipped because another instance holds the lock. */
+let _coalesced     = 0;
 
 function logRatio() {
   const total = _hits + _stale + _misses;
@@ -196,7 +198,17 @@ export async function withKVCache<T>(
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Fire-and-forget background revalidation. */
+/**
+ * Global coalescing lock TTL.
+ *
+ * When a bg-revalidation fires, we SET a KV lock key with NX+EX so only one
+ * serverless instance performs the provider call within a 30-second window.
+ * All other instances see the lock is held and skip their own revalidation —
+ * they will read the updated KV entry on the next request (typically <1s later).
+ */
+const COALESCE_LOCK_SEC = 30;
+
+/** Fire-and-forget background revalidation with cross-instance coalescing. */
 function revalidateInBackground<T>(
   kvKey:       string,
   disasterKey: string,
@@ -205,15 +217,27 @@ function revalidateInBackground<T>(
   fetcher:     () => Promise<T>,
 ): void {
   console.log(`[SWR] refresh-start ${logKey}`);
+  const lockKey = `goalradar:lock:${logKey}`;
+
   Promise.resolve()
-    .then(() => fetcher())
-    .then((data) =>
-      Promise.all([
+    .then(async () => {
+      // ── Phase 4: global coalescing — acquire KV lock before provider call ──
+      if (KV_ENABLED) {
+        const acquired = await kv.set(lockKey, '1', { nx: true, ex: COALESCE_LOCK_SEC }).catch(() => null);
+        if (!acquired) {
+          _coalesced++;
+          console.log(`[SWR] coalesced ${logKey} | another instance holds the refresh lock`);
+          return; // another instance is already refreshing — skip
+        }
+      }
+      const data = await fetcher();
+      await Promise.all([
         storeInKV<T>(kvKey, logKey, data, swr),
         storeDisasterKey<T>(disasterKey, logKey, data),
-      ]),
-    )
-    .then(() => console.log(`[SWR] refresh-complete ${logKey}`))
+      ]);
+      // Lock auto-expires after COALESCE_LOCK_SEC — no explicit delete needed.
+      console.log(`[SWR] refresh-complete ${logKey}`);
+    })
     .catch((err) =>
       console.error(
         `[SWR] refresh-failed ${logKey}: ${err instanceof Error ? err.message : String(err)}`,
@@ -273,7 +297,49 @@ export function getKVCacheStats() {
     queueBypassed:     _queueBypassed,
     /** Requests served from stale KV entry (user saw no wait; bg-refresh triggered). */
     staleServed:       _stale,
+    /** Background revalidations skipped because another instance holds the coalescing lock. */
+    coalesced:         _coalesced,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Page-safe read — no SWR trigger, no provider call
+// ---------------------------------------------------------------------------
+
+/**
+ * Read-only KV access for page renders.
+ *
+ * Returns the cached data (fresh OR stale) without triggering any background
+ * revalidation or provider call.  Returns null on KV miss (caller should use
+ * static data as fallback).
+ *
+ * Use this in page server components to ensure zero provider calls during
+ * normal user browsing.  The cron orchestrator is solely responsible for
+ * keeping KV warm via `withKVCache` / `refreshEndpoint`.
+ */
+export async function readKVOnly<T>(key: string): Promise<T | null> {
+  if (!KV_ENABLED) return null;
+  const kvKey       = `goalradar:${key}`;
+  const disasterKey = `goalradar:dr:${key}`;
+  try {
+    const entry = await kv.get<KVEntry<T>>(kvKey);
+    if (entry) {
+      _queueBypassed++;
+      recordDataSource('kv');
+      return entry.data;
+    }
+    // Fallback to disaster-recovery key (7-day TTL)
+    const dr = await kv.get<KVEntry<T>>(disasterKey);
+    if (dr) {
+      _disasters++;
+      recordDataSource('kv');
+      return dr.data;
+    }
+    return null;
+  } catch (err) {
+    console.error(`[KV] readKVOnly error ${key}:`, err instanceof Error ? err.message : String(err));
+    return null;
+  }
 }
 
 /** Manually invalidate a KV entry (e.g. after a write). */

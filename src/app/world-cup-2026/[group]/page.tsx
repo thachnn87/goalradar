@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
-import { getStandings, getUpcomingMatches, getRecentMatches } from '@/lib/api';
+// PERF-4.5
+import { getStandingsCached, getUpcomingMatchesCached, getRecentMatchesCached } from '@/lib/api';
 import { getGroupFixtures, WC_GROUP_FIXTURES, type WCGroupFixture } from '@/lib/wc-fixtures';
 import { getStaticWCGroupTables } from '@/lib/wc-static-groups';
 import { WC_ALL_TEAMS } from '@/lib/wc-all-teams';
@@ -636,9 +637,9 @@ export default async function WCGroupPage({ params }: Params) {
   const letter   = letterFromSlug(slug);
 
   const [standingsResult, upcomingResult, recentResult] = await Promise.allSettled([
-    getStandings('WC'),
-    getUpcomingMatches('WC'),
-    getRecentMatches('WC'),
+    getStandingsCached('WC'),
+    getUpcomingMatchesCached('WC'),
+    getRecentMatchesCached('WC'),
   ]);
 
   // Group standings table — fall back to static (zeroed) table if API fails

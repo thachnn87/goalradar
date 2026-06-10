@@ -1,13 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+// PERF-4.5: use page-safe *Cached variants — zero provider calls during page render.
 import {
-  getTodayMatches,
-  getWCLiveMatches,
-  getWCKnockoutMatches,
-  getStandings,
-  getUpcomingMatches,
-  getRecentMatches,
+  getTodayMatchesCached,
+  getWCLiveMatchesCached,
+  getWCKnockoutMatchesCached,
+  getStandingsCached,
+  getUpcomingMatchesCached,
+  getRecentMatchesCached,
 } from '@/lib/api';
 import type { Match, StandingTable } from '@/lib/types';
 import MatchCard from '@/components/MatchCard';
@@ -552,12 +553,12 @@ export default async function HomePage() {
     wcRecentResult,
     wcKnockoutResult,
   ] = await Promise.allSettled([
-    getTodayMatches(),
-    wcActive ? getWCLiveMatches()       : Promise.resolve({ matches: [] as Match[] }),
-    wcActive ? getStandings('WC')       : Promise.resolve({ standings: [] as StandingTable[], competition: { name: '', emblem: '' } }),
-    wcActive ? getUpcomingMatches('WC') : Promise.resolve({ matches: [] as Match[], resultSet: { count: 0 } }),
-    wcActive ? getRecentMatches('WC')   : Promise.resolve({ matches: [] as Match[] }),
-    wcActive ? getWCKnockoutMatches()   : Promise.resolve({ matches: [] as Match[] }),
+    getTodayMatchesCached(),
+    wcActive ? getWCLiveMatchesCached()       : Promise.resolve({ matches: [] as Match[] }),
+    wcActive ? getStandingsCached('WC')       : Promise.resolve({ standings: [] as StandingTable[], competition: { name: '', emblem: '' } }),
+    wcActive ? getUpcomingMatchesCached('WC') : Promise.resolve({ matches: [] as Match[], resultSet: { count: 0 } }),
+    wcActive ? getRecentMatchesCached('WC')   : Promise.resolve({ matches: [] as Match[] }),
+    wcActive ? getWCKnockoutMatchesCached()   : Promise.resolve({ matches: [] as Match[] }),
   ]);
 
   // ── Today's matches ────────────────────────────────────────────────────────

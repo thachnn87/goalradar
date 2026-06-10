@@ -10,7 +10,8 @@
 
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { getUpcomingMatches } from '@/lib/api';
+// PERF-4.5
+import { getUpcomingMatchesCached } from '@/lib/api';
 import type { Match } from '@/lib/types';
 import { getUpcomingGroupFixtures, type WCGroupFixture } from '@/lib/wc-fixtures';
 import { isStaticMode, getStaticGroupFixtures } from '@/data/worldcup/loader';
@@ -148,7 +149,7 @@ export default async function WC2026SchedulePage() {
     localUpcoming = getStaticGroupFixtures().slice(0, 48);
   } else {
     try {
-      const data = await getUpcomingMatches('WC');
+      const data = await getUpcomingMatchesCached('WC');
       upcoming = data.matches.slice(0, 48); // first 48 upcoming
     } catch { /* show static FAQ only */ }
 

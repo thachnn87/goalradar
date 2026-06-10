@@ -12,7 +12,7 @@
  *
  * Data layers
  * ──────────────────────────────────────────────────────────────────────────
- * L1 Live (API): getUpcomingMatches('WC') + getRecentMatches('WC')
+ * L1 Live (API): getUpcomingMatchesCached('WC') + getRecentMatchesCached('WC')
  *    → filtered to WC, sorted chronologically, renders live fixture cards
  *      with real match IDs so each card links to /predict/{id} & /match/{id}
  *
@@ -25,7 +25,8 @@
 
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { getUpcomingMatches, getRecentMatches } from '@/lib/api';
+// PERF-4.5
+import { getUpcomingMatchesCached, getRecentMatchesCached } from '@/lib/api';
 import { WC_ALL_FIXTURES, type WCGroupFixture } from '@/lib/wc-fixtures';
 import { matchPath, predictPath } from '@/lib/url';
 import type { Match } from '@/lib/types';
@@ -300,8 +301,8 @@ export default async function WC2026PredictionsPage() {
 
   try {
     const [upRes, recRes] = await Promise.allSettled([
-      getUpcomingMatches('WC'),
-      getRecentMatches('WC'),
+      getUpcomingMatchesCached('WC'),
+      getRecentMatchesCached('WC'),
     ]);
 
     if (upRes.status === 'fulfilled') {

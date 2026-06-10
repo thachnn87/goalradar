@@ -16,7 +16,8 @@
 
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { getUpcomingMatches } from '@/lib/api';
+// PERF-4.5
+import { getUpcomingMatchesCached } from '@/lib/api';
 import type { Match } from '@/lib/types';
 import { matchPath } from '@/lib/url';
 import AdSlot from '@/components/AdSlot';
@@ -299,7 +300,7 @@ export default async function MatchesTomorrowPage() {
   const dayAfter = dayAfterUTC();
 
   const [upcomingResult] = await Promise.allSettled([
-    getUpcomingMatches('WC'),
+    getUpcomingMatchesCached('WC'),
   ]);
 
   const upcomingAll: Match[] = upcomingResult.status === 'fulfilled'
