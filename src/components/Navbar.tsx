@@ -33,7 +33,7 @@ export default function Navbar() {
                 <Link
                   key={href}
                   href={href}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  className={`px-2 lg:px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
                     isWC
                       ? isActive
                         ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
@@ -52,7 +52,14 @@ export default function Navbar() {
                       {label}
                     </span>
                   ) : label === 'World Cup 2026' ? (
-                    <span>🏆 {label}</span>
+                    // UI-1: responsive label — never wraps, header height stays stable.
+                    // <768px: "WC26" · 768–1024px: "WC 2026" · >1024px: full label.
+                    <span className="whitespace-nowrap">
+                      🏆{' '}
+                      <span className="hidden lg:inline">World Cup 2026</span>
+                      <span className="hidden md:inline lg:hidden">WC 2026</span>
+                      <span className="inline md:hidden">WC26</span>
+                    </span>
                   ) : (
                     label
                   )}
