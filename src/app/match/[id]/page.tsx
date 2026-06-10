@@ -5,8 +5,8 @@ import type { Metadata } from 'next';
 import LocalTime from '@/components/LocalTime';
 import AddToCalendar from '@/components/AddToCalendar';
 
-import { NotFoundError, getMatchDetail } from '@/lib/api';
-import { getOrBuildMatchSnapshot, getGroupTable } from '@/lib/match-snapshot';
+import { NotFoundError } from '@/lib/api';
+import { getOrBuildMatchSnapshot, getGroupTable, type MatchSnapshot } from '@/lib/match-snapshot';
 import { getDataSourceStats } from '@/lib/data-source-tracker';
 import { recordMatchRender } from '@/lib/match-perf-tracker';
 import type { MatchRenderSource } from '@/lib/match-perf-tracker';
@@ -46,10 +46,17 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   if (!numericId) return { title: 'Match Details | GoalRadar' };
 
   try {
-    // Fast path — only the match detail is needed to build metadata.
-    // Using getMatchDetail (KV SWR 60s/120s) avoids blocking on the full
-    // snapshot build (H2H + standings) which would delay the initial HTML.
-    const match = await getMatchDetail(numericId);
+    // PERF-4 Phase 7: use snapshot instead of a bare getMatchDetail() call.
+    //
+    // Benefits:
+    //   • React.cache() deduplicates this call with the Suspense deferred
+    //     components (HeadToHeadDeferred, WCGroupSectionDeferred) — 0 extra work.
+    //   • Snapshot has tier-aware TTL (6 h upcoming, 7 d finished) vs
+    //     SWR.MATCH (60 s / 120 s) — far fewer bg-revalidation provider calls.
+    //   • Prewarm seeds goalradar:match:{id} → snapshot KV hit on first user.
+    //   • Provider is NEVER called from this path on a warm cache.
+    const snapshot = await getOrBuildMatchSnapshot(numericId);
+    const match = snapshot.match;
     const home  = match.homeTeam.name ?? 'TBD';
     const away  = match.awayTeam.name ?? 'TBD';
     const comp  = match.competition?.name ?? 'Football';
@@ -1975,27 +1982,30 @@ export default async function MatchDetailPage({ params }: Params) {
     );
   }
 
-  // ── Fast path: match detail only (L1 → KV → provider) ─────────────────────
+  // ── PERF-4: Snapshot-first (Phases 2, 3, 7) ──────────────────────────────
   //
-  // Sequence diagram
-  // ────────────────
-  //   Browser → MatchDetailPage
-  //          → getMatchDetail()       L1 in-memory (~0 ms on hit)
-  //                                   L2 Vercel KV  (~10 ms on hit, SWR 60s/120s)
-  //                                   L3 Provider   (~200-7000 ms on miss)
-  //     → [renders score hero, events, report immediately]
-  //     → Suspense boundaries dispatch getOrBuildMatchSnapshot concurrently
-  //          → getOrBuildMatchSnapshot()  React.cache() deduplication
-  //               → KV snapshot read     (~10 ms on hit, TTL 900s)
-  //               → buildSnapshot()      [on miss] L1 HIT for match detail
-  //                                      + parallel: H2H, WC fixtures, standings
-  //     → H2H section streams in
-  //     → WC group sections stream in
+  // Sequence (post-PERF-4):
+  //   generateMetadata()  ───┐
+  //   MatchDetailPage()   ───┤→ getOrBuildMatchSnapshot(id)  ← React.cache() dedup
+  //   HeadToHeadDeferred  ───┤      │
+  //   WCGroupDeferred     ───┘      ├─ 1. KV snapshot hit → instant (~10 ms)
+  //                                 ├─ 2. KV detail hit → buildSnapshot, 0 provider
+  //                                 ├─ 3. Static WC fallback for group fixtures
+  //                                 └─ 4. Provider (last resort only)
   //
-  // Goal: score hero renders in <50 ms (KV hit) or <500 ms (provider, no queue).
-  // Provider queue (RATE_LIMITER 7s/slot) blocks only providers, not the score hero.
+  // All four callers share the same React.cache() promise — work runs exactly once.
+  // Score hero renders from snapshot.match; Suspense boundaries get H2H + WC data
+  // from the same snapshot at near-zero cost.
+  //
+  // Provider is NEVER called when the KV snapshot is warm (prewarm-seeded on
+  // every orchestrator run, TTL: upcoming=6h, finished=7d).
 
-  let match: MatchDetail | null = null;
+  // PERF-4 Phase 2/3: snapshot-first — single KV read serves score hero +
+  // H2H + WC group sections.  React.cache() means generateMetadata already
+  // populated this promise; the await here returns instantly on warm cache.
+  //
+  // Priority: KV snapshot → KV detail (no SWR trigger) → static WC → provider
+  let snapshot: MatchSnapshot | null = null;
   type MatchError = 'not_found' | 'unavailable' | null;
   let matchError: MatchError = null;
 
@@ -2003,10 +2013,11 @@ export default async function MatchDetailPage({ params }: Params) {
   const _t0          = Date.now();
 
   try {
-    match = await getMatchDetail(numericId);
+    snapshot = await getOrBuildMatchSnapshot(numericId);
 
     // Redirect old numeric-only URLs to the canonical slug URL.
-    const canonical = matchPath(match.id, match.homeTeam.name, match.awayTeam.name);
+    const m = snapshot.match;
+    const canonical = matchPath(m.id, m.homeTeam.name, m.awayTeam.name);
     if (slug === numericId) {
       redirect(canonical);
     }
@@ -2033,7 +2044,7 @@ export default async function MatchDetailPage({ params }: Params) {
   console.log(`[MATCH_LATENCY] ms=${_latencyMs} | matchId=${numericId} | source=${_renderSource}`);
   recordMatchRender(_renderSource, _latencyMs);
 
-  if (matchError || !match) {
+  if (matchError || !snapshot) {
     const isNotFound = matchError === 'not_found';
     return (
       <div className="max-w-2xl mx-auto space-y-4 pb-10">
@@ -2064,7 +2075,10 @@ export default async function MatchDetailPage({ params }: Params) {
     );
   }
 
-  // ── Fast-path data (available immediately from getMatchDetail) ──────────
+  // match is always non-null here (error guard above exits otherwise)
+  const match = snapshot.match;
+
+  // ── Data derived from snapshot (score hero, events, report) ─────────────
   const isWC     = match.competition?.code === 'WC';
   const hasGroup = Boolean(match.group);
 
