@@ -1,8 +1,0 @@
-User-agent: *
-Allow: /
-
-Disallow: /api/
-Disallow: /api/newsletter/admin
-Disallow: /admin/
-
-Sitemap: https://goalradar.org/sitemap.xml

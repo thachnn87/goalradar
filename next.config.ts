@@ -174,6 +174,23 @@ const nextConfig: NextConfig = {
     ];
   },
 
+  async headers() {
+    // SEO-6 FIX 5: explicit CDN caching for sitemaps so Googlebot pings do
+    // not regenerate the full sitemap pipeline on every fetch.  The child
+    // sitemaps (/sitemap/{id}.xml) are Next.js metadata routes with
+    // force-dynamic, which would otherwise be served with no-store.
+    const sitemapCache = [
+      {
+        key:   'Cache-Control',
+        value: 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400',
+      },
+    ];
+    return [
+      { source: '/sitemap.xml',       headers: sitemapCache },
+      { source: '/sitemap/:id*.xml',  headers: sitemapCache },
+    ];
+  },
+
   async rewrites() {
     return [
       // /sitemap.xml → sitemap index handler
