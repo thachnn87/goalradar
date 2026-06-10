@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
-import { getWCResults } from '@/lib/api';
+import { getWCResultsCached as getWCResults } from '@/lib/api';
 import type { Match } from '@/lib/types';
 import { matchPath } from '@/lib/url';
 import Breadcrumb from '@/components/Breadcrumb';

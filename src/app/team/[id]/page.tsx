@@ -10,7 +10,7 @@
  */
 
 import { permanentRedirect } from 'next/navigation';
-import { getTeam } from '@/lib/api';
+import { getTeamCached } from '@/lib/api';
 import { teamPath } from '@/lib/url';
 
 // Redirect is stable once the team name is known. Revalidate daily.
@@ -21,10 +21,9 @@ type Params = { params: Promise<{ id: string }> };
 export default async function TeamIdRedirect({ params }: Params) {
   const { id } = await params;
 
-  // Resolve the team name from the API; fall back to undefined on any error.
-  // permanentRedirect() must sit outside any try/catch — it throws a
-  // NEXT_REDIRECT sentinel that a bare catch{} would intercept and replace
-  // with the fallback, producing /teams/{id}-tbd even when the API succeeds.
-  const team = await getTeam(id).catch(() => null);
+  // Resolve the team name from KV (never calls provider).
+  // getTeamCached returns null on KV miss — permanentRedirect falls back to
+  // the bare numeric-ID path (/teams/{id}) which the teams page handles.
+  const team = await getTeamCached(id);
   permanentRedirect(teamPath(team?.id ?? id, team?.name));
 }

@@ -519,3 +519,54 @@ export async function getMatchDetailCached(id: string): Promise<MatchDetail | nu
     return null;
   }
 }
+
+/**
+ * Page-safe head-to-head — reads from KV without SWR trigger.
+ * Returns null on KV miss (callers must handle null H2H gracefully).
+ */
+export async function getHeadToHeadCached(id: string): Promise<HeadToHead | null> {
+  const key = `/matches/${id}/head2head`;
+  try {
+    return await withCache(key, TTL.MATCH, async () => {
+      const data = await readKVOnly<HeadToHead>(key);
+      return data ?? null;
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Page-safe team match history (recent form).
+ * Returns empty on KV miss — no static fallback for team-specific data.
+ * The cron orchestrator pre-warms team matches for WC squads via snapshot builds.
+ */
+export async function getTeamMatchesCached(id: string): Promise<{ matches: Match[] }> {
+  const key = `/teams/${id}/matches?status=FINISHED&limit=10`;
+  try {
+    return await withCache(key, TTL.FIXTURES, async () => {
+      const data = await readKVOnly<{ matches: Match[] }>(key);
+      if (data) return data;
+      console.warn(`[API] getTeamMatchesCached: KV miss for team ${id}, returning empty`);
+      return { matches: [] };
+    });
+  } catch {
+    return { matches: [] };
+  }
+}
+
+/**
+ * Page-safe team detail.
+ * Returns null on KV miss — callers must handle null gracefully.
+ */
+export async function getTeamCached(id: string): Promise<TeamDetail | null> {
+  const key = `/teams/${id}`;
+  try {
+    return await withCache(key, TTL.STANDINGS, async () => {
+      const data = await readKVOnly<TeamDetail>(key);
+      return data ?? null;
+    });
+  } catch {
+    return null;
+  }
+}

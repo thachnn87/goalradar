@@ -50,8 +50,8 @@ import { getStaticGroupMatches } from '@/data/worldcup/loader';
 
 import {
   getMatchDetail,
-  getHeadToHead,
-  // PERF-6: use *Cached variants — read KV only, never trigger provider calls
+  // PERF-7A: use *Cached variants — read KV only, never trigger provider calls
+  getHeadToHeadCached,
   getUpcomingMatchesCached,
   getRecentMatchesCached,
   getStandingsCached,
@@ -357,7 +357,7 @@ async function buildSnapshot(matchId: string): Promise<MatchSnapshot> {
   // These NEVER call the provider — snapshot builds must not add to the queue.
   const [h2hResult, upcomingResult, recentResult, standingsResult] =
     await Promise.allSettled([
-      getHeadToHead(matchId),
+      getHeadToHeadCached(matchId),
       isWC && hasGroup ? getUpcomingMatchesCached('WC') : Promise.resolve(null),
       isWC && hasGroup ? getRecentMatchesCached('WC')   : Promise.resolve(null),
       isWC && hasGroup ? getStandingsCached('WC')       : Promise.resolve(null),

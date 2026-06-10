@@ -1,7 +1,10 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
-import { getWCLiveMatches, getUpcomingMatches } from '@/lib/api';
+import {
+  getWCLiveMatchesCached   as getWCLiveMatches,
+  getUpcomingMatchesCached as getUpcomingMatches,
+} from '@/lib/api';
 import type { Match } from '@/lib/types';
 import { matchPath } from '@/lib/url';
 import Breadcrumb from '@/components/Breadcrumb';

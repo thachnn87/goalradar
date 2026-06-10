@@ -21,7 +21,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 
-import { getTeamMatches } from '@/lib/api';
+import { getTeamMatchesCached as getTeamMatches } from '@/lib/api';
 import { getOrBuildMatchSnapshot } from '@/lib/match-snapshot';
 import {
   extractForm,

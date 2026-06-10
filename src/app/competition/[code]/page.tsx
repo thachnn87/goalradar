@@ -2,7 +2,11 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
-import { getStandings, getRecentMatches, getUpcomingMatches } from '@/lib/api';
+import {
+  getStandingsCached       as getStandings,
+  getRecentMatchesCached   as getRecentMatches,
+  getUpcomingMatchesCached as getUpcomingMatches,
+} from '@/lib/api';
 import { COMPETITIONS } from '@/lib/types';
 import type { Match } from '@/lib/types';
 import StandingsTable from '@/components/StandingsTable';

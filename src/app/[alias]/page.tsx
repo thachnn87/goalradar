@@ -23,7 +23,10 @@ import { permanentRedirect, notFound } from 'next/navigation';
 import { cache } from 'react';
 import type { Metadata } from 'next';
 
-import { getUpcomingMatches, getRecentMatches } from '@/lib/api';
+import {
+  getUpcomingMatchesCached as getUpcomingMatches,
+  getRecentMatchesCached   as getRecentMatches,
+} from '@/lib/api';
 import { slugify, matchPath } from '@/lib/url';
 import type { Match } from '@/lib/types';
 

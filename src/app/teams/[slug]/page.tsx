@@ -24,10 +24,11 @@ import { cache } from 'react';
 import type { Metadata } from 'next';
 
 import {
-  getTeam,
-  getTeamMatches,
-  getStandings,
-  getUpcomingMatches,
+  // PERF-7A: *Cached variants — readKVOnly, never call provider from page renders
+  getTeamCached            as getTeamFromKV,
+  getTeamMatchesCached     as getTeamMatches,
+  getStandingsCached       as getStandings,
+  getUpcomingMatchesCached as getUpcomingMatches,
   NotFoundError,
 } from '@/lib/api';
 import { COMPETITIONS } from '@/lib/types';
@@ -48,7 +49,7 @@ type Params = { params: Promise<{ slug: string }> };
 // React.cache() ensures generateMetadata and the page component share
 // a single getTeam API call per request lifecycle.
 // ---------------------------------------------------------------------------
-const getTeamCached = cache(getTeam);
+const getTeamCached = cache(getTeamFromKV);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -94,6 +95,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
   try {
     const team = await getTeamCached(id);
+    if (!team) return { title: 'Team | GoalRadar' };
     const leagueComp = team.runningCompetitions.find(
       (c) => c.type === 'LEAGUE' && COMPETITIONS.some((k) => k.code === c.code),
     );

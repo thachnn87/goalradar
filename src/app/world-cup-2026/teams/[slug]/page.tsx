@@ -11,7 +11,11 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { WC_ALL_TEAM_SLUGS, getWCTeam } from '@/lib/wc-all-teams';
 import { getTeamFixtures, type WCGroupFixture } from '@/lib/wc-fixtures';
-import { getUpcomingMatches, getRecentMatches, getStandings } from '@/lib/api';
+import {
+  getUpcomingMatchesCached as getUpcomingMatches,
+  getRecentMatchesCached   as getRecentMatches,
+  getStandingsCached       as getStandings,
+} from '@/lib/api';
 import type { Match, StandingTable, StandingEntry } from '@/lib/types';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
