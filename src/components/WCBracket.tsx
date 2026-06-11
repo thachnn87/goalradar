@@ -144,7 +144,7 @@ function BracketMatchCard({ match, isFinal = false }: { match: Match; isFinal?: 
   if (isLinkable) {
     return (
       <Link
-        href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}
+        href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)} prefetch={true}
         style={cardStyle}
         className={cardClassName}
       >

@@ -271,7 +271,7 @@ function BracketPreview({ matches }: { matches: Match[] }) {
             return (
               <Link
                 key={m.id}
-                href={matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name)}
+                href={matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name)} prefetch={true}
                 className="flex items-center gap-3 px-5 py-3 hover:bg-gray-800/50 transition-colors"
               >
                 <span className="text-gray-700 text-xs w-8 shrink-0 font-mono">{roundLabel}</span>

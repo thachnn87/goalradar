@@ -1,7 +1,8 @@
-import Link from 'next/link';
 import { Match } from '@/lib/types';
 import { matchPath } from '@/lib/url';
 import LocalTime from '@/components/LocalTime';
+// PERF-8: MatchLink = Link with prefetch + hover/touch/viewport snapshot prewarm
+import MatchLink from '@/components/MatchLink';
 
 function formatTime(utcDate: string) {
   return new Date(utcDate).toLocaleTimeString('en-GB', {
@@ -125,8 +126,8 @@ export default function MatchCard({ match }: { match: Match }) {
   }
 
   return (
-    <Link href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}>
+    <MatchLink href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)} matchId={match.id}>
       {cardInner}
-    </Link>
+    </MatchLink>
   );
 }

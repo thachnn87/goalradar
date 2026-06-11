@@ -9,6 +9,7 @@ import { NotFoundError } from '@/lib/api';
 import { getOrBuildMatchSnapshot, getGroupTable, type MatchSnapshot } from '@/lib/match-snapshot';
 import { getDataSourceStats } from '@/lib/data-source-tracker';
 import { recordMatchRender } from '@/lib/match-perf-tracker';
+import MatchNavTelemetry from '@/components/MatchNavTelemetry';
 import type { MatchRenderSource } from '@/lib/match-perf-tracker';
 import AnalyticsTracker from '@/components/AnalyticsTracker';
 import WCGroupTable from '@/components/WCGroupTable';
@@ -2099,6 +2100,8 @@ export default async function MatchDetailPage({ params }: Params) {
 
   return (
     <>
+      {/* PERF-8 Phase 4: click→content-visible telemetry beacon */}
+      <MatchNavTelemetry matchId={numericId} />
       <JsonLd match={match} />
       <MatchFaqJsonLd faqs={faqs} />
       <AnalyticsTracker event={{

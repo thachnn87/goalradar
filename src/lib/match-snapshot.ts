@@ -350,6 +350,20 @@ async function buildSnapshot(matchId: string): Promise<MatchSnapshot> {
     match = await getMatchDetail(matchId); // withCache → withKVCache → provider
   }
 
+  return assembleSnapshot(matchId, match, detailSource, t0);
+}
+
+/**
+ * Steps 2–3 of the snapshot build: parallel KV-only data + merge.
+ * Shared by buildSnapshot (provider-fallback path) and
+ * prewarmMatchSnapshotKVOnly (PERF-8, strictly KV-only path).
+ */
+async function assembleSnapshot(
+  matchId:      string,
+  match:        MatchDetail,
+  detailSource: 'kv' | 'provider',
+  t0:           number,
+): Promise<MatchSnapshot> {
   const isWC    = match.competition?.code === 'WC';
   const hasGroup = Boolean(match.group);
 
@@ -414,6 +428,47 @@ async function buildSnapshot(matchId: string): Promise<MatchSnapshot> {
   }
 
   return snapshot;
+}
+
+// ---------------------------------------------------------------------------
+// PERF-8: KV-only snapshot prewarm (hover/touch/viewport hints)
+// ---------------------------------------------------------------------------
+
+/**
+ * Prewarm a match snapshot WITHOUT any provider fallback.
+ *
+ * Called by /api/prewarm/match/[id] on hover / touch / viewport hints.
+ * Outcomes:
+ *   'hit'   — snapshot already in KV (nothing to do)
+ *   'built' — snapshot assembled from KV detail + KV parallel data and written
+ *   'skip'  — KV detail missing → do nothing (the provider path is
+ *             structurally absent from this function; a later real page
+ *             visit handles the full-cold case under the KV lock)
+ */
+export async function prewarmMatchSnapshotKVOnly(
+  matchId: string,
+): Promise<'hit' | 'built' | 'skip'> {
+  const existing = await readKVSnapshot(matchId);
+  if (existing) return 'hit';
+
+  const detail = await readMatchDetailFromKV(matchId);
+  if (!detail) {
+    console.log(`[Prewarm-hint] SKIP match:${matchId} — no KV detail (provider not allowed)`);
+    return 'skip';
+  }
+
+  // Coalesce with any concurrent page-render build of the same match.
+  const inflight = _buildInflight.get(matchId);
+  if (inflight) {
+    await inflight.catch(() => undefined);
+    return 'hit';
+  }
+
+  const snapshot = await assembleSnapshot(matchId, detail, 'kv', Date.now());
+  await writeKVSnapshot(matchId, snapshot).catch(() => undefined);
+  writeDRSnapshot(matchId, snapshot);
+  console.log(`[Prewarm-hint] BUILT match:${matchId} (KV-only)`);
+  return 'built';
 }
 
 // ---------------------------------------------------------------------------

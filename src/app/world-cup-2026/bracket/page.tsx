@@ -204,7 +204,7 @@ function ThirdPlaceCard({ match }: { match: Match }) {
 
   return (
     <Link
-      href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}
+      href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)} prefetch={true}
       className="block bg-gradient-to-br from-amber-950/40 to-gray-900 border border-amber-700/30 rounded-2xl p-5 hover:border-amber-600/50 transition-all"
     >
       <div className="flex items-center gap-2 mb-4">
@@ -268,7 +268,7 @@ function FinalCard({ match }: { match: Match }) {
 
   return (
     <Link
-      href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}
+      href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)} prefetch={true}
       className="block bg-gradient-to-br from-yellow-950/60 via-gray-900 to-gray-900 border border-yellow-600/40 rounded-2xl p-6 hover:border-yellow-500/60 transition-all"
     >
       <div className="flex items-center gap-2 mb-5">
@@ -569,7 +569,7 @@ export default async function WCBracketPage() {
                       return (
                         <Link
                           key={m.id}
-                          href={matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name)}
+                          href={matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name)} prefetch={true}
                           className="flex items-center justify-between px-4 py-3 hover:bg-gray-800/50 transition-colors"
                         >
                           <div className="flex items-center gap-3 flex-1 min-w-0">

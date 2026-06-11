@@ -12,6 +12,8 @@ import LocalTime from '@/components/LocalTime';
 import type { Metadata } from 'next';
 import { Match, COMPETITIONS } from '@/lib/types';
 import { WC_ALL_FIXTURES, type WCGroupFixture } from '@/lib/wc-fixtures';
+// PERF-8 Phase 3: seed KV snapshots for the first visible matches on idle
+import SnapshotPrewarmHints from '@/components/SnapshotPrewarmHints';
 
 export const revalidate = 300;
 
@@ -210,6 +212,10 @@ async function ScheduleContent({
 
   return (
     <div className="space-y-8">
+      {/* PERF-8 Phase 3: seed KV snapshots for the first visible matches */}
+      <SnapshotPrewarmHints
+        ids={dates.flatMap((d) => grouped[d]).slice(0, 10).map((m) => m.id)}
+      />
       {mode === 'recent' && (
         <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-400/10 border border-amber-400/20 rounded-lg px-4 py-2">
           <span>⚠</span>

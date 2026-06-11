@@ -13,6 +13,7 @@ import type { Match, StandingTable } from '@/lib/types';
 import { matchPath } from '@/lib/url';
 import MatchCard from '@/components/MatchCard';
 import Breadcrumb from '@/components/Breadcrumb';
+import SnapshotPrewarmHints from '@/components/SnapshotPrewarmHints';
 import WCBracket from '@/components/WCBracket';
 import WCGroupTable from '@/components/WCGroupTable';
 import WCCountdown from '@/components/WCCountdown';
@@ -331,6 +332,10 @@ export default async function WorldCup2026Page() {
       <JsonLd />
 
       <div className="max-w-5xl mx-auto space-y-10 pb-12">
+        {/* PERF-8 Phase 3: seed KV snapshots for the first visible matches */}
+        <SnapshotPrewarmHints
+          ids={[...liveMatches, ...todayMatches, ...upcomingMatches].slice(0, 10).map((m) => m.id)}
+        />
         <Breadcrumb
           items={[{ label: 'Home', href: '/' }, { label: 'World Cup 2026' }]}
         />

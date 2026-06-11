@@ -12,6 +12,7 @@ import { getRecentMatchesCached, getWCLiveMatchesCached } from '@/lib/api';
 import type { Match } from '@/lib/types';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
+import SnapshotPrewarmHints from '@/components/SnapshotPrewarmHints';
 import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
 import NewsletterSignup from '@/components/NewsletterSignup';
@@ -132,6 +133,8 @@ export default async function WC2026ResultsPage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdBreadcrumb) }} />
 
       <div className="max-w-3xl mx-auto pb-16">
+        {/* PERF-8 Phase 3: seed KV snapshots for the first visible matches */}
+        <SnapshotPrewarmHints ids={[...live, ...finishedResults].slice(0, 10).map((m) => m.id)} />
         <Breadcrumb items={[
           { label: 'Home', href: '/' },
           { label: 'World Cup 2026 Results' },
@@ -184,7 +187,7 @@ export default async function WC2026ResultsPage() {
               {live.map((m) => {
                 const { label, cls } = statusBadge(m);
                 return (
-                  <Link key={m.id} href={matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name)}
+                  <Link key={m.id} href={matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name)} prefetch={true}
                     className="flex items-center justify-between bg-red-950/20 border border-red-900/30 hover:border-red-700/50 rounded-xl px-4 py-3 transition-colors group">
                     <span className="text-sm font-semibold text-white group-hover:text-red-300 transition-colors">
                       {m.homeTeam?.name} vs {m.awayTeam?.name}
@@ -211,7 +214,7 @@ export default async function WC2026ResultsPage() {
                   day: 'numeric', month: 'short', timeZone: 'UTC',
                 });
                 return (
-                  <Link key={m.id} href={matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name)}
+                  <Link key={m.id} href={matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name)} prefetch={true}
                     className="flex items-center justify-between bg-gray-900 border border-gray-800 hover:border-yellow-700/30 rounded-xl px-4 py-3 transition-colors group">
                     <div className="flex items-center gap-3 min-w-0">
                       <span className="text-[10px] text-gray-600 shrink-0 w-10">{date}</span>

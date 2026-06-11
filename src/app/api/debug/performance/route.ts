@@ -29,7 +29,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getMatchPerfStats, getSnapshotPerfStats } from '@/lib/match-perf-tracker';
+import { getMatchPerfStats, getSnapshotPerfStats, getNavigationPerfStats } from '@/lib/match-perf-tracker';
 import { getKVCacheStats }           from '@/lib/kv-cache';
 import { getDataSourceStats }        from '@/lib/data-source-tracker';
 import { footballDataLimiter }       from '@/lib/rate-limiter';
@@ -139,6 +139,13 @@ export async function GET(req: NextRequest) {
       /** PERF-7B success criterion. */
       goalMet:         snapStats.total === 0 || snapStats.p95 < 500,
     },
+
+    /**
+     * PERF-8: client-side click→content-visible navigation timing,
+     * beaconed from match pages via /api/telemetry/navigation.
+     * Success criterion: p50 < 500 ms.
+     */
+    navigationPerf: getNavigationPerfStats(),
 
     generatedAt: new Date().toISOString(),
   });

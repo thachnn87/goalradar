@@ -180,7 +180,7 @@ function KickoffTimesSection({ matches }: { matches: Match[] }) {
                 <tr key={m.id} className="border-t border-gray-800 hover:bg-gray-800/30 transition-colors">
                   <td className="px-4 py-3">
                     <Link
-                      href={matchPath(m.id, m.homeTeam.name, m.awayTeam.name)}
+                      href={matchPath(m.id, m.homeTeam.name, m.awayTeam.name)} prefetch={true}
                       className="text-white hover:text-yellow-400 transition-colors font-medium text-xs leading-snug"
                     >
                       {m.homeTeam.shortName || m.homeTeam.name}

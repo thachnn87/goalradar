@@ -5,6 +5,8 @@ import LiveRefresher from '@/components/LiveRefresher';
 import Breadcrumb from '@/components/Breadcrumb';
 import AdSlot from '@/components/AdSlot';
 import { Match } from '@/lib/types';
+// PERF-8 Phase 3: seed KV snapshots for the first visible matches on idle
+import SnapshotPrewarmHints from '@/components/SnapshotPrewarmHints';
 
 export const revalidate = 30;
 
@@ -40,6 +42,7 @@ export default async function LivePage() {
 
   return (
     <div className="space-y-6">
+      <SnapshotPrewarmHints ids={matches.slice(0, 10).map((m) => m.id)} />
       <Breadcrumb
         items={[
           { label: 'Home', href: '/' },

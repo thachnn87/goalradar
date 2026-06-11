@@ -45,6 +45,13 @@ let _snapDrHits         = 0;
 const _snapLatencies: number[] = [];
 
 // ---------------------------------------------------------------------------
+// PERF-8: client navigation telemetry (click → content visible)
+// ---------------------------------------------------------------------------
+
+let _navCount = 0;
+const _navLatencies: number[] = [];
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -105,6 +112,33 @@ export function getSnapshotPerfStats() {
   };
 }
 
+/**
+ * PERF-8: record a click→content-visible navigation sample beaconed from the
+ * client (/api/telemetry/navigation). Values are clamped to a sane window —
+ * back/forward restores and background tabs can produce absurd deltas.
+ */
+export function recordNavigation(clickToRenderMs: number): void {
+  if (!Number.isFinite(clickToRenderMs) || clickToRenderMs < 0 || clickToRenderMs > 60_000) return;
+  _navCount++;
+  _navLatencies.push(Math.round(clickToRenderMs));
+  if (_navLatencies.length > MAX_RECENT) _navLatencies.shift();
+}
+
+export function getNavigationPerfStats() {
+  const sorted = [..._navLatencies].sort((a, b) => a - b);
+  const n = sorted.length;
+  const p = (pct: number) => (n > 0 ? (sorted[Math.floor(n * pct)] ?? sorted[n - 1]) : 0);
+  const p50 = p(0.50);
+  return {
+    samples: _navCount,
+    p50,
+    p95: p(0.95),
+    p99: p(0.99),
+    /** PERF-8 success criterion: median click→content under 500 ms. */
+    goalMet: n === 0 || p50 < 500,
+  };
+}
+
 export function getMatchPerfStats() {
   const avgLatency  = _renders > 0 ? Math.round(_totalMs / _renders) : 0;
   const cacheHits   = _l1Hits + _kvHits;
@@ -152,4 +186,6 @@ export function _resetMatchPerfStats(): void {
   _snapBuildProvider = 0;
   _snapDrHits        = 0;
   _snapLatencies.length    = 0;
+  _navCount          = 0;
+  _navLatencies.length     = 0;
 }
