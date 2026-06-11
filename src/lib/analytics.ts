@@ -67,6 +67,19 @@ export function trackMatchView(params: {
   });
 }
 
+/** GEO-1: fire when a user clicks a "Your country" chip on a match page. */
+export function trackCountryChipClick(params: {
+  country:  string;
+  matchId:  number | string;
+  pageType: string;
+}): void {
+  send('country_chip_click', {
+    country:   params.country,
+    match_id:  String(params.matchId),
+    page_type: params.pageType,
+  });
+}
+
 /** Fire when a user views a team profile page. */
 export function trackTeamView(params: {
   teamId:   number | string;

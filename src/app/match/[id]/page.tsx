@@ -10,6 +10,7 @@ import { getOrBuildMatchSnapshot, getGroupTable, type MatchSnapshot } from '@/li
 import { getDataSourceStats } from '@/lib/data-source-tracker';
 import { recordMatchRender } from '@/lib/match-perf-tracker';
 import MatchNavTelemetry from '@/components/MatchNavTelemetry';
+import CountryChips from '@/components/CountryChips';
 import type { MatchRenderSource } from '@/lib/match-perf-tracker';
 import AnalyticsTracker from '@/components/AnalyticsTracker';
 import WCGroupTable from '@/components/WCGroupTable';
@@ -1328,16 +1329,7 @@ function NextPrevNav({
 
 // ── 1. Above-fold: compact "How to watch" strip ──────────────────────────────
 
-const COUNTRY_PILLS: { slug: string; flag: string; label: string }[] = [
-  { slug: 'us',        flag: '🇺🇸', label: 'USA'       },
-  { slug: 'uk',        flag: '🇬🇧', label: 'UK'        },
-  { slug: 'canada',    flag: '🇨🇦', label: 'Canada'    },
-  { slug: 'australia', flag: '🇦🇺', label: 'Australia' },
-  { slug: 'thailand',  flag: '🇹🇭', label: 'Thailand'  },
-  { slug: 'vietnam',   flag: '🇻🇳', label: 'Vietnam'   },
-];
-
-function WCAboveFoldCTA() {
+function WCAboveFoldCTA({ matchId }: { matchId: number | string }) {
   return (
     <div className="bg-gradient-to-r from-yellow-950/40 via-gray-900 to-gray-900 border border-yellow-800/30 rounded-2xl overflow-hidden">
       {/* Header row */}
@@ -1371,19 +1363,8 @@ function WCAboveFoldCTA() {
           </Link>
         </div>
       </div>
-      {/* Country pills */}
-      <div className="px-4 pb-3 flex flex-wrap gap-1.5 border-t border-white/5 pt-2.5">
-        <span className="text-xs text-gray-600 self-center shrink-0 mr-1">Your country:</span>
-        {COUNTRY_PILLS.map(({ slug, flag, label }) => (
-          <Link
-            key={slug}
-            href={`/world-cup-2026/watch-live/${slug}`}
-            className="inline-flex items-center gap-1 text-xs text-white/60 hover:text-yellow-400 bg-white/5 hover:bg-white/10 border border-white/8 rounded-full px-2 py-0.5 transition-colors"
-          >
-            {flag} {label}
-          </Link>
-        ))}
-      </div>
+      {/* GEO-1: geo-aware, tier-prioritised country chips (6 + More on mobile) */}
+      <CountryChips matchId={matchId} pageType="match" />
     </div>
   );
 }
@@ -2015,13 +1996,6 @@ export default async function MatchDetailPage({ params }: Params) {
 
   try {
     snapshot = await getOrBuildMatchSnapshot(numericId);
-
-    // Redirect old numeric-only URLs to the canonical slug URL.
-    const m = snapshot.match;
-    const canonical = matchPath(m.id, m.homeTeam.name, m.awayTeam.name);
-    if (slug === numericId) {
-      redirect(canonical);
-    }
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     if (err instanceof NotFoundError) {
@@ -2031,6 +2005,15 @@ export default async function MatchDetailPage({ params }: Params) {
       console.error(`[MatchPage] id=${numericId} temporarily unavailable:`, errMsg);
       matchError = 'unavailable';
     }
+  }
+
+  // Redirect old numeric-only URLs to the canonical slug URL.
+  // GEO-1 fix: this must live OUTSIDE the try block — redirect() works by
+  // throwing NEXT_REDIRECT, which the catch above was swallowing and turning
+  // into the "Match Details Unavailable" card for every bare /match/{id} URL.
+  if (snapshot && slug === numericId) {
+    const m = snapshot.match;
+    redirect(matchPath(m.id, m.homeTeam.name, m.awayTeam.name));
   }
 
   // ── Performance logging ──────────────────────────────────────────────────
@@ -2120,7 +2103,7 @@ export default async function MatchDetailPage({ params }: Params) {
         <ScoreHero match={match} />
 
         {/* ── Above-fold revenue funnel (WC only) ─────────────────────────── */}
-        {isWC && <WCAboveFoldCTA />}
+        {isWC && <WCAboveFoldCTA matchId={match.id} />}
 
         {/* Ad: below score hero — high visibility placement */}
         <AdSlot slotId="match-top" variant="banner" />
