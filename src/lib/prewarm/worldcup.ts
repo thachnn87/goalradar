@@ -51,6 +51,8 @@ import {
   logRateSafeSkip,
   getMatchTier,
   TIER_REFRESH_SEC,
+  TIER_PRIORITY,
+  HOT_TIERS,
   type MatchTier,
 } from '@/lib/rate-safe';
 
@@ -85,25 +87,34 @@ const CRON_SAFE_TTL        = CRON_INTERVAL_SEC + CRON_OVERLAP_SEC; // 1920 s
  */
 const SEED_BATCH_SIZE = 10;
 
-/** TTL for seeded match detail entries per tier. */
+/**
+ * TTL for seeded match detail entries per tier.
+ *
+ * PERF-10 invariant: TTL = refresh threshold + CRON_SAFE_TTL margin.
+ * The previous config used TTL == threshold for future/finished, which made
+ * entries expire BETWEEN the cycle that skipped them (still fresh) and the
+ * cycle that would have reseeded them — a guaranteed ~30-min cold window on
+ * the largest buckets.
+ */
 const DETAIL_STALE_SEC: Record<MatchTier, number> = {
   'live':     60,
-  // today / next-3d: must exceed the cron interval so entries never expire
-  // between two consecutive prewarm runs (previously 5 min / 15 min, which
-  // caused ~14-24 min cold windows per 30-min cycle).
-  'today':    CRON_SAFE_TTL,                // 32 min (was 5 min)
-  'next-3d':  CRON_SAFE_TTL,               // 32 min (was 15 min)
-  'future':   TIER_REFRESH_SEC['future'],   // 6 h (unchanged)
-  'finished': TIER_REFRESH_SEC['finished'], // 24 h (unchanged)
+  // Hot tiers — reseeded every cycle; TTL just needs to outlive one cycle.
+  'today':    CRON_SAFE_TTL,                                  // 32 min
+  'next-24h': CRON_SAFE_TTL,                                  // 32 min
+  // Cold tiers — TTL = threshold + cron-safe margin (gap-free).
+  'next-3d':  TIER_REFRESH_SEC['next-3d'] + CRON_SAFE_TTL,    // 2 h 32 min
+  'future':   TIER_REFRESH_SEC['future']  + CRON_SAFE_TTL,    // 12 h 32 min
+  'finished': 7 * 24 * 3_600,                                 // 7 d — reseed only when missing
 };
 
-/** Snapshot KV TTL per tier. */
+/** Snapshot KV TTL per tier (same gap-free invariant). */
 const SNAPSHOT_STALE_SEC: Record<MatchTier, number> = {
   'live':     60,
-  'today':    CRON_SAFE_TTL,                // 32 min (was 6 min)
-  'next-3d':  CRON_SAFE_TTL,               // 32 min (was 16 min)
-  'future':   TIER_REFRESH_SEC['future'],   // 6 h (unchanged)
-  'finished': TIER_REFRESH_SEC['finished'], // 24 h (unchanged)
+  'today':    CRON_SAFE_TTL,                                  // 32 min
+  'next-24h': CRON_SAFE_TTL,                                  // 32 min
+  'next-3d':  TIER_REFRESH_SEC['next-3d'] + CRON_SAFE_TTL,    // 2 h 32 min
+  'future':   TIER_REFRESH_SEC['future']  + CRON_SAFE_TTL,    // 12 h 32 min
+  'finished': 7 * 24 * 3_600,                                 // 7 d
 };
 
 /** DR copy TTLs — long-lived safety net. */
@@ -115,6 +126,21 @@ const MAX_PRIORITY_FETCHES = 4;
 
 /** KV key for the seeded match ID manifest. */
 export const SEEDED_IDS_KEY = 'goalradar:prewarm:match-ids';
+
+/** PERF-10: KV key for the last prewarm run's hot/cold metrics
+ *  (read by /api/debug/performance — cron runs in a different lambda,
+ *  so in-process counters would not be visible there). */
+export const PREWARM_METRICS_KEY = 'goalradar:prewarm:metrics';
+
+export interface PrewarmMetrics {
+  ts:                number;
+  hotMatchCount:     number;  // live + today + next-24h
+  coldMatchCount:    number;  // next-3d + future + finished
+  snapshotSeedCount: number;  // snapshots written this run
+  skippedFresh:      number;
+  coveragePercent:   number;
+  tierBreakdown:     Record<MatchTier, number>;
+}
 
 // ---------------------------------------------------------------------------
 // KV entry schema (mirrors kv-cache.ts)
@@ -259,6 +285,12 @@ async function seedMatch(
   const tier      = getMatchTier(match);
   const tierTtlMs = TIER_REFRESH_SEC[tier] * 1000;
 
+  // ── PERF-10: FINISHED — reseed only when missing ─────────────────────────
+  // Scores never change; any existing snapshot is valid until KV evicts it.
+  if (tier === 'finished' && existingSnapshot) {
+    return { seededDetail: false, seededSnapshot: false, skipped: true, live: false };
+  }
+
   // ── Skip if the existing snapshot is still fresh for this tier ──────────
   if (existingSnapshot && (now - existingSnapshot.generatedAt) < tierTtlMs) {
     return { seededDetail: false, seededSnapshot: false, skipped: true, live: false };
@@ -325,7 +357,7 @@ export async function prewarmWorldCup(): Promise<WorldCupPrewarmResult> {
   let skippedLive       = 0;
   let priorityRefreshed = 0;
   const tierBreakdown: Record<MatchTier, number> = {
-    'live': 0, 'today': 0, 'next-3d': 0, 'future': 0, 'finished': 0,
+    'live': 0, 'today': 0, 'next-24h': 0, 'next-3d': 0, 'future': 0, 'finished': 0,
   };
 
   // ── Guard: abort if already in rate-safe mode ─────────────────────────────
@@ -419,23 +451,28 @@ export async function prewarmWorldCup(): Promise<WorldCupPrewarmResult> {
   );
 
   // ── 3. Tier-aware seeding — batch freshness check + parallel writes ───────
-  // Batch-read all existing snapshots in one round trip (104 → 1 KV call),
-  // then seed stale/missing entries in parallel batches of SEED_BATCH_SIZE.
-  console.log('[Prewarm] worldcup: seeding match entries (tier-aware skip-if-fresh)');
+  // PERF-10: seed in hot-first priority order (LIVE → TODAY → NEXT_24H →
+  // NEXT_72H → FUTURE → FINISHED) so the matches users are most likely to
+  // open are warmed first in every cycle.
+  console.log('[Prewarm] worldcup: seeding match entries (hot-first, skip-if-fresh)');
 
-  let existingSnaps: (MatchSnapshot | null)[] = allMatches.map(() => null);
-  if (KV_ENABLED && allMatches.length > 0) {
+  const prioritized = [...allMatches].sort(
+    (a, b) => TIER_PRIORITY[getMatchTier(a)] - TIER_PRIORITY[getMatchTier(b)],
+  );
+
+  let existingSnaps: (MatchSnapshot | null)[] = prioritized.map(() => null);
+  if (KV_ENABLED && prioritized.length > 0) {
     try {
       existingSnaps = await kv.mget<(MatchSnapshot | null)[]>(
-        ...allMatches.map((m) => snapshotKey(m.id)),
+        ...prioritized.map((m) => snapshotKey(m.id)),
       );
     } catch {
       // On mget failure, fall through — existingSnaps remain null (seed all)
     }
   }
 
-  for (let i = 0; i < allMatches.length; i += SEED_BATCH_SIZE) {
-    const batch = allMatches.slice(i, i + SEED_BATCH_SIZE);
+  for (let i = 0; i < prioritized.length; i += SEED_BATCH_SIZE) {
+    const batch = prioritized.slice(i, i + SEED_BATCH_SIZE);
     const results = await Promise.all(
       batch.map((match, j) =>
         seedMatch(match, existingSnaps[i + j] ?? null, allMatches, standings, now, errors),
@@ -493,6 +530,22 @@ export async function prewarmWorldCup(): Promise<WorldCupPrewarmResult> {
   const covered         = seededSnapshots + skippedFresh;
   const coveragePercent = allMatches.length > 0
     ? Math.round((covered / allMatches.length) * 100) : 0;
+
+  // ── PERF-10: persist hot/cold metrics for /api/debug/performance ─────────
+  const hotMatchCount  = allMatches.filter((m) => HOT_TIERS.has(getMatchTier(m))).length;
+  const coldMatchCount = allMatches.length - hotMatchCount;
+  if (KV_ENABLED) {
+    const metrics: PrewarmMetrics = {
+      ts: Date.now(),
+      hotMatchCount,
+      coldMatchCount,
+      snapshotSeedCount: seededSnapshots,
+      skippedFresh,
+      coveragePercent,
+      tierBreakdown,
+    };
+    kv.set(PREWARM_METRICS_KEY, metrics, { ex: 24 * 3_600 }).catch(() => undefined);
+  }
 
   const durationMs = Date.now() - t0;
   console.log(

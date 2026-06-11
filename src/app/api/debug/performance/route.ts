@@ -29,7 +29,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { kv } from '@vercel/kv';
 import { getMatchPerfStats, getSnapshotPerfStats, getNavigationPerfStats } from '@/lib/match-perf-tracker';
+import { PREWARM_METRICS_KEY, type PrewarmMetrics } from '@/lib/prewarm/worldcup';
 import { getKVCacheStats }           from '@/lib/kv-cache';
 import { getDataSourceStats }        from '@/lib/data-source-tracker';
 import { footballDataLimiter }       from '@/lib/rate-limiter';
@@ -55,6 +57,15 @@ export async function GET(req: NextRequest) {
 
   const matchStats   = getMatchPerfStats();
   const snapStats    = getSnapshotPerfStats();
+
+  // PERF-10: last prewarm run's hot/cold metrics (written to KV by the cron
+  // lambda — in-process counters are not shared across lambdas).
+  let prewarmMetrics: PrewarmMetrics | null = null;
+  try {
+    prewarmMetrics = await kv.get<PrewarmMetrics>(PREWARM_METRICS_KEY);
+  } catch {
+    // KV unavailable — report null
+  }
   const kvStats      = getKVCacheStats();
   const dsStats      = getDataSourceStats();
   const rlSnapshot   = footballDataLimiter.getSnapshot();
@@ -146,6 +157,22 @@ export async function GET(req: NextRequest) {
      * Success criterion: p50 < 500 ms.
      */
     navigationPerf: getNavigationPerfStats(),
+
+    /**
+     * PERF-10: hot-match cache metrics from the last prewarm cron run
+     * (null until the first run after deploy). snapshotHitRate is the
+     * live per-process KV hit rate of getOrBuildMatchSnapshot.
+     */
+    prewarm: {
+      hotMatchCount:     prewarmMetrics?.hotMatchCount     ?? null,
+      coldMatchCount:    prewarmMetrics?.coldMatchCount    ?? null,
+      snapshotSeedCount: prewarmMetrics?.snapshotSeedCount ?? null,
+      skippedFresh:      prewarmMetrics?.skippedFresh      ?? null,
+      coveragePercent:   prewarmMetrics?.coveragePercent   ?? null,
+      tierBreakdown:     prewarmMetrics?.tierBreakdown     ?? null,
+      lastRunAt:         prewarmMetrics ? new Date(prewarmMetrics.ts).toISOString() : null,
+      snapshotHitRate:   snapStats.kvHitRate,
+    },
 
     generatedAt: new Date().toISOString(),
   });

@@ -75,15 +75,34 @@ let _state:  RateSafeState | null = null;
 // Tier-aware refresh TTLs
 // ---------------------------------------------------------------------------
 
-export type MatchTier = 'live' | 'today' | 'next-3d' | 'future' | 'finished';
+// PERF-10: 'next-24h' split out of 'next-3d' so tomorrow's matches stay hot
+// (predictions traffic peaks in the 24 h before kick-off) while 72-h matches
+// can be refreshed far less often.
+export type MatchTier = 'live' | 'today' | 'next-24h' | 'next-3d' | 'future' | 'finished';
 
-/** Minimum seconds between re-seeds for a match at each tier. */
+/** PERF-10 hot buckets — always reseeded on every orchestrator cycle. */
+export const HOT_TIERS: ReadonlySet<MatchTier> = new Set(['live', 'today', 'next-24h']);
+
+/** Seeding priority — hot matches are seeded first each cycle. */
+export const TIER_PRIORITY: Record<MatchTier, number> = {
+  'live': 0, 'today': 1, 'next-24h': 2, 'next-3d': 3, 'future': 4, 'finished': 5,
+};
+
+/**
+ * Minimum seconds between re-seeds for a match at each tier.
+ *
+ * PERF-10: thresholds < cron interval (30 min) mean "every cycle";
+ * cold tiers were raised (next-3d 15 min → 2 h, future 6 h → 12 h) to cut
+ * KV write volume. 'finished' is special-cased in prewarm: reseed only when
+ * the snapshot is missing entirely (scores never change).
+ */
 export const TIER_REFRESH_SEC: Record<MatchTier, number> = {
   'live':     30,
   'today':    5  * 60,
-  'next-3d':  15 * 60,
-  'future':   6  * 3_600,
-  'finished': 24 * 3_600,
+  'next-24h': 15 * 60,
+  'next-3d':  2  * 3_600,
+  'future':   12 * 3_600,
+  'finished': 7 * 24 * 3_600,
 };
 
 /**
@@ -104,6 +123,7 @@ export function getMatchTier(match: Match): MatchTier {
   if (kickoff <= todayEnd.getTime()) return 'today';
 
   const msUntil = kickoff - now;
+  if (msUntil <= 24 * 3_600 * 1000)     return 'next-24h';
   if (msUntil <= 3 * 24 * 3_600 * 1000) return 'next-3d';
   return 'future';
 }
