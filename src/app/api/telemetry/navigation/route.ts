@@ -7,16 +7,20 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { recordNavigation } from '@/lib/match-perf-tracker';
+import { recordNavigation, recordRenderPhases } from '@/lib/match-perf-tracker';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as { clickToRenderMs?: number };
+    const body = (await req.json()) as { clickToRenderMs?: number; heroMs?: number; fullMs?: number };
     if (typeof body.clickToRenderMs === 'number') {
       recordNavigation(body.clickToRenderMs);
       console.log(`[NAV_PERF] clickToRenderMs=${Math.round(body.clickToRenderMs)}`);
+    }
+    // PERF-11: hero-visible / full-render phases
+    if (typeof body.heroMs === 'number' || typeof body.fullMs === 'number') {
+      recordRenderPhases(body.heroMs, body.fullMs);
     }
   } catch {
     // malformed beacon — ignore

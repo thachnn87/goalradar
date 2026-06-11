@@ -30,7 +30,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
-import { getMatchPerfStats, getSnapshotPerfStats, getNavigationPerfStats } from '@/lib/match-perf-tracker';
+import { getMatchPerfStats, getSnapshotPerfStats, getNavigationPerfStats, getRenderPerfStats } from '@/lib/match-perf-tracker';
 import { PREWARM_METRICS_KEY, type PrewarmMetrics } from '@/lib/prewarm/worldcup';
 import { getKVCacheStats }           from '@/lib/kv-cache';
 import { getDataSourceStats }        from '@/lib/data-source-tracker';
@@ -157,6 +157,13 @@ export async function GET(req: NextRequest) {
      * Success criterion: p50 < 500 ms.
      */
     navigationPerf: getNavigationPerfStats(),
+
+    /**
+     * PERF-11: client render phases beaconed from match pages.
+     *   hero — ms from navigation start to above-the-fold hydration
+     *   full — ms from navigation start to window load (all sections)
+     */
+    renderPerf: getRenderPerfStats(),
 
     /**
      * PERF-10: hot-match cache metrics from the last prewarm cron run

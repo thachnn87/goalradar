@@ -2108,13 +2108,73 @@ export default async function MatchDetailPage({ params }: Params) {
         {/* Ad: below score hero — high visibility placement */}
         <AdSlot slotId="match-top" variant="banner" />
 
+        {/* ── PERF-11: everything below the fold streams independently ──────
+            BelowTheFoldDeferred awaits the same React.cache-memoised snapshot,
+            so on warm renders it resolves in the same flush; on dynamic/MISS
+            renders the hero block above flushes FIRST while this subtree is
+            still rendering server-side. */}
+        <Suspense fallback={<BelowFoldSkeleton />}>
+          <BelowTheFoldDeferred matchId={numericId} />
+        </Suspense>
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// PERF-11: below-the-fold subtree — streamed behind Suspense
+// ---------------------------------------------------------------------------
+
+/**
+ * Defers client paint cost until the section nears the viewport.
+ * content-visibility keeps the HTML fully present (SEO-safe, no JS) while
+ * letting the browser skip layout/paint for offscreen content.
+ */
+function LazySection({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="space-y-4 [content-visibility:auto] [contain-intrinsic-size:auto_600px]">
+      {children}
+    </div>
+  );
+}
+
+function BelowFoldSkeleton() {
+  return (
+    <div className="space-y-4 animate-pulse" aria-hidden="true">
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl h-40" />
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl h-64" />
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl h-48" />
+    </div>
+  );
+}
+
+async function BelowTheFoldDeferred({ matchId }: { matchId: string }) {
+  // Same memoised promise as the page body — never a second fetch.
+  const snapshot = await getOrBuildMatchSnapshot(matchId);
+  const match    = snapshot.match;
+
+  const isWC            = match.competition?.code === 'WC';
+  const matchGroupSlug  = match.group ? match.group.toLowerCase().replace(/[\s_]+/g, '-') : null;
+  const matchGroupLabel = match.group ? match.group.replace('GROUP_', 'Group ') : null;
+  const hasEvents =
+    (match.goals?.length ?? 0) > 0 ||
+    (match.bookings?.length ?? 0) > 0 ||
+    (match.substitutions?.length ?? 0) > 0;
+  const showStats = ['IN_PLAY', 'PAUSED', 'FINISHED'].includes(match.status);
+  const faqs = buildFaqs(match, null);
+
+  return (
+    <>
+      <LazySection>
         {showStats && <MatchSummary match={match} />}
 
         <MatchReport match={match} />
 
         {/* ── Mid-content revenue funnel (WC only) ────────────────────────── */}
         {isWC && <WCMidFunnel />}
+      </LazySection>
 
+      <LazySection>
         {showStats && hasEvents && <MatchStatistics match={match} />}
 
         <GoalsSection match={match} />
@@ -2124,28 +2184,30 @@ export default async function MatchDetailPage({ params }: Params) {
         <SubstitutionsSection match={match} />
 
         <LineupsSection />
+      </LazySection>
 
-        {/* Head-to-head — deferred: streams in after snapshot resolves.
-            Renders immediately (from KV snapshot ~10ms) or after buildSnapshot (~200ms+).
-            Score hero is already painted before this boundary triggers. */}
-        <Suspense fallback={<HeadToHeadSkeleton />}>
-          <HeadToHeadDeferred matchId={numericId} match={match} />
-        </Suspense>
+      {/* Head-to-head — deferred: streams in after snapshot resolves. */}
+      <Suspense fallback={<HeadToHeadSkeleton />}>
+        <HeadToHeadDeferred matchId={matchId} match={match} />
+      </Suspense>
 
+      <LazySection>
         {/* FAQ — visible Q&A section + FAQPage JSON-LD for rich snippets */}
         <MatchFaqSection faqs={faqs} />
 
         {/* Ad: mid-page — between FAQ and group content */}
         <AdSlot slotId="match-mid" variant="rectangle" className="mx-auto" />
+      </LazySection>
 
-        {/* WC group sections — deferred: group standings, other matches, related, next/prev.
-            All resolved from the same getOrBuildMatchSnapshot call (React.cache dedup). */}
-        {isWC && (
-          <Suspense fallback={<WCGroupSectionSkeleton />}>
-            <WCGroupSectionDeferred matchId={numericId} match={match} />
-          </Suspense>
-        )}
+      {/* WC group sections — deferred: group standings, other matches, related, next/prev.
+          All resolved from the same getOrBuildMatchSnapshot call (React.cache dedup). */}
+      {isWC && (
+        <Suspense fallback={<WCGroupSectionSkeleton />}>
+          <WCGroupSectionDeferred matchId={matchId} match={match} />
+        </Suspense>
+      )}
 
+      <LazySection>
         {/* WC navigation box (replaces generic CompetitionLinks for WC matches) */}
         {isWC
           ? <WCNavBox groupSlug={matchGroupSlug} groupLabel={matchGroupLabel} homeTeam={match.homeTeam} awayTeam={match.awayTeam} />
@@ -2183,7 +2245,7 @@ export default async function MatchDetailPage({ params }: Params) {
 
         {/* Ad: bottom of page */}
         <AdSlot slotId="match-bottom" variant="banner" />
-      </div>
+      </LazySection>
     </>
   );
 }

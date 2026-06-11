@@ -51,6 +51,10 @@ const _snapLatencies: number[] = [];
 let _navCount = 0;
 const _navLatencies: number[] = [];
 
+// PERF-11: client render-phase timing (hero hydration / window load)
+const _heroLatencies: number[] = [];
+const _fullLatencies: number[] = [];
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -124,6 +128,27 @@ export function recordNavigation(clickToRenderMs: number): void {
   if (_navLatencies.length > MAX_RECENT) _navLatencies.shift();
 }
 
+/** PERF-11: record hero-visible / full-render timings beaconed from match pages. */
+export function recordRenderPhases(heroMs?: number, fullMs?: number): void {
+  const push = (arr: number[], v?: number) => {
+    if (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 120_000) {
+      arr.push(Math.round(v));
+      if (arr.length > MAX_RECENT) arr.shift();
+    }
+  };
+  push(_heroLatencies, heroMs);
+  push(_fullLatencies, fullMs);
+}
+
+export function getRenderPerfStats() {
+  const pct = (arr: number[]) => {
+    const s = [...arr].sort((a, b) => a - b);
+    const p = (q: number) => (s.length > 0 ? (s[Math.floor(s.length * q)] ?? s[s.length - 1]) : 0);
+    return { samples: s.length, p50: p(0.5), p95: p(0.95), p99: p(0.99) };
+  };
+  return { hero: pct(_heroLatencies), full: pct(_fullLatencies) };
+}
+
 export function getNavigationPerfStats() {
   const sorted = [..._navLatencies].sort((a, b) => a - b);
   const n = sorted.length;
@@ -188,4 +213,6 @@ export function _resetMatchPerfStats(): void {
   _snapLatencies.length    = 0;
   _navCount          = 0;
   _navLatencies.length     = 0;
+  _heroLatencies.length    = 0;
+  _fullLatencies.length    = 0;
 }

@@ -13,9 +13,29 @@
 import { useEffect } from 'react';
 import { NAV_STAMP_KEY } from '@/components/MatchLink';
 
+function sendPayload(payload: Record<string, number>): void {
+  const body = JSON.stringify(payload);
+  if (navigator.sendBeacon) {
+    navigator.sendBeacon('/api/telemetry/navigation', new Blob([body], { type: 'application/json' }));
+  } else {
+    fetch('/api/telemetry/navigation', { method: 'POST', body, keepalive: true }).catch(() => undefined);
+  }
+}
+
 export default function MatchNavTelemetry({ matchId }: { matchId: string }) {
   useEffect(() => {
     try {
+      // PERF-11: hero render ≈ this component's hydration (it mounts with the
+      // above-the-fold block); full render ≈ window load (all sections + ads).
+      const heroMs = Math.round(performance.now());
+      const onLoad = () => {
+        try {
+          sendPayload({ heroMs, fullMs: Math.round(performance.now()) });
+        } catch { /* best-effort */ }
+      };
+      if (document.readyState === 'complete') onLoad();
+      else window.addEventListener('load', onLoad, { once: true });
+
       const raw = sessionStorage.getItem(NAV_STAMP_KEY);
       if (!raw) return;
       sessionStorage.removeItem(NAV_STAMP_KEY); // one-shot
@@ -23,12 +43,7 @@ export default function MatchNavTelemetry({ matchId }: { matchId: string }) {
       if (String(id) !== String(matchId)) return;            // navigated elsewhere first
       const clickToRenderMs = Date.now() - t;
       if (clickToRenderMs < 0 || clickToRenderMs > 60_000) return; // stale stamp
-      const payload = JSON.stringify({ clickToRenderMs });
-      if (navigator.sendBeacon) {
-        navigator.sendBeacon('/api/telemetry/navigation', new Blob([payload], { type: 'application/json' }));
-      } else {
-        fetch('/api/telemetry/navigation', { method: 'POST', body: payload, keepalive: true }).catch(() => undefined);
-      }
+      sendPayload({ clickToRenderMs });
     } catch {
       // telemetry is best-effort
     }
