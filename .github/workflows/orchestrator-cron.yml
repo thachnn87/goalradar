@@ -1,0 +1,47 @@
+# PERF-9: external scheduler for /api/cron/orchestrator.
+#
+# The orchestrator (WC fixtures refresh + standings + prewarmWorldCup) was
+# designed to be triggered externally after Vercel crons were removed
+# (commits "remove cron" / "remove vercel cron"), but no trigger was ever
+# configured — the PERF-9 audit measured 92/104 WC match snapshots missing
+# in production KV as a result (see PERF9_AUDIT.md).
+#
+# REQUIRED SETUP: add the repository secret CRON_SECRET
+# (Settings → Secrets and variables → Actions) with the same value as the
+# CRON_SECRET Vercel environment variable. The endpoint fails closed (401)
+# without it.
+
+name: WC cache orchestrator
+
+on:
+  schedule:
+    # Every 30 minutes. GitHub may delay scheduled runs by a few minutes
+    # under load — acceptable: snapshot TTLs include a 2-min overlap margin
+    # (PERF-7B CRON_SAFE_TTL = 32 min).
+    - cron: '*/30 * * * *'
+  workflow_dispatch: {} # manual smoke-test from the Actions tab
+
+concurrency:
+  group: orchestrator
+  cancel-in-progress: false # never abort a half-finished refresh cycle
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Call orchestrator
+        run: |
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "::error::CRON_SECRET repository secret is not set — see PERF9_AUDIT.md"
+            exit 1
+          fi
+          code=$(curl -sS -o /tmp/out.json -w '%{http_code}' \
+            --max-time 540 \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "https://www.goalradar.org/api/cron/orchestrator")
+          echo "HTTP ${code}"
+          cat /tmp/out.json
+          [ "${code}" = "200" ] || exit 1
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
