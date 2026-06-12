@@ -578,25 +578,44 @@ export default async function HomePage() {
   const wcToday   = allToday.filter((m) => m.competition.code === 'WC' && !['IN_PLAY','PAUSED'].includes(m.status));
   const otherToday = allToday.filter((m) => m.competition.code !== 'WC');
 
-  // ── Live WC matches ────────────────────────────────────────────────────────
-  const wcLive: Match[] = wcLiveResult.status === 'fulfilled' ? wcLiveResult.value.matches : [];
+  // ── Live WC matches (live cache; live strays merged in below) ─────────────
+  const wcLiveBase: Match[] = wcLiveResult.status === 'fulfilled' ? wcLiveResult.value.matches : [];
 
   // ── WC upcoming ────────────────────────────────────────────────────────────
-  const wcUpcoming: Match[] =
-    wcUpcomingResult.status === 'fulfilled'
-      ? [...wcUpcomingResult.value.matches]
-          .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
-          .slice(0, 6)
-      : [];
+  // DATA-3: the upcoming feed can carry matches whose DATA-2 overlay has
+  // advanced them to LIVE/FINISHED (stale list payload or L1 window).
+  // Section membership must follow the overlaid STATUS, not the feed name:
+  // finished strays → Results, live strays → Live, Upcoming = truly upcoming.
+  const wcUpcomingRaw: Match[] =
+    wcUpcomingResult.status === 'fulfilled' ? wcUpcomingResult.value.matches : [];
 
-  // ── WC recent results ─────────────────────────────────────────────────────
-  const wcResults: Match[] =
-    wcRecentResult.status === 'fulfilled'
-      ? [...wcRecentResult.value.matches]
-          .filter((m) => m.status === 'FINISHED')
-          .sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime())
-          .slice(0, 6)
-      : [];
+  const wcUpcoming: Match[] = wcUpcomingRaw
+    .filter((m) => m.status === 'SCHEDULED' || m.status === 'TIMED')
+    .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
+    .slice(0, 6);
+
+  const liveStrays     = wcUpcomingRaw.filter((m) => m.status === 'IN_PLAY' || m.status === 'PAUSED');
+  const finishedStrays = wcUpcomingRaw.filter((m) => m.status === 'FINISHED');
+
+  // ── WC recent results (recent feed + finished strays, deduped) ────────────
+  const dedupById = (arr: Match[]): Match[] => {
+    const seen = new Set<number>();
+    return arr.filter((m) => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
+  };
+
+  // DATA-3: live strays from the upcoming feed join the Live section —
+  // a match the overlay knows is IN_PLAY must appear in Live even when the
+  // live cache lags (it is overlay-filtered, never contradictory).
+  const wcLive: Match[] = dedupById([...wcLiveBase, ...liveStrays]);
+
+  const wcResults: Match[] = dedupById([
+    ...(wcRecentResult.status === 'fulfilled'
+      ? wcRecentResult.value.matches.filter((m) => m.status === 'FINISHED')
+      : []),
+    ...finishedStrays,
+  ])
+    .sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime())
+    .slice(0, 6);
 
   // ── WC group standings ────────────────────────────────────────────────────
   const allGroupTables: StandingTable[] =
