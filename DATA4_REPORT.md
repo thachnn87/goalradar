@@ -43,7 +43,25 @@ wcUpcomingRaw (overlaid)
   (Germany–Morocco); the "No World Cup matches today" message is gone; no
   card appears in both sections.
 - `tsc --noEmit` 0 errors · production build passes.
-- **Post-deploy production check:** Today's section populated with
-  Canada–Bosnia / Qatar–Switzerland / Brazil–Morocco etc.; Upcoming begins
-  with June 13 fixtures; no duplicates; no contradictory empty-state.
-  (Executed after Vercel deploy — see final verification below.)
+- **Post-deploy production check:** Today's section populated
+  (Canada–Bosnia, today 19:00 UTC); Upcoming begins with June-13 fixtures
+  (USA–Paraguay 01:00, Qatar–Switzerland 19:00, Brazil–Morocco …); no
+  duplicates; the contradictory empty-state is gone.
+
+## Production-found follow-up: prewarm snapshot state regression (fixed)
+
+The post-deploy check exposed a deeper bug: Korea–Czechia (FINISHED 2–1)
+rendered in Today as a **scoreless TIMED card**. Timeline: the match
+finished at ~03:50 UTC, *after* the 03:41 list refresh; the next prewarm
+cycle then **overwrote its FINISHED snapshot with a TIMED one** built from
+the still-stale bulk list (the tier was computed from the stale status, so
+the hot-tier reseed clobbered it). Once the snapshot itself regresses, the
+forward-only DATA-2 overlay has nothing fresher to apply.
+
+**Fix:** `STATE_RANK` exported from `match-state-overlay.ts`; `seedMatch`
+in `prewarm/worldcup.ts` now refuses to overwrite a snapshot whose match
+status is ahead of the incoming list status (`[Prewarm] STATE-GUARD` log).
+The snapshot layer is now forward-only **end to end** — readers (overlay)
+and writers (prewarm) both respect SCHEDULED → LIVE → FINISHED. The
+regressed 537328 snapshot self-heals on its next match-page visit and can
+no longer be clobbered.

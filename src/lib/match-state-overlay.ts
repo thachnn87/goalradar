@@ -27,8 +27,9 @@ const KV_ENABLED =
   typeof process.env.KV_REST_API_TOKEN === 'string' &&
   process.env.KV_REST_API_TOKEN !== '';
 
-/** Forward-only state machine rank: SCHEDULED/TIMED → LIVE → FINISHED. */
-const STATE_RANK: Record<string, number> = {
+/** Forward-only state machine rank: SCHEDULED/TIMED → LIVE → FINISHED.
+ *  Exported (DATA-4) so the prewarm can refuse to regress snapshot state. */
+export const STATE_RANK: Record<string, number> = {
   SCHEDULED: 0,
   TIMED:     0,
   POSTPONED: 1,

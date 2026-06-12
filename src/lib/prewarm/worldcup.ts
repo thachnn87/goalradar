@@ -46,6 +46,8 @@ import { kv }                 from '@vercel/kv';
 import { providerManager }    from '@/lib/providers/manager';
 import type { Match, MatchDetail, StandingTable } from '@/lib/types';
 import type { MatchSnapshot } from '@/lib/match-snapshot';
+// DATA-4: forward-only state ranks — prewarm must never regress snapshot state
+import { STATE_RANK } from '@/lib/match-state-overlay';
 import {
   isRateSafeModeActive,
   logRateSafeSkip,
@@ -293,6 +295,24 @@ async function seedMatch(
 
   // ── Skip if the existing snapshot is still fresh for this tier ──────────
   if (existingSnapshot && (now - existingSnapshot.generatedAt) < tierTtlMs) {
+    return { seededDetail: false, seededSnapshot: false, skipped: true, live: false };
+  }
+
+  // ── DATA-4: never regress snapshot state ─────────────────────────────────
+  // The bulk WC list driving this seeding can be older than reality — a match
+  // can finish AFTER the list refresh within the same cycle. If the existing
+  // snapshot is AHEAD in the forward-only state machine (e.g. FINISHED while
+  // the stale list still says TIMED), overwriting it would clobber the
+  // fresher state — observed in production: a finished match regressed to a
+  // scoreless TIMED card on the homepage. Keep the snapshot; the next list
+  // refresh reconciles naturally.
+  if (
+    existingSnapshot &&
+    (STATE_RANK[existingSnapshot.match.status] ?? 0) > (STATE_RANK[match.status] ?? 0)
+  ) {
+    console.log(
+      `[Prewarm] STATE-GUARD match ${match.id}: keeping snapshot ${existingSnapshot.match.status} over stale list ${match.status}`,
+    );
     return { seededDetail: false, seededSnapshot: false, skipped: true, live: false };
   }
 
