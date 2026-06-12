@@ -15,10 +15,15 @@ name: WC cache orchestrator
 
 on:
   schedule:
-    # Every 30 minutes. GitHub may delay scheduled runs by a few minutes
-    # under load — acceptable: snapshot TTLs include a 2-min overlap margin
-    # (PERF-7B CRON_SAFE_TTL = 32 min).
-    - cron: '*/30 * * * *'
+    # OPS-2: every 15 minutes (was */30). GitHub schedule events are
+    # best-effort — measured ~2 h effective on this repo — so we
+    # overprovision fire attempts. Extra fires are provider-free: the
+    # orchestrator's PERF-6 skip-if-fresh guards refresh nothing that is
+    # still inside its min-interval, and the concurrency group below
+    # prevents overlapping runs. Pair with a 30-min UptimeRobot monitor on
+    # the ?secret= URL for a hard cadence guarantee (see
+    # OPS2_SCHEDULER_HARDENING.md).
+    - cron: '*/15 * * * *'
   workflow_dispatch: {} # manual smoke-test from the Actions tab
 
 concurrency:
