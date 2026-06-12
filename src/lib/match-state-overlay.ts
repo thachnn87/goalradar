@@ -43,6 +43,30 @@ const STATE_RANK: Record<string, number> = {
 const MAX_OVERLAY = 120;
 
 /**
+ * DATA-2 — canonical merge rule: the snapshot is the single source of truth
+ * for match STATE. It wins whenever it is ahead in the forward-only state
+ * machine (SCHEDULED → LIVE → FINISHED — never backwards), and supplies the
+ * fresher score while both sides agree the match is live.
+ * Returns the input `listMatch` unchanged when the snapshot adds nothing.
+ */
+export function mergeSnapshotState(listMatch: Match, snapMatch: Match | undefined | null): Match {
+  if (!snapMatch || snapMatch.id !== listMatch.id) return listMatch;
+
+  const listRank = STATE_RANK[listMatch.status] ?? 0;
+  const snapRank = STATE_RANK[snapMatch.status] ?? 0;
+
+  // Snapshot ahead in the state machine → adopt status + score.
+  if (snapRank > listRank) {
+    return { ...listMatch, status: snapMatch.status, score: snapMatch.score, lastUpdated: snapMatch.lastUpdated };
+  }
+  // Same live state → snapshot usually has the fresher score/minute.
+  if (snapRank === listRank && (snapMatch.status === 'IN_PLAY' || snapMatch.status === 'PAUSED')) {
+    return { ...listMatch, score: snapMatch.score, lastUpdated: snapMatch.lastUpdated };
+  }
+  return listMatch;
+}
+
+/**
  * Overlay stale list entries with fresher per-match snapshot state.
  * Forward transitions only (a snapshot can never demote FINISHED → upcoming).
  * Best-effort: any KV failure returns the input unchanged.
@@ -58,22 +82,9 @@ export async function overlayMatchStates(matches: Match[]): Promise<Match[]> {
 
     let overlaid = 0;
     const merged = subject.map((m, i) => {
-      const s = snaps[i]?.match;
-      if (!s || s.id !== m.id) return m;
-
-      const listRank = STATE_RANK[m.status] ?? 0;
-      const snapRank = STATE_RANK[s.status] ?? 0;
-
-      // Snapshot is ahead in the state machine → adopt status + score.
-      if (snapRank > listRank) {
-        overlaid++;
-        return { ...m, status: s.status, score: s.score, lastUpdated: s.lastUpdated };
-      }
-      // Same live state → snapshot usually has the fresher score/minute.
-      if (snapRank === listRank && (s.status === 'IN_PLAY' || s.status === 'PAUSED')) {
-        return { ...m, score: s.score, lastUpdated: s.lastUpdated };
-      }
-      return m;
+      const out = mergeSnapshotState(m, snaps[i]?.match);
+      if (out.status !== m.status) overlaid++;
+      return out;
     });
 
     if (overlaid > 0) {

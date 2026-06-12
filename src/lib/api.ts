@@ -18,6 +18,8 @@ const BASE_URL = 'https://api.football-data.org/v4';
 
 export { NotFoundError, ApiUnavailableError } from './errors';
 import { NotFoundError, ApiUnavailableError } from './errors';
+// DATA-2: snapshot-authoritative state overlay (forward-only transitions)
+import { overlayMatchStates } from './match-state-overlay';
 
 // ---------------------------------------------------------------------------
 // HTTP layer  (retry + timeout + 429 back-off + Next.js ISR)
@@ -351,7 +353,10 @@ export async function getUpcomingMatchesCached(
 ): Promise<{ matches: Match[]; resultSet: { count: number } }> {
   const key = `/competitions/${competition}/matches?status=SCHEDULED,TIMED`;
   try {
-    return await withCache(key, TTL.FIXTURES, async () => {
+    // DATA-2: overlay runs OUTSIDE withCache so snapshot freshness is never
+    // pinned to the L1 TTL — every consumer (pages, snapshot builds, sitemap)
+    // gets snapshot-authoritative state on every call. KV mget only.
+    const data = await withCache(key, TTL.FIXTURES, async () => {
       const data = await readKVOnly<{ matches: Match[]; resultSet: { count: number } }>(key);
       if (data) return data;
       // KV miss — use static fallback for WC, empty for leagues
@@ -361,6 +366,7 @@ export async function getUpcomingMatchesCached(
       }
       return { matches: [], resultSet: { count: 0 } };
     });
+    return { ...data, matches: await overlayMatchStates(data.matches) };
   } catch {
     if (competition === 'WC') {
       const today = new Date().toISOString().split('T')[0];
@@ -381,14 +387,16 @@ export async function getRecentMatchesCached(
   const from     = new Date(Date.now() - 30 * 86_400_000).toISOString().split('T')[0];
   const key      = `/competitions/${competition}/matches?dateFrom=${from}&dateTo=${today}`;
   try {
-    return await withCache(key, TTL.FIXTURES, async () => {
-      const data = await readKVOnly<{ matches: Match[] }>(key);
-      if (data) return data;
+    const data = await withCache(key, TTL.FIXTURES, async () => {
+      const inner = await readKVOnly<{ matches: Match[] }>(key);
+      if (inner) return inner;
       if (competition === 'WC') {
         return { matches: getStaticGroupMatches().filter((m) => m.status === 'FINISHED') };
       }
       return { matches: [] };
     });
+    // DATA-2: snapshot-authoritative state (fresher live scores on this list)
+    return { matches: await overlayMatchStates(data.matches) };
   } catch {
     if (competition === 'WC') {
       return { matches: getStaticGroupMatches().filter((m) => m.status === 'FINISHED') };
@@ -404,11 +412,13 @@ export async function getRecentMatchesCached(
 export async function getWCResultsCached(): Promise<{ matches: Match[] }> {
   const key = '/competitions/WC/matches?status=FINISHED';
   try {
-    return await withCache(key, TTL.FIXTURES, async () => {
-      const data = await readKVOnly<{ matches: Match[] }>(key);
-      if (data) return data;
+    const data = await withCache(key, TTL.FIXTURES, async () => {
+      const inner = await readKVOnly<{ matches: Match[] }>(key);
+      if (inner) return inner;
       return { matches: getStaticGroupMatches().filter((m) => m.status === 'FINISHED') };
     });
+    // DATA-2: snapshot-authoritative state
+    return { matches: await overlayMatchStates(data.matches) };
   } catch {
     return { matches: getStaticGroupMatches().filter((m) => m.status === 'FINISHED') };
   }
@@ -449,11 +459,14 @@ export async function getStandingsCached(competition: string): Promise<{
 export async function getWCKnockoutMatchesCached(): Promise<{ matches: Match[] }> {
   const key = '/competitions/WC/matches';
   try {
-    return await withCache(key, TTL.WC, async () => {
-      const data = await readKVOnly<{ matches: Match[] }>(key);
-      if (data) return data;
+    const data = await withCache(key, TTL.WC, async () => {
+      const inner = await readKVOnly<{ matches: Match[] }>(key);
+      if (inner) return inner;
       return { matches: getStaticGroupMatches() };
     });
+    // DATA-2: snapshot-authoritative state — critical here, the bulk WC list
+    // has a 6 h L1 TTL and would otherwise lag every transition.
+    return { matches: await overlayMatchStates(data.matches) };
   } catch {
     return { matches: getStaticGroupMatches() };
   }
@@ -464,11 +477,14 @@ export async function getWCKnockoutMatchesCached(): Promise<{ matches: Match[] }
  * Live data routes through live-cache.ts which is already KV-backed (30s TTL).
  * This is an alias that makes the page-safe intent explicit.
  */
-export function getWCLiveMatchesCached(): Promise<{ matches: Match[] }> {
+export async function getWCLiveMatchesCached(): Promise<{ matches: Match[] }> {
   // live-cache.ts already reads from KV and only calls the provider when KV misses.
   // It uses the same pattern as readKVOnly but with a 30s TTL.
-  // Re-exporting under the *Cached name for consistency.
-  return getWCLiveMatches();
+  // DATA-2: overlay drops the stale-live window — a match that has since
+  // FINISHED (per its snapshot) is filtered out of the live list.
+  const data = await getWCLiveMatches();
+  const merged = await overlayMatchStates(data.matches);
+  return { matches: merged.filter((m) => m.status === 'IN_PLAY' || m.status === 'PAUSED') };
 }
 
 /**
@@ -490,14 +506,16 @@ export async function getTodayMatchesCached(): Promise<{ matches: Match[] }> {
   const today = new Date().toISOString().split('T')[0];
   const key   = `/matches?dateFrom=${today}&dateTo=${today}`;
   try {
-    return await withCache(key, TTL.MATCH, async () => {
-      const data = await readKVOnly<{ matches: Match[] }>(key);
-      if (data) return data;
+    const data = await withCache(key, TTL.MATCH, async () => {
+      const inner = await readKVOnly<{ matches: Match[] }>(key);
+      if (inner) return inner;
       // No static fallback for cross-competition today view — return empty
       // (cron will populate this on next run via refreshEndpoint)
       console.warn('[API] getTodayMatchesCached: KV miss, returning empty');
       return { matches: [] };
     });
+    // DATA-2: snapshot-authoritative state
+    return { matches: await overlayMatchStates(data.matches) };
   } catch {
     return { matches: [] };
   }
