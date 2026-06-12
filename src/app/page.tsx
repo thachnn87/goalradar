@@ -571,11 +571,13 @@ export default async function HomePage() {
     wcActive ? getWCKnockoutMatchesCached()   : Promise.resolve({ matches: [] as Match[] }),
   ]);
 
-  // ── Today's matches ────────────────────────────────────────────────────────
-  // DATA-2: lists are snapshot-overlaid inside the *Cached functions
+  // ── Today's matches (other leagues only) ──────────────────────────────────
+  // DATA-4: the cross-competition today feed proved unreliable for WC (empty
+  // in KV while WC fixtures existed today) — WC "Today" now derives from the
+  // WC upcoming feed below, the same authority the hub uses. This feed keeps
+  // serving only the "Other Leagues" section.
   const todayError = todayResult.status === 'rejected';
   const allToday: Match[] = todayResult.status === 'fulfilled' ? todayResult.value.matches : [];
-  const wcToday   = allToday.filter((m) => m.competition.code === 'WC' && !['IN_PLAY','PAUSED'].includes(m.status));
   const otherToday = allToday.filter((m) => m.competition.code !== 'WC');
 
   // ── Live WC matches (live cache; live strays merged in below) ─────────────
@@ -589,9 +591,16 @@ export default async function HomePage() {
   const wcUpcomingRaw: Match[] =
     wcUpcomingResult.status === 'fulfilled' ? wcUpcomingResult.value.matches : [];
 
-  const wcUpcoming: Match[] = wcUpcomingRaw
+  // DATA-4: split scheduled fixtures by UTC day — kickoff today → Today,
+  // tomorrow onward → Upcoming. A match can never appear in both sections.
+  const wcScheduled = wcUpcomingRaw
     .filter((m) => m.status === 'SCHEDULED' || m.status === 'TIMED')
-    .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
+    .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
+
+  const wcToday: Match[] = wcScheduled.filter((m) => m.utcDate.startsWith(today));
+
+  const wcUpcoming: Match[] = wcScheduled
+    .filter((m) => m.utcDate.split('T')[0] > today)
     .slice(0, 6);
 
   const liveStrays     = wcUpcomingRaw.filter((m) => m.status === 'IN_PLAY' || m.status === 'PAUSED');
