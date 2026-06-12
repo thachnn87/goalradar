@@ -67,6 +67,19 @@ export function trackMatchView(params: {
   });
 }
 
+/** LIVE-2: fire when a user clicks the World Cup live banner CTA. */
+export function trackLiveBannerClick(params: {
+  matchId?:       number | string | null;
+  destination:    string;
+  liveMatchCount: number;
+}): void {
+  send('live_banner_click', {
+    match_id:         params.matchId != null ? String(params.matchId) : '',
+    destination:      params.destination,
+    live_match_count: params.liveMatchCount,
+  });
+}
+
 /** GEO-1: fire when a user clicks a "Your country" chip on a match page. */
 export function trackCountryChipClick(params: {
   country:  string;

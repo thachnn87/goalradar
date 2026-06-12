@@ -1,4 +1,7 @@
 import Link from 'next/link';
+import type { Match } from '@/lib/types';
+import { matchPath } from '@/lib/url';
+import LiveBannerCTA from '@/components/LiveBannerCTA';
 
 // Opening match: Mexico vs South Africa — confirmed from football-data.org API
 const OPENING_MATCH_UTC = '2026-06-11T19:00:00Z';
@@ -69,7 +72,18 @@ function Separator() {
 // Public component
 // ---------------------------------------------------------------------------
 
-export default function WCCountdown({ compact = false }: { compact?: boolean }) {
+export default function WCCountdown({
+  compact = false,
+  liveMatches,
+  currentPath,
+}: {
+  compact?: boolean;
+  /** LIVE-2: in-play WC matches, passed by pages that already fetch them
+   *  (zero extra fetches). Omitted → CTA defaults to /live. */
+  liveMatches?: Match[];
+  /** LIVE-2: pathname of the rendering page — used by the self-reference guard. */
+  currentPath?: string;
+}) {
   const now = Date.now();
   const openingMs  = new Date(OPENING_MATCH_UTC).getTime();
   const tournamentEndMs = new Date(TOURNAMENT_END_UTC).getTime();
@@ -81,6 +95,31 @@ export default function WCCountdown({ compact = false }: { compact?: boolean }) 
   if (isFinished) return null; // no countdown needed after tournament
 
   if (isLive) {
+    // ── LIVE-2: dynamic CTA ──────────────────────────────────────────────
+    // Exactly one live match  → "Match Center →"  → canonical match page
+    // Otherwise (0 or many)   → "View Live Scores →" → /live
+    const live = liveMatches ?? [];
+    let ctaHref:  string;
+    let ctaLabel: string;
+    let ctaMatchId: number | null = null;
+
+    if (live.length === 1) {
+      const m   = live[0];
+      ctaHref   = matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name);
+      ctaLabel  = 'Match Center →';
+      ctaMatchId = m.id;
+    } else {
+      ctaHref  = '/live';
+      ctaLabel = 'View Live Scores →';
+    }
+
+    // Safeguard: the CTA must never point at the page it is rendered on.
+    if (currentPath && ctaHref === currentPath) {
+      ctaHref  = '/live';
+      ctaLabel = 'View Live Scores →';
+      ctaMatchId = null;
+    }
+
     // Tournament is underway — show live banner instead
     return (
       <div className={`rounded-2xl border border-yellow-700/30 bg-gradient-to-br from-yellow-950/50 to-gray-900 overflow-hidden ${compact ? 'p-4' : 'p-5 sm:p-6'}`}>
@@ -95,15 +134,21 @@ export default function WCCountdown({ compact = false }: { compact?: boolean }) 
                 </span>
                 <p className="text-white font-bold text-sm sm:text-base">FIFA World Cup 2026 is LIVE</p>
               </div>
-              <p className="text-gray-500 text-xs mt-0.5">USA · Canada · Mexico</p>
+              <p className="text-gray-500 text-xs mt-0.5">
+                {live.length === 1
+                  ? `${live[0].homeTeam?.shortName ?? live[0].homeTeam?.name ?? 'TBD'} vs ${live[0].awayTeam?.shortName ?? live[0].awayTeam?.name ?? 'TBD'} — in play`
+                  : live.length > 1
+                    ? `${live.length} matches in play`
+                    : 'USA · Canada · Mexico'}
+              </p>
             </div>
           </div>
-          <Link
-            href="/world-cup-2026"
-            className="bg-yellow-500 hover:bg-yellow-400 text-black px-4 py-2 rounded-lg text-sm font-bold transition-colors shrink-0"
-          >
-            Live →
-          </Link>
+          <LiveBannerCTA
+            href={ctaHref}
+            label={ctaLabel}
+            matchId={ctaMatchId}
+            liveMatchCount={live.length}
+          />
         </div>
       </div>
     );

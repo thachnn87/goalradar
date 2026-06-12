@@ -302,7 +302,8 @@ export default async function SchedulePage({
       </div>
 
       {/* Show compact countdown only when WC tab is selected */}
-      {competition === 'WC' && <WCCountdown compact />}
+      {/* LIVE-2: no live data fetched on this page — CTA defaults to /live */}
+      {competition === 'WC' && <WCCountdown compact currentPath="/schedule" />}
 
       {/* Above-fold banner — height reserved to prevent CLS */}
       <AdSlot slotId="schedule-top" variant="banner" />

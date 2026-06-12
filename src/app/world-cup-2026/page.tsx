@@ -373,7 +373,9 @@ export default async function WorldCup2026Page() {
         </div>
 
         {/* ── Countdown ────────────────────────────────────────────────── */}
-        <WCCountdown compact />
+        {/* LIVE-2: live matches drive the CTA; currentPath enables the
+            self-reference guard (this page previously linked to itself) */}
+        <WCCountdown compact liveMatches={liveMatches} currentPath="/world-cup-2026" />
 
         {/* ── Push notification opt-in ─────────────────────────────────── */}
         <PushNotificationButton variant="banner" matchLabel="World Cup 2026" />
