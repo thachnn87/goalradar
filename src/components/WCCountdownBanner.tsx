@@ -82,9 +82,11 @@ export default function WCCountdownBanner() {
             </span>
           </div>
 
-          {/* Right — CTA */}
+          {/* Right — CTA.
+              DATA-1 Phase 2: must land on the live-scores experience (/live),
+              not the hub — the label says "Live scores". */}
           <Link
-            href="/world-cup-2026"
+            href="/live"
             className="text-xs font-semibold text-yellow-400 hover:text-yellow-200 transition-colors shrink-0 flex items-center gap-1"
           >
             Live scores <span aria-hidden>→</span>

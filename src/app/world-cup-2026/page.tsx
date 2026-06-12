@@ -14,6 +14,7 @@ import { matchPath } from '@/lib/url';
 import MatchCard from '@/components/MatchCard';
 import Breadcrumb from '@/components/Breadcrumb';
 import SnapshotPrewarmHints from '@/components/SnapshotPrewarmHints';
+import { overlayMatchStates } from '@/lib/match-state-overlay';
 import WCBracket from '@/components/WCBracket';
 import WCGroupTable from '@/components/WCGroupTable';
 import WCCountdown from '@/components/WCCountdown';
@@ -288,15 +289,23 @@ export default async function WorldCup2026Page() {
       getWCKnockoutMatchesCached(),
     ]);
 
-  // 1. Live matches
-  const liveMatches: Match[] =
+  // 1. Live matches — overlay catches a stale live-cache entry whose match
+  // has since finished (forward-only: IN_PLAY → FINISHED).
+  const liveMatchesRaw: Match[] =
     liveResult.status === 'fulfilled' ? liveResult.value.matches : [];
+  const liveOverlaid = await overlayMatchStates(liveMatchesRaw);
+  const liveMatches  = liveOverlaid.filter((m) => m.status === 'IN_PLAY' || m.status === 'PAUSED');
 
   // 2. All upcoming (SCHEDULED / TIMED), sorted asc
+  // DATA-1: overlay with fresher per-match snapshots — a finished match in a
+  // stale upcoming payload must render as FINISHED with its score, matching
+  // the match page. Forward-only transitions; KV mget; zero provider calls.
   const allUpcoming: Match[] =
     upcomingResult.status === 'fulfilled'
-      ? [...upcomingResult.value.matches].sort(
-          (a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()
+      ? await overlayMatchStates(
+          [...upcomingResult.value.matches].sort(
+            (a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()
+          )
         )
       : [];
 

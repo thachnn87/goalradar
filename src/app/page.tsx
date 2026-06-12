@@ -17,6 +17,7 @@ import WCCountdown from '@/components/WCCountdown';
 import { matchPath } from '@/lib/url';
 import AdSlot from '@/components/AdSlot';
 import WCCountdownBanner from '@/components/WCCountdownBanner';
+import { overlayMatchStates } from '@/lib/match-state-overlay';
 
 export const revalidate = 30;
 
@@ -572,8 +573,11 @@ export default async function HomePage() {
   ]);
 
   // ── Today's matches ────────────────────────────────────────────────────────
+  // DATA-1: overlay with fresher per-match snapshot state (forward-only)
   const todayError = todayResult.status === 'rejected';
-  const allToday: Match[] = todayResult.status === 'fulfilled' ? todayResult.value.matches : [];
+  const allToday: Match[] = todayResult.status === 'fulfilled'
+    ? await overlayMatchStates(todayResult.value.matches)
+    : [];
   const wcToday   = allToday.filter((m) => m.competition.code === 'WC' && !['IN_PLAY','PAUSED'].includes(m.status));
   const otherToday = allToday.filter((m) => m.competition.code !== 'WC');
 
@@ -583,9 +587,11 @@ export default async function HomePage() {
   // ── WC upcoming ────────────────────────────────────────────────────────────
   const wcUpcoming: Match[] =
     wcUpcomingResult.status === 'fulfilled'
-      ? [...wcUpcomingResult.value.matches]
-          .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
-          .slice(0, 6)
+      ? await overlayMatchStates(
+          [...wcUpcomingResult.value.matches]
+            .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
+            .slice(0, 6)
+        )
       : [];
 
   // ── WC recent results ─────────────────────────────────────────────────────

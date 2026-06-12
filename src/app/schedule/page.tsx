@@ -14,6 +14,8 @@ import { Match, COMPETITIONS } from '@/lib/types';
 import { WC_ALL_FIXTURES, type WCGroupFixture } from '@/lib/wc-fixtures';
 // PERF-8 Phase 3: seed KV snapshots for the first visible matches on idle
 import SnapshotPrewarmHints from '@/components/SnapshotPrewarmHints';
+// DATA-1: forward-only snapshot state overlay for list consistency
+import { overlayMatchStates } from '@/lib/match-state-overlay';
 
 export const revalidate = 300;
 
@@ -200,6 +202,10 @@ async function ScheduleContent({
       </div>
     );
   }
+
+  // DATA-1: overlay stale list state with fresher per-match snapshots so the
+  // schedule never shows "upcoming" for a match that is already live/finished.
+  matches = await overlayMatchStates(matches);
 
   const grouped = groupByDate(matches);
 
