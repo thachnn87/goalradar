@@ -175,6 +175,48 @@ function minuteLabel(minute: number, injuryTime?: number | null) {
   return `${minute}${injuryTime ? `+${injuryTime}` : ''}'`;
 }
 
+function goalSuffix(type: string): string {
+  if (type === 'PENALTY'  || type === 'Penalty')  return '(P)';
+  if (type === 'OWN_GOAL' || type === 'Own Goal') return '(OG)';
+  return '';
+}
+
+function GoalScorers({ match }: { match: MatchDetail }) {
+  const goals = [...(match.goals ?? [])].sort((a, b) => a.minute - b.minute);
+  if (!goals.length) return null;
+  if (!['IN_PLAY', 'PAUSED', 'FINISHED'].includes(match.status)) return null;
+
+  const homeGoals = goals.filter((g) => g.team?.id === match.homeTeam.id);
+  const awayGoals = goals.filter((g) => g.team?.id !== match.homeTeam.id);
+
+  function ScorerRow({ g, reverse }: { g: Goal; reverse?: boolean }) {
+    const suffix = goalSuffix(g.type);
+    return (
+      <div className={`flex items-baseline gap-1.5 text-xs text-gray-300 ${reverse ? 'flex-row-reverse' : ''}`}>
+        <span className="text-sm leading-none shrink-0">⚽</span>
+        <span className={`font-medium truncate ${reverse ? 'text-right' : ''}`}>{g.scorer?.name}</span>
+        {suffix && <span className="text-gray-500 shrink-0">{suffix}</span>}
+        <span className={`text-gray-500 shrink-0 tabular-nums ${reverse ? 'mr-auto' : 'ml-auto'}`}>
+          {minuteLabel(g.minute, g.injuryTime)}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 pt-4 border-t border-gray-800">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          {homeGoals.map((g, i) => <ScorerRow key={i} g={g} />)}
+        </div>
+        <div className="space-y-1.5">
+          {awayGoals.map((g, i) => <ScorerRow key={i} g={g} reverse />)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function sectionTitle(label: string) {
   return (
     <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">
@@ -368,6 +410,9 @@ function ScoreHero({ match, centerSlot }: { match: MatchDetail; centerSlot?: Rea
           {mainRef && <span>🟡 Referee: {mainRef.name}</span>}
         </div>
       )}
+
+      {/* Goal scorers — compact above-fold summary */}
+      <GoalScorers match={match} />
     </div>
   );
 }
