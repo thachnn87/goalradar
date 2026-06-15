@@ -1,52 +1,134 @@
-# LIVE-2 Report — World Cup Live Banner CTA Fix
+# LIVE-2 SSR Live Score Authority Report
 ## GoalRadar · Sprint LIVE-2
 
-Generated: 2026-06-12
-Audit: `LIVE2_AUDIT.md`.
+Implemented: 2026-06-15
+Audit: `LIVE2_AUDIT.md`
 
 ---
 
-## Changes
+## Problem
 
-| File | Change |
-|------|--------|
-| `src/components/WCCountdown.tsx` | Live-state CTA is now dynamic: 1 live match → `Match Center →` to the canonical match page; 0/many → `View Live Scores →` to `/live`; self-reference guard falls back to `/live` whenever the computed destination equals `currentPath`. Subtitle shows "X vs Y — in play" / "N matches in play". New optional props `liveMatches` / `currentPath` (no fetches inside the component). |
-| `src/components/LiveBannerCTA.tsx` | NEW client CTA — fires `live_banner_click` `{match_id, destination, live_match_count}` on click; `prefetch={true}`. |
-| `src/lib/analytics.ts` | `trackLiveBannerClick` |
-| `src/app/world-cup-2026/page.tsx` | passes its already-fetched `liveMatches` + `currentPath="/world-cup-2026"` |
-| `src/app/schedule/page.tsx` | passes `currentPath="/schedule"` (no live fetch on this page → CTA defaults to `/live`) |
+When a user first loaded `/match/[id]` for a live match, the SSR-rendered score
+came from `goalradar:/matches/{id}` (per-match detail KV, 60s SWR). This key
+lags behind `goalradar:live:matches` (30s TTL) — the source used by `/live` and
+`/api/live-score`. First-paint score could be up to 60s stale. Combined with the
+MatchLiveZone poll interval (30s), a user could see the wrong score for up to 90s
+after loading the page.
 
-## Behavior matrix
+---
 
-| Situation | CTA | Destination |
-|-----------|-----|-------------|
-| Exactly 1 live WC match (hub) | `Match Center →` | `/match/{id}-{home}-vs-{away}` |
-| 2+ live matches (hub) | `View Live Scores →` | `/live` |
-| 0 live (between matches, tournament running) | `View Live Scores →` | `/live` |
-| Schedule page (no live list passed) | `View Live Scores →` | `/live` |
-| Any case where destination = current page | `View Live Scores →` | `/live` (guard) |
+## Change
 
-The previous hard-coded `Live →` → `/world-cup-2026` (a no-op on the hub
-itself) is gone in every state.
+**File: `src/lib/match-snapshot.ts`**
 
-## Verification
+Two additions:
 
-- Running app (hub + schedule, rendered moments after the live match
-  finished → 0 in play): both render `View Live Scores →` with
-  `href="/live"`; the old self-referencing label/href no longer appears in
-  the HTML.
-- Case A (`Match Center →`) is data-driven by the same `liveMatches` array
-  verified live in OPS-1 (hub correctly tracked 537328 as LIVE); next
-  kickoff exercises it in production.
-- `tsc --noEmit` 0 errors · production build passes.
+1. Import `readKVLiveMatches` from `./live-cache` (KV-direct, no L1, no provider — exported in LIVE-1A).
 
-## Success criteria
+2. In `buildSnapshot()`, between the detail-load and `assembleSnapshot()` call, an overlay block runs for IN_PLAY/PAUSED matches:
 
-| Criterion | Result |
-|-----------|--------|
-| No self-referencing CTA | ✅ guard + hub passes its own path |
-| Single live match → match center | ✅ canonical `matchPath` URL |
-| Multiple live → `/live` | ✅ |
-| Build passes | ✅ |
-| No provider calls added | ✅ hub reuses its existing live list; schedule adds no fetch |
-| No SEO changes | ✅ no routes/metadata/sitemap touched; one internal link target improved |
+```typescript
+if (isLiveStatus(match.status)) {
+  try {
+    const kvLive = await readKVLiveMatches();
+    const numId  = parseInt(matchId, 10);
+    const live   = kvLive?.find((m) => m.id === numId);
+    if (live) {
+      match = { ...match, score: live.score, status: live.status };
+      console.log(`[Snapshot] LIVE-OVERLAY match:${matchId} | score=...`);
+    }
+  } catch {
+    // live cache unavailable — use detail score as-is
+  }
+}
+```
+
+**Ephemeral**: the overlay affects only this render's output. The write guard (`writeKVSnapshot` skips live matches) remains. No live snapshot is ever persisted to KV.
+
+---
+
+## Authority rule — after LIVE-2
+
+| Status | Score source | Max first-paint lag |
+|--------|-------------|-------------------|
+| IN_PLAY / PAUSED | `goalradar:live:matches` (overlay) | **30s** |
+| FINISHED | `goalradar:match:{id}` (7d snapshot) | 0 (immutable) |
+| SCHEDULED / TIMED | `goalradar:/matches/{id}` (fixture) | 60s (score irrelevant) |
+
+The SSR score source for live matches now matches the `/live` page and `/api/live-score` endpoint — same KV key, same 30s bound.
+
+---
+
+## What is unchanged
+
+| Concern | Status |
+|---------|--------|
+| `vercel.json` | not touched |
+| ISR `revalidate = 60` | unchanged |
+| `MatchLiveZone` polling | unchanged — now confirms rather than corrects first-paint score |
+| FINISHED / TIMED match rendering | unchanged — `isLiveStatus()` guard skips overlay |
+| `prewarmMatchSnapshotKVOnly` | unchanged — calls `assembleSnapshot()` directly, bypasses `buildSnapshot()` |
+| Provider call count | unchanged — `readKVLiveMatches()` is KV-only |
+| New KV keys | none |
+| `writeKVSnapshot` / `readKVSnapshot` guards | unchanged |
+| Inflight dedup map (`_buildInflight`) | unchanged — overlay runs inside `buildSnapshot()` which is already protected |
+
+---
+
+## Log evidence (expected in Vercel function logs for live match)
+
+```
+[Snapshot] kv-detail-hit match:537358 | age=42s
+[LIVE CACHE] hit  | live-matches | KV age 12s
+[Snapshot] LIVE-OVERLAY match:537358 | score=4-1 | status=IN_PLAY
+[Snapshot] BUILT match:537358 | detail=kv | h2h=ok | standings=ok | wcMatches=48 | 28ms
+```
+
+Without the fix the log would show:
+```
+[Snapshot] kv-detail-hit match:537358 | age=42s
+[Snapshot] BUILT match:537358 | detail=kv | ...
+```
+No overlay line, and the score would be 42s stale.
+
+---
+
+## TypeScript
+
+`npx tsc --noEmit` → 0 errors.
+
+---
+
+## Build
+
+`npm run build` → clean, no warnings.
+
+---
+
+## Production verification
+
+**Performed at 2026-06-15 ~04:14 UTC. No live match active (next kickoff 16:00 UTC).**
+
+Non-live match checks (confirm overlay guard does not fire):
+
+| Match | Status | Source | Score |
+|-------|--------|--------|-------|
+| 537358 | FINISHED | `snapshot` | 5-1 FT ✅ |
+| 537361 | TIMED | `snapshot` | null ✅ |
+| `/live` | — | — | "No live matches" ✅ |
+
+These confirm `isLiveStatus()` correctly gates the overlay to IN_PLAY/PAUSED only.
+
+**IN_PLAY verification pending**: next WC match at 2026-06-15T16:00:00Z.
+
+When active, expected observations:
+- `/match/[id]` SSR score hero shows same score as `/live` page on first paint
+- `/api/live-score/[id]` returns `"source": "kv-live"` and same score
+- Server log emits `[Snapshot] LIVE-OVERLAY match:{id} | score=X-Y | status=IN_PLAY`
+- No `[LIVE CACHE] miss` log spike (no new provider calls)
+
+---
+
+## Commit
+
+Pending push — see git log.

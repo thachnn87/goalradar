@@ -48,6 +48,7 @@ import { kv }   from '@vercel/kv';
 import { recordDataSource, getDataSourceStats } from './data-source-tracker';
 import { recordSnapshotFetch }                  from './match-perf-tracker';
 import { getStaticGroupMatches } from '@/data/worldcup/loader';
+import { readKVLiveMatches } from './live-cache';
 
 import {
   getMatchDetail,
@@ -348,6 +349,30 @@ async function buildSnapshot(matchId: string): Promise<MatchSnapshot> {
     console.log(`[Snapshot] kv-detail-miss match:${matchId} — calling provider`);
     detailSource = 'provider';
     match = await getMatchDetail(matchId); // withCache → withKVCache → provider
+  }
+
+  // LIVE-2: overlay score + status from live cache for IN_PLAY/PAUSED matches.
+  // goalradar:live:matches (30s TTL) is fresher than goalradar:/matches/{id}
+  // (60s SWR). Reading KV-direct via readKVLiveMatches() (no L1, no provider)
+  // ensures the SSR first-paint score matches what /live and /api/live-score
+  // show, eliminating the up-to-60s stale window on initial page load.
+  // Overlay is ephemeral — write guard still prevents caching live snapshots.
+  if (isLiveStatus(match.status)) {
+    try {
+      const kvLive = await readKVLiveMatches();
+      const numId  = parseInt(matchId, 10);
+      const live   = kvLive?.find((m) => m.id === numId);
+      if (live) {
+        match = { ...match, score: live.score, status: live.status };
+        console.log(
+          `[Snapshot] LIVE-OVERLAY match:${matchId}` +
+          ` | score=${live.score?.fullTime?.home ?? '?'}-${live.score?.fullTime?.away ?? '?'}` +
+          ` | status=${live.status}`,
+        );
+      }
+    } catch {
+      // live cache unavailable — use detail score as-is (graceful degradation)
+    }
   }
 
   return assembleSnapshot(matchId, match, detailSource, t0);
