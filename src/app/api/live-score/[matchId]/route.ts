@@ -2,16 +2,22 @@
  * GET /api/live-score/[matchId]
  *
  * LIVE-1 Phase 1: lightweight score endpoint for the match page client poller.
- * Source order:
- *   1. Live cache (goalradar:live:matches, 30s TTL) — covers IN_PLAY/PAUSED
- *   2. Match snapshot (KV-backed, provider only on cold start)
  *
- * Never bypasses existing rate limits — both sources respect the existing
- * caching hierarchy from live-cache.ts and match-snapshot.ts.
+ * Source order:
+ *   1. KV live cache direct (goalradar:live:matches) — bypasses L1, cross-instance consistent
+ *   2. getLiveMatches() — fallback if KV expired; may trigger a fresh provider fetch
+ *   3. Match snapshot (KV-backed, provider only on cold start)
+ *
+ * LIVE-1A fix: step 1 now reads KV directly via readKVLiveMatches(), bypassing the
+ * in-process L1 cache. The L1 is per-instance and can lag up to 30s behind KV after
+ * the KV is updated with a new goal — different Vercel instances can diverge. Reading
+ * from KV directly guarantees this endpoint returns the same score as any other instance
+ * that recently read from KV, eliminating the /live vs /match divergence.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getLiveMatches } from '@/lib/api';
+import { readKVLiveMatches } from '@/lib/live-cache';
 import { getOrBuildMatchSnapshot } from '@/lib/match-snapshot';
 import { NotFoundError } from '@/lib/errors';
 
@@ -27,7 +33,26 @@ export async function GET(_req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'invalid matchId' }, { status: 400 });
   }
 
-  // Step 1: live cache — fastest, covers all competitions in IN_PLAY/PAUSED
+  // Step 1: KV live cache — bypasses in-process L1, cross-instance consistent.
+  // goalradar:live:matches is the single authority for IN_PLAY/PAUSED scores.
+  try {
+    const kvMatches = await readKVLiveMatches();
+    const liveMatch = kvMatches?.find((m) => m.id === numericId) ?? null;
+    if (liveMatch) {
+      return NextResponse.json({
+        matchId: liveMatch.id,
+        status: liveMatch.status,
+        score: liveMatch.score,
+        lastUpdated: liveMatch.lastUpdated ?? null,
+        source: 'kv-live',
+      });
+    }
+  } catch {
+    // KV unavailable — fall through
+  }
+
+  // Step 2: getLiveMatches() — L1 fallback + provider fetch if KV expired.
+  // Catches the case where KV TTL expired between orchestrator runs.
   try {
     const { matches } = await getLiveMatches();
     const liveMatch = matches.find((m) => m.id === numericId);
@@ -41,10 +66,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
       });
     }
   } catch {
-    // live cache miss/error — fall through to snapshot
+    // live cache error — fall through to snapshot
   }
 
-  // Step 2: snapshot (KV → provider as last resort)
+  // Step 3: snapshot (KV → provider as last resort).
+  // Covers FINISHED matches and the transition window from IN_PLAY → FINISHED.
   try {
     const snapshot = await getOrBuildMatchSnapshot(String(numericId));
     const { match } = snapshot;

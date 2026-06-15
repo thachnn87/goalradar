@@ -234,6 +234,25 @@ export async function getCachedWCLiveMatches(
 // Diagnostics
 // ---------------------------------------------------------------------------
 
+/**
+ * Read live matches directly from KV, bypassing the in-process L1 cache.
+ *
+ * Use this in API endpoints (e.g. /api/live-score) where cross-instance
+ * consistency is required. L1 is per-instance and can lag up to 30s behind
+ * KV after the KV is updated — different instances can diverge. Reading from
+ * KV directly guarantees every instance sees the same data within the KV TTL.
+ *
+ * Returns null if KV is disabled, the key is absent, or the entry is expired.
+ * Callers should fall back to getLiveMatches() (which may hit provider) on null.
+ */
+export async function readKVLiveMatches(): Promise<Match[] | null> {
+  const entry = await kvGet(KV_KEY);
+  if (!entry) return null;
+  const ageMs = Date.now() - entry.fetchedAt;
+  if (ageMs >= LIVE_TTL_SEC * 1000) return null; // expired — caller should refresh
+  return entry.matches;
+}
+
 export function getLiveCacheStats() {
   const now = Date.now();
   return {
