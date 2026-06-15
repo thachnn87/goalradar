@@ -376,24 +376,28 @@ export default async function WCTeamPage({
   const faq = [
     {
       q: `Is ${team.displayName} in the World Cup 2026?`,
-      a: `Yes. ${team.displayName} (${team.confederation}) qualified for the FIFA World Cup 2026, which takes place in USA, Canada and Mexico from 11 June to 19 July 2026.`,
+      a: team.qualified === false
+        ? `No. ${team.displayName} did not qualify for the FIFA World Cup 2026. ${team.intro}`
+        : `Yes. ${team.displayName} (${team.confederation}) qualified for the FIFA World Cup 2026, which takes place in USA, Canada and Mexico from 11 June to 19 July 2026.`,
     },
-    {
-      q: `What group is ${team.displayName} in at World Cup 2026?`,
-      a: standingGroupLabel
-        ? `${team.displayName} are in Group ${standingGroupLabel} at the FIFA World Cup 2026. The top two teams from each group advance to the Round of 32.`
-        : `${team.displayName}'s group at the FIFA World Cup 2026 will be confirmed after the official draw.`,
-    },
-    {
-      q: `When does ${team.displayName} play at World Cup 2026?`,
-      a: upcoming.length > 0
-        ? `${team.displayName}'s next match is ${upcoming[0].homeTeam?.name} vs ${upcoming[0].awayTeam?.name} on ${formatKickoff(upcoming[0].utcDate)}.`
-        : `Check the full FIFA World Cup 2026 schedule on GoalRadar for ${team.displayName}'s upcoming fixtures.`,
-    },
-    {
-      q: `How can I watch ${team.displayName} at World Cup 2026?`,
-      a: `World Cup 2026 is broadcast in the USA on Fox Sports and Telemundo. In the UK on ITV and BBC. In Australia on SBS. Check our Watch Live guide for all country broadcasters.`,
-    },
+    ...(team.qualified !== false ? [
+      {
+        q: `What group is ${team.displayName} in at World Cup 2026?`,
+        a: standingGroupLabel
+          ? `${team.displayName} are in Group ${standingGroupLabel} at the FIFA World Cup 2026. The top two teams from each group advance to the Round of 32.`
+          : `${team.displayName}'s group at the FIFA World Cup 2026 will be confirmed after the official draw.`,
+      },
+      {
+        q: `When does ${team.displayName} play at World Cup 2026?`,
+        a: upcoming.length > 0
+          ? `${team.displayName}'s next match is ${upcoming[0].homeTeam?.name} vs ${upcoming[0].awayTeam?.name} on ${formatKickoff(upcoming[0].utcDate)}.`
+          : `Check the full FIFA World Cup 2026 schedule on GoalRadar for ${team.displayName}'s upcoming fixtures.`,
+      },
+      {
+        q: `How can I watch ${team.displayName} at World Cup 2026?`,
+        a: `World Cup 2026 is broadcast in the USA on Fox Sports and Telemundo. In the UK on ITV and BBC. In Australia on SBS. Check our Watch Live guide for all country broadcasters.`,
+      },
+    ] : []),
   ];
 
   const jsonLdFaq = {
