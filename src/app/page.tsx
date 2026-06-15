@@ -2,13 +2,13 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 // PERF-4.5: use page-safe *Cached variants — zero provider calls during page render.
+// DATA-4 unified: getWCAuthorityMatchesCached merges upcoming + recent WC feeds.
 import {
   getTodayMatchesCached,
   getWCLiveMatchesCached,
   getWCKnockoutMatchesCached,
   getStandingsCached,
-  getUpcomingMatchesCached,
-  getRecentMatchesCached,
+  getWCAuthorityMatchesCached,
 } from '@/lib/api';
 import type { Match, StandingTable } from '@/lib/types';
 import MatchCard from '@/components/MatchCard';
@@ -554,21 +554,20 @@ export default async function HomePage() {
   const today   = new Date().toISOString().split('T')[0];
   const wcActive = isWCActive(today);
 
-  // All 6 fetches in parallel — WC-specific ones resolve empty when inactive
+  // All 5 fetches in parallel — WC-specific ones resolve empty when inactive.
+  // DATA-4 unified: getWCAuthorityMatchesCached replaces separate upcoming+recent calls.
   const [
     todayResult,
     wcLiveResult,
     wcStandingsResult,
-    wcUpcomingResult,
-    wcRecentResult,
+    wcAuthorityResult,
     wcKnockoutResult,
   ] = await Promise.allSettled([
     getTodayMatchesCached(),
-    wcActive ? getWCLiveMatchesCached()       : Promise.resolve({ matches: [] as Match[] }),
-    wcActive ? getStandingsCached('WC')       : Promise.resolve({ standings: [] as StandingTable[], competition: { name: '', emblem: '' } }),
-    wcActive ? getUpcomingMatchesCached('WC') : Promise.resolve({ matches: [] as Match[], resultSet: { count: 0 } }),
-    wcActive ? getRecentMatchesCached('WC')   : Promise.resolve({ matches: [] as Match[] }),
-    wcActive ? getWCKnockoutMatchesCached()   : Promise.resolve({ matches: [] as Match[] }),
+    wcActive ? getWCLiveMatchesCached()         : Promise.resolve({ matches: [] as Match[] }),
+    wcActive ? getStandingsCached('WC')         : Promise.resolve({ standings: [] as StandingTable[], competition: { name: '', emblem: '' } }),
+    wcActive ? getWCAuthorityMatchesCached()    : Promise.resolve({ matches: [] as Match[] }),
+    wcActive ? getWCKnockoutMatchesCached()     : Promise.resolve({ matches: [] as Match[] }),
   ]);
 
   // ── Today's matches (other leagues only) ──────────────────────────────────
@@ -583,17 +582,14 @@ export default async function HomePage() {
   // ── Live WC matches (live cache; live strays merged in below) ─────────────
   const wcLiveBase: Match[] = wcLiveResult.status === 'fulfilled' ? wcLiveResult.value.matches : [];
 
-  // ── WC upcoming ────────────────────────────────────────────────────────────
-  // DATA-3: the upcoming feed can carry matches whose DATA-2 overlay has
-  // advanced them to LIVE/FINISHED (stale list payload or L1 window).
-  // Section membership must follow the overlaid STATUS, not the feed name:
-  // finished strays → Results, live strays → Live, Upcoming = truly upcoming.
-  const wcUpcomingRaw: Match[] =
-    wcUpcomingResult.status === 'fulfilled' ? wcUpcomingResult.value.matches : [];
+  // ── WC authority set — merged upcoming + recent feeds, snapshot-overlaid ──
+  // DATA-4 unified: authority function ensures FINISHED matches always carry the
+  // correct score regardless of snapshot expiry. Section membership follows STATUS.
+  const wcAuthorityRaw: Match[] =
+    wcAuthorityResult.status === 'fulfilled' ? wcAuthorityResult.value.matches : [];
 
-  // DATA-4: split scheduled fixtures by UTC day — kickoff today → Today,
-  // tomorrow onward → Upcoming. A match can never appear in both sections.
-  const wcScheduled = wcUpcomingRaw
+  // DATA-4: split by status + UTC day. A match can never appear in two sections.
+  const wcScheduled = wcAuthorityRaw
     .filter((m) => m.status === 'SCHEDULED' || m.status === 'TIMED')
     .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
 
@@ -603,26 +599,19 @@ export default async function HomePage() {
     .filter((m) => m.utcDate.split('T')[0] > today)
     .slice(0, 6);
 
-  const liveStrays     = wcUpcomingRaw.filter((m) => m.status === 'IN_PLAY' || m.status === 'PAUSED');
-  const finishedStrays = wcUpcomingRaw.filter((m) => m.status === 'FINISHED');
+  const liveStrays = wcAuthorityRaw.filter((m) => m.status === 'IN_PLAY' || m.status === 'PAUSED');
 
-  // ── WC recent results (recent feed + finished strays, deduped) ────────────
   const dedupById = (arr: Match[]): Match[] => {
     const seen = new Set<number>();
     return arr.filter((m) => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
   };
 
-  // DATA-3: live strays from the upcoming feed join the Live section —
-  // a match the overlay knows is IN_PLAY must appear in Live even when the
-  // live cache lags (it is overlay-filtered, never contradictory).
+  // Live: merge live cache with live strays (authority knows IN_PLAY; live cache may lag).
   const wcLive: Match[] = dedupById([...wcLiveBase, ...liveStrays]);
 
-  const wcResults: Match[] = dedupById([
-    ...(wcRecentResult.status === 'fulfilled'
-      ? wcRecentResult.value.matches.filter((m) => m.status === 'FINISHED')
-      : []),
-    ...finishedStrays,
-  ])
+  // Results: FINISHED from authority set (already merged from recent feed — no separate call).
+  const wcResults: Match[] = wcAuthorityRaw
+    .filter((m) => m.status === 'FINISHED')
     .sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime())
     .slice(0, 6);
 
@@ -638,8 +627,7 @@ export default async function HomePage() {
   const wcKnockout: Match[] =
     wcKnockoutResult.status === 'fulfilled' ? wcKnockoutResult.value.matches : [];
 
-  const upcomingCount =
-    wcUpcomingResult.status === 'fulfilled' ? wcUpcomingResult.value.matches.length : 0;
+  const upcomingCount = wcScheduled.length;
 
   const jsonLdWebSite = {
     '@context': 'https://schema.org',

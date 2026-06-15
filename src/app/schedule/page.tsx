@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
-// PERF-4.5
-import { getUpcomingMatchesCached, getRecentMatchesCached } from '@/lib/api';
+// PERF-4.5 / DATA-4 unified authority
+import { getUpcomingMatchesCached, getRecentMatchesCached, getWCAuthorityMatchesCached } from '@/lib/api';
 import MatchCard from '@/components/MatchCard';
 import CompetitionSelector from '@/components/CompetitionSelector';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -127,38 +127,40 @@ async function ScheduleContent({
   let mode: 'upcoming' | 'recent' = 'upcoming';
 
   try {
-    const upcoming =
-      await getUpcomingMatchesCached(competition);
-
-    if (upcoming.resultSet.count > 0) {
-      matches = upcoming.matches;
+    if (competition === 'WC') {
+      // DATA-4 unified: authority function merges SCHEDULED/TIMED + FINISHED so a
+      // finished match is never shown as upcoming. Schedule shows SCHEDULED/TIMED
+      // matches going forward; past matches have correct FT scores via MatchCard.
+      const authority = await getWCAuthorityMatchesCached();
+      matches = authority.matches;
       mode = 'upcoming';
     } else {
-      const recent =
-        await getRecentMatchesCached(competition);
+      const upcoming = await getUpcomingMatchesCached(competition);
 
-      matches = [...recent.matches]
-        .sort((a, b) =>
-          b.utcDate.localeCompare(a.utcDate)
-        )
-        .slice(0, 40);
+      if (upcoming.resultSet.count > 0) {
+        matches = upcoming.matches;
+        mode = 'upcoming';
+      } else {
+        const recent = await getRecentMatchesCached(competition);
 
-      mode = 'recent';
+        matches = [...recent.matches]
+          .sort((a, b) => b.utcDate.localeCompare(a.utcDate))
+          .slice(0, 40);
+
+        mode = 'recent';
+      }
     }
   } catch (error) {
     console.error(
-      '[Schedule] Upcoming fixtures unavailable, falling back to recent matches:',
+      '[Schedule] Fixtures unavailable, falling back:',
       error instanceof Error ? error.message : String(error)
     );
 
     try {
-      const recent =
-        await getRecentMatchesCached(competition);
+      const recent = await getRecentMatchesCached(competition);
 
       matches = [...recent.matches]
-        .sort((a, b) =>
-          b.utcDate.localeCompare(a.utcDate)
-        )
+        .sort((a, b) => b.utcDate.localeCompare(a.utcDate))
         .slice(0, 40);
 
       mode = 'recent';
@@ -201,8 +203,7 @@ async function ScheduleContent({
     );
   }
 
-  // DATA-2: snapshot state overlay now happens inside the *Cached list
-  // functions themselves (single source of truth) — no per-page call needed.
+  // DATA-4: snapshot state overlay now happens inside the *Cached functions.
   const grouped = groupByDate(matches);
 
   const dates =

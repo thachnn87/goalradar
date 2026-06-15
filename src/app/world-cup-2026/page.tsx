@@ -2,11 +2,11 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 
 // PERF-4.5: page-safe *Cached variants — zero provider calls during page render.
+// DATA-4 unified: getWCAuthorityMatchesCached replaces separate upcoming/recent calls.
 import {
   getWCLiveMatchesCached,
   getWCKnockoutMatchesCached,
-  getUpcomingMatchesCached,
-  getRecentMatchesCached,
+  getWCAuthorityMatchesCached,
   getStandingsCached,
 } from '@/lib/api';
 import type { Match, StandingTable } from '@/lib/types';
@@ -277,13 +277,13 @@ function EmptyState({ message, sub }: { message: string; sub?: string }) {
 export default async function WorldCup2026Page() {
   const today = todayUTC();
 
-  // PERF-4.5: all five calls use page-safe *Cached variants.
-  // Static WC fallbacks are wired inside each *Cached function — no provider call possible.
-  const [liveResult, upcomingResult, recentResult, standingsResult, knockoutResult] =
+  // PERF-4.5: all four calls use page-safe *Cached variants.
+  // DATA-4 unified: getWCAuthorityMatchesCached merges the upcoming (SCHEDULED/TIMED)
+  // and recent (FINISHED) feeds so a finished match is never shown as upcoming.
+  const [liveResult, authorityResult, standingsResult, knockoutResult] =
     await Promise.allSettled([
       getWCLiveMatchesCached(),
-      getUpcomingMatchesCached('WC'),
-      getRecentMatchesCached('WC'),
+      getWCAuthorityMatchesCached(),
       getStandingsCached('WC'),
       getWCKnockoutMatchesCached(),
     ]);
@@ -293,34 +293,48 @@ export default async function WorldCup2026Page() {
   const liveMatches: Match[] =
     liveResult.status === 'fulfilled' ? liveResult.value.matches : [];
 
-  // 2. All upcoming (SCHEDULED / TIMED), sorted asc.
-  // DATA-2: list is snapshot-overlaid inside getUpcomingMatchesCached —
-  // a finished match in a stale payload arrives here as FINISHED with score.
-  const allUpcoming: Match[] =
-    upcomingResult.status === 'fulfilled'
-      ? [...upcomingResult.value.matches].sort(
+  // 2. Authority set — all WC matches with correct status from merged feeds + overlay.
+  // DATA-4 stray routing: section membership follows STATUS, not feed origin.
+  //   FINISHED  → recentResults   (correct score visible immediately)
+  //   IN_PLAY / PAUSED → liveMatches (merged with live cache below)
+  //   SCHEDULED / TIMED → today / upcoming by UTC day
+  const allAuthority: Match[] =
+    authorityResult.status === 'fulfilled'
+      ? [...authorityResult.value.matches].sort(
           (a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()
         )
       : [];
 
-  // Today's matches (not yet kicked off — live ones are already in liveMatches)
-  const todayMatches = allUpcoming.filter((m) => m.utcDate.startsWith(today));
+  const dedupById = (arr: Match[]): Match[] => {
+    const seen = new Set<number>();
+    return arr.filter((m) => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
+  };
 
-  // Upcoming = everything after today, capped at next 3 days / 12 matches
-  const upcomingMatches = allUpcoming
-    .filter((m) => m.utcDate.split('T')[0] > today)
+  // Live strays: authority knows they're IN_PLAY but live cache may lag — merge.
+  const liveStrays = allAuthority.filter((m) => m.status === 'IN_PLAY' || m.status === 'PAUSED');
+  const allLive: Match[] = dedupById([...liveMatches, ...liveStrays]);
+
+  // Today's matches — only truly upcoming (SCHEDULED/TIMED) ones; live in allLive above.
+  const todayMatches = allAuthority.filter(
+    (m) => m.utcDate.startsWith(today) && (m.status === 'SCHEDULED' || m.status === 'TIMED'),
+  );
+
+  // Upcoming = SCHEDULED/TIMED starting tomorrow, capped at 12.
+  const upcomingMatches = allAuthority
+    .filter(
+      (m) =>
+        m.utcDate.split('T')[0] > today &&
+        (m.status === 'SCHEDULED' || m.status === 'TIMED'),
+    )
     .slice(0, 12);
 
-  // 3. Recent results — FINISHED, sorted newest first
-  const recentResults: Match[] =
-    recentResult.status === 'fulfilled'
-      ? [...recentResult.value.matches]
-          .filter((m) => m.status === 'FINISHED')
-          .sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime())
-          .slice(0, 10)
-      : [];
+  // Recent results — FINISHED from authority set, newest first.
+  const recentResults: Match[] = allAuthority
+    .filter((m) => m.status === 'FINISHED')
+    .sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime())
+    .slice(0, 10);
 
-  // 4. Knockout bracket matches
+  // 3. Knockout bracket matches
   const knockoutMatches: Match[] =
     knockoutResult.status === 'fulfilled' ? knockoutResult.value.matches : [];
 
@@ -337,7 +351,7 @@ export default async function WorldCup2026Page() {
       <div className="max-w-5xl mx-auto space-y-10 pb-12">
         {/* PERF-8 Phase 3: seed KV snapshots for the first visible matches */}
         <SnapshotPrewarmHints
-          ids={[...liveMatches, ...todayMatches, ...upcomingMatches].slice(0, 10).map((m) => m.id)}
+          ids={[...allLive, ...todayMatches, ...upcomingMatches].slice(0, 10).map((m) => m.id)}
         />
         <Breadcrumb
           items={[{ label: 'Home', href: '/' }, { label: 'World Cup 2026' }]}
@@ -375,7 +389,7 @@ export default async function WorldCup2026Page() {
         {/* ── Countdown ────────────────────────────────────────────────── */}
         {/* LIVE-2: live matches drive the CTA; currentPath enables the
             self-reference guard (this page previously linked to itself) */}
-        <WCCountdown compact liveMatches={liveMatches} currentPath="/world-cup-2026" />
+        <WCCountdown compact liveMatches={allLive} currentPath="/world-cup-2026" />
 
         {/* ── Push notification opt-in ─────────────────────────────────── */}
         <PushNotificationButton variant="banner" matchLabel="World Cup 2026" />
@@ -410,19 +424,19 @@ export default async function WorldCup2026Page() {
         </nav>
 
         {/* ── 1. Live Matches ───────────────────────────────────────────── */}
-        {liveMatches.length > 0 && (
+        {allLive.length > 0 && (
           <section aria-labelledby="live-heading">
-            <SectionHeader title="Live Matches" live count={liveMatches.length} />
+            <SectionHeader title="Live Matches" live count={allLive.length} />
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {liveMatches.map((m) => <MatchCard key={m.id} match={m} />)}
+              {allLive.map((m) => <MatchCard key={m.id} match={m} />)}
             </div>
           </section>
         )}
 
         {/* ── 2. Today's Matches ────────────────────────────────────────── */}
         <section aria-labelledby="today-heading">
-          <SectionHeader title="Today's Matches" count={todayMatches.length + liveMatches.length} />
-          {todayMatches.length > 0 || liveMatches.length > 0 ? (
+          <SectionHeader title="Today's Matches" count={todayMatches.length + allLive.length} />
+          {todayMatches.length > 0 || allLive.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {todayMatches.map((m) => <MatchCard key={m.id} match={m} />)}
             </div>

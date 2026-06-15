@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
-// PERF-4.5
-import { getUpcomingMatchesCached } from '@/lib/api';
+// PERF-4.5 / DATA-4 unified authority
+import { getWCAuthorityMatchesCached } from '@/lib/api';
 import type { Match } from '@/lib/types';
 import { matchPath } from '@/lib/url';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -148,7 +148,9 @@ function JsonLd({ matches }: { matches: Match[] }) {
 export default async function WCFixturesPage() {
   let fixtures: Match[] = [];
   try {
-    const data = await getUpcomingMatchesCached('WC');
+    // DATA-4 unified: authority function merges SCHEDULED/TIMED + FINISHED feeds.
+    // Fixtures page shows all WC matches grouped by date with correct status/score.
+    const data = await getWCAuthorityMatchesCached();
     fixtures = [...data.matches].sort(
       (a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()
     );
@@ -238,7 +240,24 @@ export default async function WCFixturesPage() {
                             {m.homeTeam?.crest && <img src={m.homeTeam.crest} alt="" width={18} height={18} className="object-contain shrink-0" />}
                             <span className="text-gray-200 text-sm font-medium truncate text-right group-hover:text-white">{hn}</span>
                           </div>
-                          <span className="text-gray-600 text-xs shrink-0 font-mono">vs</span>
+                          {/* DATA-4: show score for finished matches, kickoff separator for upcoming */}
+                          {m.status === 'FINISHED' ? (
+                            <div className="flex flex-col items-center shrink-0 gap-0">
+                              <span className="text-white font-bold text-sm font-mono leading-tight">
+                                {m.score.fullTime.home ?? '–'}&nbsp;–&nbsp;{m.score.fullTime.away ?? '–'}
+                              </span>
+                              <span className="text-gray-600 text-[10px] leading-tight">FT</span>
+                            </div>
+                          ) : m.status === 'IN_PLAY' || m.status === 'PAUSED' ? (
+                            <div className="flex flex-col items-center shrink-0 gap-0">
+                              <span className="text-red-400 font-bold text-sm font-mono leading-tight">
+                                {m.score.fullTime.home ?? '0'}&nbsp;–&nbsp;{m.score.fullTime.away ?? '0'}
+                              </span>
+                              <span className="text-red-500 text-[10px] leading-tight">LIVE</span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-600 text-xs shrink-0 font-mono">vs</span>
+                          )}
                           <div className="flex items-center gap-1.5 flex-1 min-w-0">
                             <span className="text-gray-200 text-sm font-medium truncate group-hover:text-white">{an}</span>
                             {m.awayTeam?.crest && <img src={m.awayTeam.crest} alt="" width={18} height={18} className="object-contain shrink-0" />}

@@ -19,7 +19,7 @@ const BASE_URL = 'https://api.football-data.org/v4';
 export { NotFoundError, ApiUnavailableError } from './errors';
 import { NotFoundError, ApiUnavailableError } from './errors';
 // DATA-2: snapshot-authoritative state overlay (forward-only transitions)
-import { overlayMatchStates } from './match-state-overlay';
+import { overlayMatchStates, STATE_RANK } from './match-state-overlay';
 
 // ---------------------------------------------------------------------------
 // HTTP layer  (retry + timeout + 429 back-off + Next.js ISR)
@@ -519,6 +519,52 @@ export async function getTodayMatchesCached(): Promise<{ matches: Match[] }> {
   } catch {
     return { matches: [] };
   }
+}
+
+/**
+ * Single authoritative WC match list — DATA-4 unified authority.
+ *
+ * Problem: `getUpcomingMatchesCached` reads only the SCHEDULED/TIMED KV feed.
+ * When a match finishes, it stays in that feed until the cron refreshes it.
+ * `overlayMatchStates` bridges the gap via per-match snapshots, but snapshots
+ * can expire (60 s TIMED TTL) or be absent — leaving the stale SCHEDULED entry
+ * visible on fixtures/hub/schedule pages even when the results feed is correct.
+ *
+ * Fix: merge the upcoming (SCHEDULED/TIMED) feed with the recent (FINISHED)
+ * feed using the forward-only STATE_RANK rule — FINISHED always beats
+ * SCHEDULED/TIMED for the same match ID. Per-match snapshot overlay is then
+ * applied on top for live-score freshness.
+ *
+ * This means FINISHED detection no longer depends on a per-match snapshot
+ * existing in KV; it relies on the bulk results feed which the cron maintains
+ * independently and which is correct within one 15-min cron cycle.
+ *
+ * Constraints: no new KV writes, no provider calls, no new caches, no ISR change.
+ */
+export async function getWCAuthorityMatchesCached(): Promise<{ matches: Match[] }> {
+  const [upcomingResult, recentResult] = await Promise.allSettled([
+    getUpcomingMatchesCached('WC'),
+    getRecentMatchesCached('WC'),
+  ]);
+
+  const upcoming = upcomingResult.status === 'fulfilled' ? upcomingResult.value.matches : [];
+  const recent   = recentResult.status  === 'fulfilled' ? recentResult.value.matches   : [];
+
+  // Merge by ID — forward-only: higher STATE_RANK wins.
+  // upcoming feed carries all 104 WC fixtures (SCHEDULED/TIMED).
+  // recent feed carries the last 30 days; FINISHED entries supersede stale SCHEDULED ones.
+  const byId = new Map<number, Match>();
+  for (const m of upcoming) byId.set(m.id, m);
+  for (const m of recent) {
+    const existing = byId.get(m.id);
+    if (!existing || (STATE_RANK[m.status] ?? 0) >= (STATE_RANK[existing.status] ?? 0)) {
+      byId.set(m.id, m);
+    }
+  }
+
+  // Snapshot overlay runs last — advances IN_PLAY scores and catches any
+  // FINISHED transitions the bulk feeds haven't propagated yet.
+  return { matches: await overlayMatchStates([...byId.values()]) };
 }
 
 /**
