@@ -25,9 +25,9 @@ export const GROUP_PREDICTIONS: Record<string, GroupPredictionData> = {
   A: {
     group: 'A',
     groupLabel: 'Group A',
-    metaTitle: 'FIFA World Cup 2026 Group A Predictions – France, USA, Japan, Switzerland | GoalRadar',
+    metaTitle: 'FIFA World Cup 2026 Group A Predictions & Preview | GoalRadar',
     metaDesc:
-      'Expert Group A predictions for the FIFA World Cup 2026. Who will advance from Group A? France, USA, Japan and Switzerland group stage analysis, odds and tips.',
+      'Expert Group A predictions for the FIFA World Cup 2026. Pre-draw analysis, dark horse picks, key match insights and group stage tips from GoalRadar.',
     intro:
       'Group A is arguably the most star-studded group at the FIFA World Cup 2026. France — ranked second in the world — face the host nation United States, Asia\'s pace-setters Japan, and the reliable Swiss side. On paper this is France\'s group to dominate, but USA\'s home advantage and Japan\'s giant-killing record make it far from a foregone conclusion.',
     predicted1st: {
@@ -84,9 +84,9 @@ export const GROUP_PREDICTIONS: Record<string, GroupPredictionData> = {
   B: {
     group: 'B',
     groupLabel: 'Group B',
-    metaTitle: 'FIFA World Cup 2026 Group B Predictions – England, Canada, Denmark, South Korea | GoalRadar',
+    metaTitle: 'FIFA World Cup 2026 Group B Predictions & Preview | GoalRadar',
     metaDesc:
-      'Expert Group B predictions for the FIFA World Cup 2026. Who will qualify from Group B? England, Canada, Denmark and South Korea analysis, odds and group stage tips.',
+      'Expert Group B predictions for the FIFA World Cup 2026. Pre-draw analysis, dark horse picks, key match insights and group stage tips from GoalRadar.',
     intro:
       'Group B pairs England — one of the tournament\'s biggest favourites — with co-hosts Canada, the technically gifted Danish side, and high-energy South Korea. England should advance comfortably, but the second qualification spot is fiercely contested. Canada are playing at home and Denmark are one of Europe\'s most cohesive sides.',
     predicted1st: {
@@ -143,9 +143,9 @@ export const GROUP_PREDICTIONS: Record<string, GroupPredictionData> = {
   C: {
     group: 'C',
     groupLabel: 'Group C',
-    metaTitle: 'FIFA World Cup 2026 Group C Predictions – Spain, Mexico, Australia, Serbia | GoalRadar',
+    metaTitle: 'FIFA World Cup 2026 Group C Predictions & Preview | GoalRadar',
     metaDesc:
-      'Expert Group C predictions for the FIFA World Cup 2026. Who advances from Group C? Spain, Mexico, Australia and Serbia group stage analysis, odds and tips.',
+      'Expert Group C predictions for the FIFA World Cup 2026. Pre-draw analysis, dark horse picks, key match insights and group stage tips from GoalRadar.',
     intro:
       'Group C is one of the most interesting groups at the 2026 World Cup, combining Spain\'s technical football with Mexico\'s passionate home support, Australia\'s warrior spirit, and Serbia\'s physical quality. Spain are favourites, but Mexico at home is a formidable prospect and Australia proved at Qatar 2022 they are no pushovers.',
     predicted1st: {
@@ -202,9 +202,9 @@ export const GROUP_PREDICTIONS: Record<string, GroupPredictionData> = {
   D: {
     group: 'D',
     groupLabel: 'Group D',
-    metaTitle: 'FIFA World Cup 2026 Group D Predictions – Germany, Morocco, Iran, Costa Rica | GoalRadar',
+    metaTitle: 'FIFA World Cup 2026 Group D Predictions & Preview | GoalRadar',
     metaDesc:
-      'Expert Group D predictions for the FIFA World Cup 2026. Who advances from Group D? Germany, Morocco, Iran and Costa Rica group stage analysis, odds and tips.',
+      'Expert Group D predictions for the FIFA World Cup 2026. Pre-draw analysis, dark horse picks, key match insights and group stage tips from GoalRadar.',
     intro:
       'Group D is perhaps the most competitive group at the World Cup 2026. Germany — four-time world champions motivated by their 2022 group-stage humiliation — face Morocco, the 2022 semi-finalists who are one of world football\'s great stories. Iran and Costa Rica are not to be underestimated either.',
     predicted1st: {
@@ -261,9 +261,9 @@ export const GROUP_PREDICTIONS: Record<string, GroupPredictionData> = {
   E: {
     group: 'E',
     groupLabel: 'Group E',
-    metaTitle: 'FIFA World Cup 2026 Group E Predictions – Portugal, Senegal, Saudi Arabia, Panama | GoalRadar',
+    metaTitle: 'FIFA World Cup 2026 Group E Predictions & Preview | GoalRadar',
     metaDesc:
-      'Expert Group E predictions for the FIFA World Cup 2026. Who advances from Group E? Portugal, Senegal, Saudi Arabia and Panama analysis, odds and group stage tips.',
+      'Expert Group E predictions for the FIFA World Cup 2026. Pre-draw analysis, dark horse picks, key match insights and group stage tips from GoalRadar.',
     intro:
       'Group E could be Cristiano Ronaldo\'s final World Cup, making it one of the most emotionally charged groups at the tournament. Portugal enter as favourites but face Senegal — Africa\'s best — and Saudi Arabia, who stunned Argentina in 2022. Panama will be competitive but face an uphill task.',
     predicted1st: {
@@ -320,9 +320,9 @@ export const GROUP_PREDICTIONS: Record<string, GroupPredictionData> = {
   F: {
     group: 'F',
     groupLabel: 'Group F',
-    metaTitle: 'FIFA World Cup 2026 Group F Predictions – Netherlands, Nigeria, Qatar, Honduras | GoalRadar',
+    metaTitle: 'FIFA World Cup 2026 Group F Predictions & Preview | GoalRadar',
     metaDesc:
-      'Expert Group F predictions for the FIFA World Cup 2026. Who advances from Group F? Netherlands, Nigeria, Qatar and Honduras analysis, odds and group stage tips.',
+      'Expert Group F predictions for the FIFA World Cup 2026. Pre-draw analysis, dark horse picks, key match insights and group stage tips from GoalRadar.',
     intro:
       'Group F looks like the clearest qualification picture at the 2026 World Cup on paper, but history shows the Netherlands can disappoint when least expected. Nigeria bring pace and Premier League firepower; Qatar return as defending host nation; Honduras will be competitive. Oranje are heavy favourites to top the group.',
     predicted1st: {
@@ -379,9 +379,9 @@ export const GROUP_PREDICTIONS: Record<string, GroupPredictionData> = {
   G: {
     group: 'G',
     groupLabel: 'Group G',
-    metaTitle: 'FIFA World Cup 2026 Group G Predictions – Argentina, Iraq, Egypt | GoalRadar',
+    metaTitle: 'FIFA World Cup 2026 Group G Predictions & Preview | GoalRadar',
     metaDesc:
-      'Expert Group G predictions for the FIFA World Cup 2026. Who advances from Group G? Argentina, Iraq and Egypt group stage analysis, odds and tips.',
+      'Expert Group G predictions for the FIFA World Cup 2026. Pre-draw analysis, dark horse picks, key match insights and group stage tips from GoalRadar.',
     intro:
       'Group G is headlined by the defending world champions Argentina, who arrive with Lionel Messi potentially playing his final World Cup matches. Iraq make a historic return to the tournament for the first time since 1986, while Egypt represent Africa\'s hopes. Argentina are heavy favourites, but the group carries real drama.',
     predicted1st: {
@@ -438,9 +438,9 @@ export const GROUP_PREDICTIONS: Record<string, GroupPredictionData> = {
   H: {
     group: 'H',
     groupLabel: 'Group H',
-    metaTitle: 'FIFA World Cup 2026 Group H Predictions – Brazil, Belgium, Cameroon, Jordan | GoalRadar',
+    metaTitle: 'FIFA World Cup 2026 Group H Predictions & Preview | GoalRadar',
     metaDesc:
-      'Expert Group H predictions for the FIFA World Cup 2026. Who advances from Group H? Brazil, Belgium, Cameroon and Jordan analysis, odds and group stage tips.',
+      'Expert Group H predictions for the FIFA World Cup 2026. Pre-draw analysis, dark horse picks, key match insights and group stage tips from GoalRadar.',
     intro:
       'Group H is a blockbuster group featuring two of the world\'s greatest football powers. Brazil — desperate to end a 24-year wait for the Hexacampeonato — face Belgium, ranked third in the world, in what could be the most anticipated group stage match of the entire tournament. Cameroon and Jordan complete the group.',
     predicted1st: {

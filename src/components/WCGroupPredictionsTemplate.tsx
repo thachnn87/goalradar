@@ -367,6 +367,19 @@ export default function WCGroupPredictionsTemplate({ group, data }: Props) {
 
         <WCPageNav />
 
+        {/* ── Pre-draw disclaimer ── */}
+        <div className="mt-3 mb-1 flex items-start gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-300">
+          <span className="mt-0.5 shrink-0 text-base">⚠️</span>
+          <p>
+            <strong>Pre-draw analysis.</strong> These predictions were written before the official
+            FIFA World Cup 2026 draw. Team assignments shown here may not reflect the actual
+            draw. For live standings and confirmed group fixtures, visit the{' '}
+            <a href={`/world-cup-2026/group-${group.toLowerCase()}`} className="underline hover:text-yellow-100">
+              Group {group} page
+            </a>.
+          </p>
+        </div>
+
         {/* ── Hero ── */}
         <div className="pt-2 pb-2">
           <p className="text-yellow-400 text-xs font-bold uppercase tracking-wider mb-2">
