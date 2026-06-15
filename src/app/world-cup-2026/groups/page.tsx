@@ -4,7 +4,6 @@ import type { Metadata } from 'next';
 // PERF-4.5
 import { getStandingsCached } from '@/lib/api';
 import type { StandingTable } from '@/lib/types';
-import { getStaticWCGroupTables } from '@/lib/wc-static-groups';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCGroupTable from '@/components/WCGroupTable';
 import WCPageNav from '@/components/WCPageNav';
@@ -81,8 +80,6 @@ export default async function WCGroupsPage() {
     groupTables = data.standings.filter(s => s.type === 'TOTAL');
   } catch {
     apiError = true;
-    // Serve static group structure so the page is never empty.
-    groupTables = getStaticWCGroupTables();
   }
 
   const matchesPlayed = groupTables.some(t => t.table.some(e => e.playedGames > 0));

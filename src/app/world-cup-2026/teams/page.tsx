@@ -8,6 +8,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { WC_ALL_TEAMS } from '@/lib/wc-all-teams';
+import { getStandingsCached } from '@/lib/api';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
@@ -95,17 +96,32 @@ function JsonLd() {
 // Page
 // ---------------------------------------------------------------------------
 
-export default function WCTeamsPage() {
+export default async function WCTeamsPage() {
   const byConfederation = CONFEDERATION_ORDER.map((conf) => ({
     conf,
     label: CONFEDERATION_LABELS[conf] ?? conf,
     teams: WC_ALL_TEAMS.filter((t) => t.confederation === conf),
   })).filter((c) => c.teams.length > 0);
 
-  const byGroup = GROUPS.map((g) => ({
-    group: g,
-    teams: WC_ALL_TEAMS.filter((t) => t.group === g),
-  })).filter((g) => g.teams.length > 0);
+  // Derive by-group from authority standings — not from wc-all-teams group field
+  let byGroup: { group: string; teams: typeof WC_ALL_TEAMS }[] = [];
+  try {
+    const standingsData = await getStandingsCached('WC');
+    const tables = (standingsData.standings ?? []).filter((s) => s.type === 'TOTAL');
+    if (tables.length > 0) {
+      byGroup = tables.map((t) => {
+        const letter = (t.group ?? '').replace('GROUP_', '');
+        const teams = t.table.map((e) => {
+          const wct = WC_ALL_TEAMS.find(
+            (wt) => wt.apiName.toLowerCase() === (e.team?.name ?? '').toLowerCase() ||
+                    wt.displayName.toLowerCase() === (e.team?.name ?? '').toLowerCase()
+          );
+          return wct ?? null;
+        }).filter((wct): wct is NonNullable<typeof wct> => Boolean(wct));
+        return { group: letter, teams };
+      }).filter((g) => g.teams.length > 0);
+    }
+  } catch { /* show confederation view only */ }
 
   return (
     <>

@@ -6,7 +6,7 @@
  */
 
 import Link from 'next/link';
-import { WC_ALL_TEAMS, type WCTeamEntry } from '@/lib/wc-all-teams';
+import { getWCTeam, type WCTeamEntry } from '@/lib/wc-all-teams';
 import type { GroupPredictionData } from '@/lib/wc-predictions';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCPageNav from '@/components/WCPageNav';
@@ -339,9 +339,13 @@ function TeamAnalysis({
 // ---------------------------------------------------------------------------
 
 export default function WCGroupPredictionsTemplate({ group, data }: Props) {
-  const teams = WC_ALL_TEAMS
-    .filter((t) => t.group === group)
-    .sort((a, b) => a.fifaRanking - b.fifaRanking);
+  // Build team list from prediction slugs — uses wc-all-teams.ts for flag/name/ranking only
+  const teams: WCTeamEntry[] = [
+    data.predicted1st.slug,
+    data.predicted2nd.slug,
+    data.darkHorse.slug,
+  ].map((s) => getWCTeam(s)).filter((t): t is WCTeamEntry => Boolean(t))
+   .sort((a, b) => a.fifaRanking - b.fifaRanking);
 
   const pageUrl = `${BASE_URL}/world-cup-2026/group-${group.toLowerCase()}-predictions`;
   const { breadcrumb, faqPage, article } = buildGroupJsonLd(group, data, pageUrl);

@@ -9,7 +9,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 // PERF-4.5
 import { getStandingsCached } from '@/lib/api';
-import { getStaticWCGroupTables } from '@/lib/wc-static-groups';
 import type { StandingTable, StandingEntry } from '@/lib/types';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -121,22 +120,11 @@ function GroupTable({ table, groupLabel }: { table: StandingEntry[]; groupLabel:
 
 export default async function WC2026StandingsPage() {
   let standingTables: StandingTable[] = [];
-  let isStaticData = false;
 
   try {
     const data = await getStandingsCached('WC');
     standingTables = (data.standings ?? []).filter((s) => s.type === 'TOTAL');
-  } catch {
-    // API unavailable — serve static pre-tournament group tables
-    standingTables = getStaticWCGroupTables();
-    isStaticData   = standingTables.length > 0;
-  }
-
-  // Also use static data if API returned nothing useful
-  if (standingTables.length === 0) {
-    standingTables = getStaticWCGroupTables();
-    isStaticData   = standingTables.length > 0;
-  }
+  } catch { /* standings unavailable */ }
 
   const jsonLdFaq = {
     '@context': 'https://schema.org',
@@ -185,17 +173,9 @@ export default async function WC2026StandingsPage() {
         <AdSlot slotId="wc-standings-top" variant="banner" />
 
         {/* Group tables */}
-        {isStaticData && (
-          <div className="flex items-center gap-2 text-xs text-yellow-600 bg-yellow-500/5 border border-yellow-700/20 rounded-lg px-4 py-2 mb-4">
-            <span>⏳</span>
-            <span>Pre-tournament group lineup — live standings update once matches begin on 11 June 2026.</span>
-          </div>
-        )}
         {standingTables.length > 0 ? (
           <section className="mb-8">
-            <h2 className="text-xl font-bold text-white mb-4">
-              {isStaticData ? 'Group Preview' : 'Live Group Standings'}
-            </h2>
+            <h2 className="text-xl font-bold text-white mb-4">Live Group Standings</h2>
             {standingTables.map((st, i) => {
               const groupLetter = String.fromCharCode(65 + i); // A, B, C...
               return (

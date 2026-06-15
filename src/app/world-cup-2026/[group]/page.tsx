@@ -5,7 +5,6 @@ import type { Metadata } from 'next';
 // PERF-4.5
 import { getStandingsCached, getUpcomingMatchesCached, getRecentMatchesCached } from '@/lib/api';
 import type { WCGroupFixture } from '@/lib/wc-fixtures';
-import { getStaticWCGroupTables } from '@/lib/wc-static-groups';
 import { WC_ALL_TEAMS } from '@/lib/wc-all-teams';
 import { matchPath } from '@/lib/url';
 import type { Match, StandingEntry } from '@/lib/types';
@@ -60,9 +59,12 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const url   = `${BASE_URL}/world-cup-2026/${slug}`;
   const letter = letterFromSlug(slug);
 
-  // Use local team data — no API call needed during build
-  const groupTeams = WC_ALL_TEAMS.filter((t) => t.group === letter);
-  const teamNames  = groupTeams.map((t) => t.displayName).join(', ');
+  // Use authority standings data for team names in SEO
+  const standingsMeta = await getStandingsCached('WC');
+  const groupTableMeta = (standingsMeta.standings ?? []).find(
+    (s) => s.type === 'TOTAL' && s.group === slugToApiGroup(slug)
+  );
+  const teamNames = groupTableMeta?.table.map((e) => e.team?.shortName ?? e.team?.name ?? '').filter(Boolean).join(', ') ?? '';
   const teamsText  = teamNames ? ` Featuring ${teamNames}.` : '';
 
   const title = `FIFA World Cup 2026 ${label} Standings, Fixtures & Teams | GoalRadar`;
@@ -340,8 +342,15 @@ interface GroupFaq {
   answer: string;
 }
 
-function buildGroupFaqs(letter: string, label: string): GroupFaq[] {
-  const groupTeams = WC_ALL_TEAMS.filter((t) => t.group === letter);
+function buildGroupFaqs(letter: string, label: string, tableEntries: StandingEntry[]): GroupFaq[] {
+  // Derive team info from authority standings; fall back to WC_ALL_TEAMS for flag lookup
+  const groupTeams = tableEntries.map((e) => {
+    const wct = WC_ALL_TEAMS.find(
+      (t) => t.apiName.toLowerCase() === (e.team?.name ?? '').toLowerCase() ||
+             t.displayName.toLowerCase() === (e.team?.name ?? '').toLowerCase()
+    );
+    return { displayName: e.team?.shortName ?? e.team?.name ?? '', flag: wct?.flag ?? '🏳️', fifaRanking: wct?.fifaRanking ?? 999, slug: wct?.slug ?? '' };
+  });
   const fixtures: WCGroupFixture[] = [];
 
   const teamNames  = groupTeams.map((t) => `${t.flag} ${t.displayName}`).join(', ');
@@ -467,7 +476,14 @@ function QualificationScenarios({
   totalMatches: number;
   playedMatches: number;
 }) {
-  const groupTeams = WC_ALL_TEAMS.filter((t) => t.group === letter);
+  // Derive team info from authority tableEntries; use WC_ALL_TEAMS only for flag/slug/ranking lookup
+  const groupTeams = tableEntries.map((e) => {
+    const wct = WC_ALL_TEAMS.find(
+      (t) => t.apiName.toLowerCase() === (e.team?.name ?? '').toLowerCase() ||
+             t.displayName.toLowerCase() === (e.team?.name ?? '').toLowerCase()
+    );
+    return { displayName: e.team?.shortName ?? e.team?.name ?? '', flag: wct?.flag ?? '🏳️', fifaRanking: wct?.fifaRanking ?? 999, slug: wct?.slug ?? '' };
+  });
   const hasLiveData = tableEntries.some((e) => e.playedGames > 0);
   const groupComplete = playedMatches >= totalMatches && totalMatches > 0;
 
@@ -650,16 +666,8 @@ export default async function WCGroupPage({ params }: Params) {
         ) ?? null
       : null;
 
-  let tableEntries: StandingEntry[] = liveGroupTable?.table ?? [];
-  let isStaticStandings = false;
-
-  if (tableEntries.length === 0) {
-    // Serve static pre-tournament group table so the page always has team names
-    const staticTables = getStaticWCGroupTables();
-    const staticGroup  = staticTables.find((t) => t.group === apiGroup);
-    tableEntries       = staticGroup?.table ?? [];
-    isStaticStandings  = tableEntries.length > 0;
-  }
+  const tableEntries: StandingEntry[] = liveGroupTable?.table ?? [];
+  const isStaticStandings = false;
 
   // All group matches — for JSON-LD and stats
   const allGroupUpcoming: Match[] =
@@ -685,7 +693,7 @@ export default async function WCGroupPage({ params }: Params) {
   const totalGroupMatches = 6; // each WC group plays 6 matches (4 teams × 3 rounds C(4,2))
   const playedMatches = results.length;
 
-  const faqs = buildGroupFaqs(letter, label);
+  const faqs = buildGroupFaqs(letter, label, tableEntries);
 
   return (
     <>

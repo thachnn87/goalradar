@@ -5,7 +5,6 @@ import { recordAuditCall } from './api-audit';
 import { getCachedLiveMatches, getCachedWCLiveMatches } from './live-cache';
 import { providerManager } from './providers/manager';
 import { recordDataSource } from './data-source-tracker';
-import { getStaticWCGroupTables } from '@/lib/wc-static-groups';
 
 const BASE_URL = 'https://api.football-data.org/v4';
 
@@ -422,13 +421,13 @@ export async function getStandingsCached(competition: string): Promise<{
       const data = await readKVOnly<{ standings: StandingTable[]; competition: { name: string; emblem: string } }>(key);
       if (data) return data;
       if (competition === 'WC') {
-        return { standings: getStaticWCGroupTables(), competition: wcMeta };
+        return { standings: [], competition: wcMeta };
       }
       return empty;
     });
   } catch {
     if (competition === 'WC') {
-      return { standings: getStaticWCGroupTables(), competition: wcMeta };
+      return { standings: [], competition: wcMeta };
     }
     return empty;
   }

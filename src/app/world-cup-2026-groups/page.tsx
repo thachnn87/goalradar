@@ -10,7 +10,6 @@ import Link from 'next/link';
 // PERF-4.5
 import { getStandingsCached } from '@/lib/api';
 import type { StandingTable } from '@/lib/types';
-import { isStaticMode, STATIC_GROUPS, STATIC_TEAMS } from '@/data/worldcup/loader';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCPageNav from '@/components/WCPageNav';
@@ -72,12 +71,10 @@ const FAQ = [
 export default async function WC2026GroupsPage() {
   let standingTables: StandingTable[] = [];
 
-  if (!isStaticMode()) {
-    try {
-      const data = await getStandingsCached('WC');
-      standingTables = (data.standings ?? []).filter((s) => s.type === 'TOTAL');
-    } catch { /* static only */ }
-  }
+  try {
+    const data = await getStandingsCached('WC');
+    standingTables = (data.standings ?? []).filter((s) => s.type === 'TOTAL');
+  } catch { /* standings unavailable */ }
 
   const jsonLdFaq = {
     '@context': 'https://schema.org',
@@ -173,27 +170,14 @@ export default async function WC2026GroupsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {WC_GROUPS.map((g) => {
                 const letter = g.toUpperCase();
-                const teamSlugs = STATIC_GROUPS[letter] ?? [];
-                const teamMap = new Map(STATIC_TEAMS.map((t) => [t.slug, t]));
                 return (
                   <Link key={g} href={`/world-cup-2026/group-${g}`}
                     className="group bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-yellow-700/40 rounded-xl p-4 transition-all">
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between">
                       <span className="text-sm font-black text-white group-hover:text-yellow-400 transition-colors">
                         Group {letter}
                       </span>
                       <span className="text-[10px] text-yellow-600 group-hover:text-yellow-400">Details →</span>
-                    </div>
-                    <div className="space-y-1">
-                      {teamSlugs.map((slug) => {
-                        const t = teamMap.get(slug);
-                        return t ? (
-                          <div key={slug} className="flex items-center gap-1.5 text-xs text-gray-400">
-                            <span>{t.flag}</span>
-                            <span>{t.name}</span>
-                          </div>
-                        ) : null;
-                      })}
                     </div>
                   </Link>
                 );

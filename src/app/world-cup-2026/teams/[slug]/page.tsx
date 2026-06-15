@@ -330,7 +330,7 @@ export default async function WCTeamPage({
         );
         if (entry) {
           standingEntry = entry;
-          standingGroupLabel = String.fromCharCode(65 + i);
+          standingGroupLabel = (tables[i].group ?? '').replace('GROUP_', '');
           break;
         }
       }
@@ -349,7 +349,7 @@ export default async function WCTeamPage({
     return teamWon ? 'W' : 'L';
   })).filter(Boolean);
 
-  const groupSlug = team.group !== 'TBD' ? `group-${team.group.toLowerCase()}` : null;
+  const groupSlug = standingGroupLabel ? `group-${standingGroupLabel.toLowerCase()}` : null;
 
   const jsonLdTeam = {
     '@context': 'https://schema.org',
@@ -380,8 +380,8 @@ export default async function WCTeamPage({
     },
     {
       q: `What group is ${team.displayName} in at World Cup 2026?`,
-      a: team.group !== 'TBD'
-        ? `${team.displayName} are in Group ${team.group} at the FIFA World Cup 2026. The top two teams from each group advance to the Round of 32.`
+      a: standingGroupLabel
+        ? `${team.displayName} are in Group ${standingGroupLabel} at the FIFA World Cup 2026. The top two teams from each group advance to the Round of 32.`
         : `${team.displayName}'s group at the FIFA World Cup 2026 will be confirmed after the official draw.`,
     },
     {
@@ -431,9 +431,9 @@ export default async function WCTeamPage({
           </h1>
           <p className="text-gray-400 text-sm leading-relaxed">{team.intro}</p>
           <div className="flex flex-wrap gap-2 mt-4">
-            {team.group !== 'TBD' && (
+            {standingGroupLabel && (
               <span className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs font-bold px-3 py-1 rounded-full">
-                Group {team.group}
+                Group {standingGroupLabel}
               </span>
             )}
             <span className="bg-white/5 border border-white/10 text-gray-300 text-xs px-3 py-1 rounded-full">
@@ -571,7 +571,7 @@ export default async function WCTeamPage({
         {upcoming.length === 0 && recent.length === 0 && localTeamFixtures.length > 0 && (
           <section className="mb-8">
             <h2 className="text-lg font-bold text-white mb-3">
-              Group {team.group} Schedule
+              Group {standingGroupLabel || team.group} Schedule
             </h2>
             <div className="space-y-2">
               {localTeamFixtures.map((f) => {
@@ -658,7 +658,7 @@ export default async function WCTeamPage({
         <AdSlot slotId={`team-${slug}-bottom`} variant="banner" />
 
         <WCRelatedLinks links={[
-          ...(groupSlug ? [{ href: `/world-cup-2026/${groupSlug}`, icon: '🗂️', label: `Group ${team.group} Standings`, desc: `Table, fixtures and results for Group ${team.group}` }] : []),
+          ...(groupSlug ? [{ href: `/world-cup-2026/${groupSlug}`, icon: '🗂️', label: `Group ${standingGroupLabel} Standings`, desc: `Table, fixtures and results for Group ${standingGroupLabel}` }] : []),
           { href: '/world-cup-2026-schedule',       icon: '📅', label: 'WC 2026 Schedule',    desc: 'All 104 fixtures with kickoff times and dates' },
           { href: '/world-cup-2026-results',        icon: '🏁', label: 'WC 2026 Results',     desc: 'Live and full-time scores for every match' },
           { href: '/world-cup-2026-standings',      icon: '📊', label: 'Group Standings',     desc: 'Points tables for all 12 groups' },
