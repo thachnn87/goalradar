@@ -10,7 +10,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { WC_ALL_TEAM_SLUGS, getWCTeam } from '@/lib/wc-all-teams';
-import { getTeamFixtures, type WCGroupFixture } from '@/lib/wc-fixtures';
+import type { WCGroupFixture } from '@/lib/wc-fixtures';
 import {
   getUpcomingMatchesCached as getUpcomingMatches,
   getRecentMatchesCached   as getRecentMatches,
@@ -337,10 +337,6 @@ export default async function WCTeamPage({
     }
   } catch { /* render with static content */ }
 
-  // If API returned nothing, load local scheduled fixtures for this team
-  if (upcoming.length === 0 && recent.length === 0) {
-    localTeamFixtures = getTeamFixtures(slug);
-  }
 
   // Form helper
   const recentForm: string[] = (recent.slice(0, 5).map((m) => {

@@ -379,11 +379,11 @@ export const GROUP_PREDICTIONS: Record<string, GroupPredictionData> = {
   G: {
     group: 'G',
     groupLabel: 'Group G',
-    metaTitle: 'FIFA World Cup 2026 Group G Predictions – Argentina, Italy, Egypt, Iraq | GoalRadar',
+    metaTitle: 'FIFA World Cup 2026 Group G Predictions – Argentina, Iraq, Egypt | GoalRadar',
     metaDesc:
-      'Expert Group G predictions for the FIFA World Cup 2026. Who advances from Group G? Argentina, Italy, Egypt and Iraq group stage analysis, odds and tips.',
+      'Expert Group G predictions for the FIFA World Cup 2026. Who advances from Group G? Argentina, Iraq and Egypt group stage analysis, odds and tips.',
     intro:
-      'Group G is headlined by the defending world champions Argentina and the reborn Italy side returning after their 2022 absence. With Lionel Messi potentially playing his final World Cup matches, Group G carries enormous emotional and sporting weight. Egypt and Iraq will battle hard, but the two South American/European giants are clear favourites.',
+      'Group G is headlined by the defending world champions Argentina, who arrive with Lionel Messi potentially playing his final World Cup matches. Iraq make a historic return to the tournament for the first time since 1986, while Egypt represent Africa\'s hopes. Argentina are heavy favourites, but the group carries real drama.',
     predicted1st: {
       slug: 'argentina',
       name: 'Argentina',
@@ -392,45 +392,45 @@ export const GROUP_PREDICTIONS: Record<string, GroupPredictionData> = {
         'Defending champions Argentina, led by Messi in what could be his final World Cup, are strong favourites to top Group G. La Albiceleste have the quality to win every match in the group stage.',
     },
     predicted2nd: {
-      slug: 'italy',
-      name: 'Italy',
-      flag: '🇮🇹',
-      reason:
-        'Italy return to the World Cup after missing 2022 with a renewed purpose. Gli Azzurri have rebuilt with a blend of youth and Serie A experience and should qualify from Group G.',
-    },
-    darkHorse: {
       slug: 'egypt',
       name: 'Egypt',
       flag: '🇪🇬',
       reason:
-        'Egypt are Africa\'s wild card in Group G. Led by their talismanic captain, the Pharaohs are capable of a giant-killing if either Argentina or Italy are below their best.',
+        'Egypt are Africa\'s most experienced side in the group and arrive well-organised under their coach. The Pharaohs are disciplined, dangerous on the counter, and capable of edging out Iraq for second place.',
+    },
+    darkHorse: {
+      slug: 'iraq',
+      name: 'Iraq',
+      flag: '🇮🇶',
+      reason:
+        'Iraq return to the World Cup after 40 years and bring enormous passion and motivation. A young squad competing on the biggest stage for the first time in a generation — expect a surprise or two.',
     },
     keyMatch: {
-      home: 'Argentina',
-      away: 'Italy',
-      homeFlag: '🇦🇷',
-      awayFlag: '🇮🇹',
+      home: 'Egypt',
+      away: 'Iraq',
+      homeFlag: '🇪🇬',
+      awayFlag: '🇮🇶',
       note:
-        'Argentina vs Italy in the group stage — a match that most football fans never expected to see at a World Cup. Two of the game\'s most storied nations; the winner is virtually guaranteed first place.',
+        'Egypt vs Iraq is the decisive second-place battle in Group G. Both sides know Argentina will likely top the group — this match determines who joins them in the Round of 32.',
     },
     analysis:
-      'Argentina are the defending champions and arrive as one of the tournament favourites. Whether Messi can inspire La Albiceleste to back-to-back titles is the defining storyline of the 2026 World Cup. Italy\'s absence from Qatar 2022 was humbling but galvanising — they have been motivated like never before and return with a competitive squad. Egypt will be energised, disciplined and dangerous on the counter-attack. Iraq make a historic return to the World Cup after 40 years and will be passionate and competitive, though progression seems unlikely against this calibre of opposition.',
+      'Argentina are the defending champions and arrive as one of the tournament favourites. Whether Messi can inspire La Albiceleste to back-to-back titles is the defining storyline of the 2026 World Cup. Egypt will be organised, disciplined and dangerous on the counter-attack — they have the defensive structure to contain Iraq and potentially steal second place. Iraq\'s historic return after 40 years adds enormous emotion to the group: their young, passionate squad will be fuelled by national pride and capable of upsets even if progression seems unlikely against Argentina\'s class.',
     faq: [
       {
         q: 'Who will win Group G at the 2026 World Cup?',
-        a: 'Argentina are strong favourites to top Group G as defending world champions. Led by Messi, La Albiceleste should be too strong for Italy, Egypt and Iraq.',
+        a: 'Argentina are strong favourites to top Group G as defending world champions. Led by Messi, La Albiceleste should be too strong for Egypt and Iraq in the group stage.',
       },
       {
-        q: 'Can Italy qualify from Group G at the 2026 World Cup?',
-        a: 'Italy are expected to qualify from Group G in second place. Their return to the World Cup after missing Qatar 2022 gives them enormous motivation, and their renewed squad is capable of advancing.',
+        q: 'Can Egypt qualify from Group G at the 2026 World Cup?',
+        a: 'Egypt are the second-favourites in Group G. Well-organised and experienced at international level, the Pharaohs have the quality to edge out Iraq for the second automatic qualification spot.',
       },
       {
         q: 'Is this Lionel Messi\'s last World Cup?',
         a: 'The 2026 World Cup is widely expected to be Lionel Messi\'s last. He will be 38 during the tournament, making every Argentina match — starting in Group G — potentially his final World Cup appearance.',
       },
       {
-        q: 'Will Egypt qualify from Group G?',
-        a: 'Egypt face a very tough challenge behind Argentina and Italy. However, with a motivated squad and the element of surprise, they could upset Italy if the Azzurri start slowly.',
+        q: 'Why is Iraq\'s appearance at the 2026 World Cup historic?',
+        a: 'Iraq last appeared at the FIFA World Cup in 1986 — a gap of 40 years. Their return to the tournament is one of the great stories of the 2026 edition, and the Lions of Mesopotamia carry the hopes of an entire nation.',
       },
     ],
   },

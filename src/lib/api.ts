@@ -5,7 +5,6 @@ import { recordAuditCall } from './api-audit';
 import { getCachedLiveMatches, getCachedWCLiveMatches } from './live-cache';
 import { providerManager } from './providers/manager';
 import { recordDataSource } from './data-source-tracker';
-import { getStaticGroupMatches, getStaticUpcomingMatches } from '@/data/worldcup/loader';
 import { getStaticWCGroupTables } from '@/lib/wc-static-groups';
 
 const BASE_URL = 'https://api.football-data.org/v4';
@@ -259,7 +258,6 @@ export function getWCResults(): Promise<{ matches: Match[] }> {
 
 export function getWCKnockoutMatches(): Promise<{ matches: Match[] }> {
   // All 104 WC matches — routes through providerManager for failover.
-  // Static WC fixtures are the final fallback when provider + KV + DR all fail.
   return withCache(
     '/competitions/WC/matches',
     TTL.WC,
@@ -269,9 +267,8 @@ export function getWCKnockoutMatches(): Promise<{ matches: Match[] }> {
       () => providerManager.getAllMatches('WC'),
     ),
   ).catch(() => {
-    console.warn('[DATA_SOURCE] static | getWCKnockoutMatches fallback to bundled fixtures');
-    recordDataSource('static');
-    return { matches: getStaticGroupMatches() };
+    console.warn('[DATA_SOURCE] empty | getWCKnockoutMatches — provider + KV failed, returning empty');
+    return { matches: [] };
   });
 }
 
@@ -359,19 +356,10 @@ export async function getUpcomingMatchesCached(
     const data = await withCache(key, TTL.FIXTURES, async () => {
       const data = await readKVOnly<{ matches: Match[]; resultSet: { count: number } }>(key);
       if (data) return data;
-      // KV miss — use static fallback for WC, empty for leagues
-      if (competition === 'WC') {
-        const today = new Date().toISOString().split('T')[0];
-        return { matches: getStaticUpcomingMatches(today), resultSet: { count: 72 } };
-      }
       return { matches: [], resultSet: { count: 0 } };
     });
     return { ...data, matches: await overlayMatchStates(data.matches) };
   } catch {
-    if (competition === 'WC') {
-      const today = new Date().toISOString().split('T')[0];
-      return { matches: getStaticUpcomingMatches(today), resultSet: { count: 72 } };
-    }
     return { matches: [], resultSet: { count: 0 } };
   }
 }
@@ -390,17 +378,11 @@ export async function getRecentMatchesCached(
     const data = await withCache(key, TTL.FIXTURES, async () => {
       const inner = await readKVOnly<{ matches: Match[] }>(key);
       if (inner) return inner;
-      if (competition === 'WC') {
-        return { matches: getStaticGroupMatches().filter((m) => m.status === 'FINISHED') };
-      }
       return { matches: [] };
     });
     // DATA-2: snapshot-authoritative state (fresher live scores on this list)
     return { matches: await overlayMatchStates(data.matches) };
   } catch {
-    if (competition === 'WC') {
-      return { matches: getStaticGroupMatches().filter((m) => m.status === 'FINISHED') };
-    }
     return { matches: [] };
   }
 }
@@ -415,12 +397,12 @@ export async function getWCResultsCached(): Promise<{ matches: Match[] }> {
     const data = await withCache(key, TTL.FIXTURES, async () => {
       const inner = await readKVOnly<{ matches: Match[] }>(key);
       if (inner) return inner;
-      return { matches: getStaticGroupMatches().filter((m) => m.status === 'FINISHED') };
+      return { matches: [] };
     });
     // DATA-2: snapshot-authoritative state
     return { matches: await overlayMatchStates(data.matches) };
   } catch {
-    return { matches: getStaticGroupMatches().filter((m) => m.status === 'FINISHED') };
+    return { matches: [] };
   }
 }
 
@@ -462,13 +444,13 @@ export async function getWCKnockoutMatchesCached(): Promise<{ matches: Match[] }
     const data = await withCache(key, TTL.WC, async () => {
       const inner = await readKVOnly<{ matches: Match[] }>(key);
       if (inner) return inner;
-      return { matches: getStaticGroupMatches() };
+      return { matches: [] };
     });
     // DATA-2: snapshot-authoritative state — critical here, the bulk WC list
     // has a 6 h L1 TTL and would otherwise lag every transition.
     return { matches: await overlayMatchStates(data.matches) };
   } catch {
-    return { matches: getStaticGroupMatches() };
+    return { matches: [] };
   }
 }
 

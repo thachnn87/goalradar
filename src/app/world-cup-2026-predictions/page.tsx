@@ -16,9 +16,6 @@
  *    → filtered to WC, sorted chronologically, renders live fixture cards
  *      with real match IDs so each card links to /predict/{id} & /match/{id}
  *
- * L2 Static fallback (local): WC_ALL_FIXTURES from wc-fixtures.ts
- *    → pre-tournament or API-down fallback — shows scheduled fixtures
- *      but cannot deep-link to /predict/{id} (no API match ID yet)
  *
  * Revalidates every 15 min (same cadence as getUpcomingMatches cache).
  */
@@ -27,7 +24,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 // PERF-4.5
 import { getUpcomingMatchesCached, getRecentMatchesCached } from '@/lib/api';
-import { WC_ALL_FIXTURES, type WCGroupFixture } from '@/lib/wc-fixtures';
+import type { WCGroupFixture } from '@/lib/wc-fixtures';
 import { matchPath, predictPath } from '@/lib/url';
 import type { Match } from '@/lib/types';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -323,14 +320,7 @@ export default async function WC2026PredictionsPage() {
     }
   } catch { /* render with static fallback */ }
 
-  // ── Static fallback: next N fixtures from local dataset ───────────────────
-  const now = Date.now();
-  const staticFixtures: WCGroupFixture[] =
-    upcoming.length === 0
-      ? WC_ALL_FIXTURES
-          .filter((f) => new Date(f.utcDate).getTime() >= now)
-          .slice(0, MAX_UPCOMING)
-      : [];
+  const staticFixtures: WCGroupFixture[] = [];
 
   const isLive   = upcoming.length > 0 || recent.length > 0;
   const total    = upcoming.length + recent.length;

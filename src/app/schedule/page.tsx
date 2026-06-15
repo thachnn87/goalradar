@@ -11,7 +11,6 @@ import TimezoneBanner from '@/components/TimezoneBanner';
 import LocalTime from '@/components/LocalTime';
 import type { Metadata } from 'next';
 import { Match, COMPETITIONS } from '@/lib/types';
-import { WC_ALL_FIXTURES, type WCGroupFixture } from '@/lib/wc-fixtures';
 // PERF-8 Phase 3: seed KV snapshots for the first visible matches on idle
 import SnapshotPrewarmHints from '@/components/SnapshotPrewarmHints';
 
@@ -41,58 +40,6 @@ function groupByDate(matches: Match[]): Record<string, Match[]> {
   }, {});
 }
 
-function groupLocalByDate(fixtures: WCGroupFixture[]): Record<string, WCGroupFixture[]> {
-  return fixtures.reduce<Record<string, WCGroupFixture[]>>((acc, f) => {
-    const date = f.utcDate.split('T')[0];
-    (acc[date] ??= []).push(f);
-    return acc;
-  }, {});
-}
-
-/** Static WC schedule rendered when the API is unavailable. */
-function WCLocalSchedule({ fixtures }: { fixtures: WCGroupFixture[] }) {
-  const grouped = groupLocalByDate(fixtures);
-  const dates   = Object.keys(grouped).sort();
-
-  return (
-    <div className="space-y-8">
-      <div className="flex items-center gap-2 text-xs text-blue-400 bg-blue-400/10 border border-blue-400/20 rounded-lg px-4 py-2">
-        <span>ℹ️</span>
-        <span>Showing scheduled kickoff times. Live match links will appear once the tournament begins on 11 June 2026.</span>
-      </div>
-      {dates.map((date) => (
-        <section key={date}>
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
-            {formatDate(date)}
-          </h3>
-          <div className="space-y-2">
-            {grouped[date].map((f) => (
-              <div key={f.localId}
-                className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex flex-col items-start gap-0.5 shrink-0">
-                    <span className="text-[10px] text-gray-600 font-mono">
-                      {new Date(f.utcDate).toLocaleTimeString('en-GB', {
-                        hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
-                      })} UTC
-                    </span>
-                    <LocalTime utcDate={f.utcDate} variant="badge" />
-                  </div>
-                  <span className="text-sm text-white font-semibold truncate">
-                    {f.homeFlag} {f.homeLabel} <span className="text-gray-500 font-normal">vs</span> {f.awayLabel} {f.awayFlag}
-                  </span>
-                </div>
-                <span className="text-[10px] text-gray-600 shrink-0">
-                  Group {f.group} · MD{f.matchday}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-      ))}
-    </div>
-  );
-}
 
 function formatDate(iso: string) {
   const date = new Date(iso);
@@ -170,12 +117,6 @@ async function ScheduleContent({
         fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
       );
 
-      // WC: serve local static fixture dataset instead of an error box
-      if (competition === 'WC') {
-        console.warn('[Schedule] WC API unavailable — serving local fixture dataset');
-        return <WCLocalSchedule fixtures={WC_ALL_FIXTURES} />;
-      }
-
       return (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center">
           <div className="text-gray-400 font-medium">
@@ -190,10 +131,6 @@ async function ScheduleContent({
   }
 
   if (matches.length === 0) {
-    // WC: serve local static schedule rather than a blank page
-    if (competition === 'WC') {
-      return <WCLocalSchedule fixtures={WC_ALL_FIXTURES} />;
-    }
     return (
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
         <div className="text-3xl mb-2">📅</div>

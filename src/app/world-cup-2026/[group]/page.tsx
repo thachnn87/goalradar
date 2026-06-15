@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 
 // PERF-4.5
 import { getStandingsCached, getUpcomingMatchesCached, getRecentMatchesCached } from '@/lib/api';
-import { getGroupFixtures, WC_GROUP_FIXTURES, type WCGroupFixture } from '@/lib/wc-fixtures';
+import type { WCGroupFixture } from '@/lib/wc-fixtures';
 import { getStaticWCGroupTables } from '@/lib/wc-static-groups';
 import { WC_ALL_TEAMS } from '@/lib/wc-all-teams';
 import { matchPath } from '@/lib/url';
@@ -342,7 +342,7 @@ interface GroupFaq {
 
 function buildGroupFaqs(letter: string, label: string): GroupFaq[] {
   const groupTeams = WC_ALL_TEAMS.filter((t) => t.group === letter);
-  const fixtures   = getGroupFixtures(letter);
+  const fixtures: WCGroupFixture[] = [];
 
   const teamNames  = groupTeams.map((t) => `${t.flag} ${t.displayName}`).join(', ');
 
@@ -679,11 +679,7 @@ export default async function WCGroupPage({ params }: Params) {
     (a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime()
   );
 
-  // Local fixture fallback — used when API upcoming is empty (pre-tournament or API down)
-  const localFixtures: WCGroupFixture[] =
-    upcoming.length === 0 && results.length === 0
-      ? getGroupFixtures(letter)
-      : [];
+  const localFixtures: WCGroupFixture[] = [];
 
   const allMatches = [...allGroupResults, ...allGroupUpcoming];
   const totalGroupMatches = 6; // each WC group plays 6 matches (4 teams × 3 rounds C(4,2))
