@@ -43,6 +43,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
         matchId: liveMatch.id,
         status: liveMatch.status,
         score: liveMatch.score,
+        minute: liveMatch.minute ?? null,
         lastUpdated: liveMatch.lastUpdated ?? null,
         source: 'kv-live',
       });
@@ -61,6 +62,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
         matchId: liveMatch.id,
         status: liveMatch.status,
         score: liveMatch.score,
+        minute: liveMatch.minute ?? null,
         lastUpdated: liveMatch.lastUpdated ?? null,
         source: 'live',
       });

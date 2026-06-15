@@ -161,6 +161,7 @@ function normaliseMatch(item: AFFixtureItem): Match {
     homeTeam:    normaliseTeam(item.teams.home),
     awayTeam:    normaliseTeam(item.teams.away),
     score:       normaliseScore(item.goals, item.score),
+    minute:      item.fixture.status.elapsed ?? null,
   };
 }
 

@@ -14,30 +14,33 @@ const TERMINAL_STATUSES: MatchStatus[] = ['FINISHED', 'POSTPONED', 'CANCELLED', 
 interface LiveScoreResponse {
   status: MatchStatus;
   score: Score;
+  minute?: number | null;
 }
 
 interface Props {
   matchId: string;
   initialStatus: MatchStatus;
   initialScore: Score;
+  initialMinute?: number | null;
 }
 
-function StatusBadge({ status }: { status: MatchStatus }) {
+function StatusBadge({ status, minute }: { status: MatchStatus; minute: number | null }) {
   if (status === 'IN_PLAY') {
+    const clockLabel = minute != null ? `${minute}'` : 'LIVE';
     return (
       <span className="inline-flex items-center gap-1.5 bg-red-500/20 text-red-400 border border-red-500/30 px-3 py-1 rounded-full text-sm font-bold">
         <span className="relative flex h-2 w-2">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
           <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
         </span>
-        LIVE
+        {clockLabel}
       </span>
     );
   }
   if (status === 'PAUSED') {
     return (
       <span className="bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-3 py-1 rounded-full text-sm font-bold">
-        HALF TIME
+        HT
       </span>
     );
   }
@@ -55,9 +58,10 @@ function StatusBadge({ status }: { status: MatchStatus }) {
   );
 }
 
-export default function MatchLiveZone({ matchId, initialStatus, initialScore }: Props) {
+export default function MatchLiveZone({ matchId, initialStatus, initialScore, initialMinute }: Props) {
   const [status, setStatus] = useState<MatchStatus>(initialStatus);
   const [score, setScore] = useState<Score>(initialScore);
+  const [minute, setMinute] = useState<number | null>(initialMinute ?? null);
   const [countdown, setCountdown] = useState(POLL_INTERVAL);
   const [polling, setPolling] = useState(LIVE_STATUSES.includes(initialStatus));
 
@@ -81,6 +85,7 @@ export default function MatchLiveZone({ matchId, initialStatus, initialScore }: 
         setScore(data.score);
         prevScore.current = data.score;
       }
+      setMinute(data.minute ?? null);
 
       // Phase 4: fire-and-forget telemetry beacon
       fetch('/api/telemetry/live', {
@@ -119,7 +124,7 @@ export default function MatchLiveZone({ matchId, initialStatus, initialScore }: 
   return (
     <>
       <div className="flex justify-center mb-4">
-        <StatusBadge status={status} />
+        <StatusBadge status={status} minute={minute} />
       </div>
 
       {showScore ? (

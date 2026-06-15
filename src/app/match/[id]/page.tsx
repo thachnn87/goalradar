@@ -2112,6 +2112,7 @@ export default async function MatchDetailPage({ params }: Params) {
                 matchId={String(match.id)}
                 initialStatus={match.status}
                 initialScore={match.score}
+                initialMinute={match.minute ?? null}
               />
             ) : undefined
           }

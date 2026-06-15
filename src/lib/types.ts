@@ -51,6 +51,8 @@ export interface Match {
   homeTeam: Team;
   awayTeam: Team;
   score: Score;
+  /** Live clock minute (IN_PLAY/PAUSED only). Present when primary provider is active. */
+  minute?: number | null;
 }
 
 export interface StandingEntry {

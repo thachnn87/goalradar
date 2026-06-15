@@ -15,20 +15,13 @@ function formatTime(utcDate: string) {
 function StatusBadge({
   status,
   duration,
+  minute,
 }: {
   status:    Match['status'];
   duration?: string;
+  minute?:   number | null;
 }) {
-  const map: Partial<Record<Match['status'], { text: string; className: string }>> = {
-    IN_PLAY:   { text: 'LIVE', className: 'bg-red-500/20 text-red-400 border border-red-500/30' },
-    PAUSED:    { text: 'HT',   className: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' },
-    POSTPONED: { text: 'PST',  className: 'bg-orange-500/20 text-orange-400' },
-    CANCELLED: { text: 'CANC', className: 'bg-gray-700 text-gray-500' },
-    SUSPENDED: { text: 'SUSP', className: 'bg-orange-500/20 text-orange-400' },
-  };
-
   if (status === 'FINISHED') {
-    // Show match duration suffix when the game went beyond 90 minutes.
     const suffix =
       duration === 'PENALTY_SHOOTOUT' ? ' (P)'
       : duration === 'EXTRA_TIME'     ? ' AET'
@@ -39,6 +32,26 @@ function StatusBadge({
       </span>
     );
   }
+
+  if (status === 'IN_PLAY') {
+    const label = minute != null ? `${minute}'` : 'LIVE';
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30">
+        <span className="relative flex h-1.5 w-1.5">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500" />
+        </span>
+        {label}
+      </span>
+    );
+  }
+
+  const map: Partial<Record<Match['status'], { text: string; className: string }>> = {
+    PAUSED:    { text: 'HT',   className: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' },
+    POSTPONED: { text: 'PST',  className: 'bg-orange-500/20 text-orange-400' },
+    CANCELLED: { text: 'CANC', className: 'bg-gray-700 text-gray-500' },
+    SUSPENDED: { text: 'SUSP', className: 'bg-orange-500/20 text-orange-400' },
+  };
 
   const config = map[status];
   if (!config) return null;
@@ -101,7 +114,7 @@ export default function MatchCard({ match }: { match: Match }) {
               <LocalTime utcDate={match.utcDate} variant="badge" />
             </div>
           )}
-          <StatusBadge status={status} duration={score.duration} />
+          <StatusBadge status={status} duration={score.duration} minute={match.minute} />
         </div>
       </div>
       <div className="space-y-2">
