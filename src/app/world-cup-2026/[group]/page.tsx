@@ -41,6 +41,11 @@ function letterFromSlug(slug: string) {
   return slug.replace('group-', '').toUpperCase();
 }
 
+// Normalise football-data.org group strings: 'GROUP_G' | 'Group G' → 'G'
+function normalizeGroupLetter(group: string | null | undefined): string {
+  return (group ?? '').replace('GROUP_', '').replace(/^Group\s+/i, '').trim();
+}
+
 type Params = { params: Promise<{ group: string }> };
 
 export function generateStaticParams() {
@@ -62,7 +67,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   // Use authority standings data for team names in SEO
   const standingsMeta = await getStandingsCached('WC');
   const groupTableMeta = (standingsMeta.standings ?? []).find(
-    (s) => s.type === 'TOTAL' && s.group === slugToApiGroup(slug)
+    (s) => s.type === 'TOTAL' && normalizeGroupLetter(s.group) === letter
   );
   const teamNames = groupTableMeta?.table.map((e) => e.team?.shortName ?? e.team?.name ?? '').filter(Boolean).join(', ') ?? '';
   const teamsText  = teamNames ? ` Featuring ${teamNames}.` : '';
@@ -662,7 +667,7 @@ export default async function WCGroupPage({ params }: Params) {
   const liveGroupTable =
     standingsResult.status === 'fulfilled'
       ? standingsResult.value.standings.find(
-          (s) => s.type === 'TOTAL' && s.group === apiGroup
+          (s) => s.type === 'TOTAL' && normalizeGroupLetter(s.group) === letter
         ) ?? null
       : null;
 

@@ -110,7 +110,7 @@ export default async function WCTeamsPage() {
     const tables = (standingsData.standings ?? []).filter((s) => s.type === 'TOTAL');
     if (tables.length > 0) {
       byGroup = tables.map((t) => {
-        const letter = (t.group ?? '').replace('GROUP_', '');
+        const letter = (t.group ?? '').replace('GROUP_', '').replace(/^Group\s+/i, '').trim();
         const teams = t.table.map((e) => {
           const wct = WC_ALL_TEAMS.find(
             (wt) => wt.apiName.toLowerCase() === (e.team?.name ?? '').toLowerCase() ||

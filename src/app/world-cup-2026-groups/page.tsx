@@ -135,7 +135,7 @@ export default async function WC2026GroupsPage() {
             <h2 className="text-xl font-bold text-white mb-4">Live Group Standings</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {standingTables.map((st, i) => {
-                const letter = String.fromCharCode(65 + i);
+                const letter = (st.group ?? '').replace('GROUP_', '').replace(/^Group\s+/i, '').trim() || String.fromCharCode(65 + i);
                 return (
                   <div key={st.group ?? i} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
                     <div className="px-4 py-2.5 border-b border-gray-800 flex items-center justify-between">

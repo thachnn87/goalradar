@@ -330,7 +330,8 @@ export default async function WCTeamPage({
         );
         if (entry) {
           standingEntry = entry;
-          standingGroupLabel = (tables[i].group ?? '').replace('GROUP_', '');
+          // Handle both 'GROUP_A' and 'Group A' formats from football-data.org
+          standingGroupLabel = (tables[i].group ?? '').replace('GROUP_', '').replace(/^Group\s+/i, '').trim();
           break;
         }
       }
