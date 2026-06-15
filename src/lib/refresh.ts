@@ -264,14 +264,9 @@ export async function refreshLiveMatches(): Promise<RefreshResult> {
   const start    = Date.now();
   const endpoint = '/matches?status=IN_PLAY,PAUSED';
 
-  // Live matches bypass rate-safe mode: even during a rate-limit event we
-  // still want the cached live data served.  But we must not call the
-  // provider when we're throttled — return immediately if active.
-  if (isRateSafeModeActive()) {
-    logRateSafeSkip(endpoint);
-    return { endpoint, status: 'skipped', fetchedAt: new Date(start).toISOString(), freshUntil: '', error: 'rate-safe mode active' };
-  }
-
+  // Live matches bypass rate-safe mode — a 429 on the WC fixture endpoints
+  // does not mean /matches?status=IN_PLAY,PAUSED is also throttled, and live
+  // state is the most user-visible data on the site.
   let result: Awaited<ReturnType<typeof providerManager.getLiveMatches>>;
   try {
     result = await providerManager.getLiveMatches();

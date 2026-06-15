@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Suspense } from 'react';
+import React, { Suspense } from 'react';
 import type { Metadata } from 'next';
 import LocalTime from '@/components/LocalTime';
 import AddToCalendar from '@/components/AddToCalendar';
@@ -20,6 +20,7 @@ import type { BreadcrumbItem } from '@/components/Breadcrumb';
 import { matchPath, extractMatchId, teamPath } from '@/lib/url';
 import AdSlot from '@/components/AdSlot';
 import AffiliateBlock from '@/components/AffiliateBlock';
+import MatchLiveZone from '@/components/MatchLiveZone';
 import NewsletterSignup from '@/components/NewsletterSignup';
 import PushNotificationButton from '@/components/PushNotificationButton';
 import { WC_TEAMS } from '@/lib/wc-teams';
@@ -227,7 +228,7 @@ function StatusPill({ status }: { status: MatchDetail['status'] }) {
 // Score hero
 // ---------------------------------------------------------------------------
 
-function ScoreHero({ match }: { match: MatchDetail }) {
+function ScoreHero({ match, centerSlot }: { match: MatchDetail; centerSlot?: React.ReactNode }) {
   const { score, homeTeam, awayTeam, status } = match;
   const showScore   = ['IN_PLAY', 'PAUSED', 'FINISHED'].includes(status);
   const isUpcoming  = ['SCHEDULED', 'TIMED'].includes(status);
@@ -265,10 +266,6 @@ function ScoreHero({ match }: { match: MatchDetail }) {
         )}
       </div>
 
-      <div className="flex justify-center mb-6">
-        <StatusPill status={status} />
-      </div>
-
       <div className="grid grid-cols-3 items-center gap-4">
         {/* Home */}
         {homeTeam.id > 0 ? (
@@ -303,23 +300,30 @@ function ScoreHero({ match }: { match: MatchDetail }) {
           </div>
         )}
 
-        {/* Score */}
+        {/* Score / live zone */}
         <div className="text-center">
-          {showScore ? (
+          {centerSlot ?? (
             <>
-              <div className="text-4xl sm:text-5xl font-black text-white tabular-nums">
-                {score.fullTime.home ?? 0}
-                <span className="text-gray-600 mx-1">–</span>
-                {score.fullTime.away ?? 0}
+              <div className="flex justify-center mb-4">
+                <StatusPill status={status} />
               </div>
-              {score.halfTime.home !== null && (
-                <p className="text-xs text-gray-500 mt-2">
-                  HT {score.halfTime.home} – {score.halfTime.away}
-                </p>
+              {showScore ? (
+                <>
+                  <div className="text-4xl sm:text-5xl font-black text-white tabular-nums">
+                    {score.fullTime.home ?? 0}
+                    <span className="text-gray-600 mx-1">–</span>
+                    {score.fullTime.away ?? 0}
+                  </div>
+                  {score.halfTime.home !== null && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      HT {score.halfTime.home} – {score.halfTime.away}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="text-3xl font-bold text-gray-600">vs</div>
               )}
             </>
-          ) : (
-            <div className="text-3xl font-bold text-gray-600">vs</div>
           )}
         </div>
 
@@ -2100,7 +2104,18 @@ export default async function MatchDetailPage({ params }: Params) {
         {/* Breadcrumb: Home > WC 2026 > Group A > Match */}
         <Breadcrumb items={buildBreadcrumb(match)} />
 
-        <ScoreHero match={match} />
+        <ScoreHero
+          match={match}
+          centerSlot={
+            (match.status === 'IN_PLAY' || match.status === 'PAUSED') ? (
+              <MatchLiveZone
+                matchId={String(match.id)}
+                initialStatus={match.status}
+                initialScore={match.score}
+              />
+            ) : undefined
+          }
+        />
 
         {/* ── Above-fold revenue funnel (WC only) ─────────────────────────── */}
         {isWC && <WCAboveFoldCTA matchId={match.id} />}

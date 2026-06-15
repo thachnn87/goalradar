@@ -542,20 +542,30 @@ export async function getTodayMatchesCached(): Promise<{ matches: Match[] }> {
  * Constraints: no new KV writes, no provider calls, no new caches, no ISR change.
  */
 export async function getWCAuthorityMatchesCached(): Promise<{ matches: Match[] }> {
-  const [upcomingResult, recentResult] = await Promise.allSettled([
+  const [upcomingResult, recentResult, liveResult] = await Promise.allSettled([
     getUpcomingMatchesCached('WC'),
     getRecentMatchesCached('WC'),
+    getWCLiveMatches(),
   ]);
 
   const upcoming = upcomingResult.status === 'fulfilled' ? upcomingResult.value.matches : [];
   const recent   = recentResult.status  === 'fulfilled' ? recentResult.value.matches   : [];
+  const live     = liveResult.status    === 'fulfilled' ? liveResult.value.matches     : [];
 
   // Merge by ID — forward-only: higher STATE_RANK wins.
   // upcoming feed carries all 104 WC fixtures (SCHEDULED/TIMED).
   // recent feed carries the last 30 days; FINISHED entries supersede stale SCHEDULED ones.
+  // live feed carries IN_PLAY/PAUSED (rank 2 > SCHEDULED rank 0) — fills the gap where the
+  // recent feed hasn't been refreshed since kickoff (up to the 30-min skip-guard window).
   const byId = new Map<number, Match>();
   for (const m of upcoming) byId.set(m.id, m);
   for (const m of recent) {
+    const existing = byId.get(m.id);
+    if (!existing || (STATE_RANK[m.status] ?? 0) >= (STATE_RANK[existing.status] ?? 0)) {
+      byId.set(m.id, m);
+    }
+  }
+  for (const m of live) {
     const existing = byId.get(m.id);
     if (!existing || (STATE_RANK[m.status] ?? 0) >= (STATE_RANK[existing.status] ?? 0)) {
       byId.set(m.id, m);
