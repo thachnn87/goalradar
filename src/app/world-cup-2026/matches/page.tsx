@@ -11,7 +11,7 @@ import Breadcrumb from '@/components/Breadcrumb';
 import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
 
-export const revalidate = 3600;
+export const revalidate = 300; // DATA-9: reduced from 3600 — match results page
 
 const BASE_URL = 'https://goalradar.org';
 const PAGE_URL = `${BASE_URL}/world-cup-2026/matches`;

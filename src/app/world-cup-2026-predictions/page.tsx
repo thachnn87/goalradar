@@ -32,7 +32,7 @@ import WCPageNav from '@/components/WCPageNav';
 import AdSlot from '@/components/AdSlot';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
 
-export const revalidate = 900; // 15 minutes — stay in sync with upcoming-matches cache
+export const revalidate = 86400; // DATA-9: raised from 900 — predictions content is static, no live data
 
 const BASE_URL    = 'https://goalradar.org';
 const CANONICAL   = `${BASE_URL}/world-cup-2026-predictions`;

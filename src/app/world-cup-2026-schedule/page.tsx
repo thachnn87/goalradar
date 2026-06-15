@@ -10,11 +10,9 @@
 
 import type { Metadata } from 'next';
 import Link from 'next/link';
-// PERF-4.5
-import { getUpcomingMatchesCached } from '@/lib/api';
+// DATA-6: authority source only — no static fallbacks.
+import { getWCAuthorityMatchesCached } from '@/lib/api';
 import type { Match } from '@/lib/types';
-import { getUpcomingGroupFixtures, type WCGroupFixture } from '@/lib/wc-fixtures';
-import { isStaticMode, getStaticGroupFixtures } from '@/data/worldcup/loader';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCPageNav from '@/components/WCPageNav';
@@ -22,7 +20,7 @@ import WCRelatedLinks from '@/components/WCRelatedLinks';
 import NewsletterSignup from '@/components/NewsletterSignup';
 import { matchPath } from '@/lib/url';
 
-export const revalidate = 3600;
+export const revalidate = 300; // DATA-9: reduced from 3600 — schedule changes frequently during tournament
 
 const BASE_URL = 'https://goalradar.org';
 const CANONICAL = `${BASE_URL}/world-cup-2026-schedule`;
@@ -129,41 +127,20 @@ const FAQ = [
 // Page
 // ---------------------------------------------------------------------------
 
-/** Group local WCGroupFixtures by calendar date (YYYY-MM-DD). */
-function groupLocalByDay(fixtures: WCGroupFixture[]): Map<string, WCGroupFixture[]> {
-  const map = new Map<string, WCGroupFixture[]>();
-  for (const f of fixtures) {
-    const day = f.utcDate.slice(0, 10);
-    if (!map.has(day)) map.set(day, []);
-    map.get(day)!.push(f);
-  }
-  return map;
-}
-
 export default async function WC2026SchedulePage() {
+  // DATA-6: authority source only. Filter to SCHEDULED/TIMED — never show
+  // live, paused, or finished matches inside a schedule view.
   let upcoming: Match[] = [];
-  let localUpcoming: WCGroupFixture[] = [];
-
-  if (isStaticMode()) {
-    // WORLD_CUP_DATA_SOURCE=static — bypass API, use JSON dataset directly
-    localUpcoming = getStaticGroupFixtures().slice(0, 48);
-  } else {
-    try {
-      const data = await getUpcomingMatchesCached('WC');
-      upcoming = data.matches.slice(0, 48); // first 48 upcoming
-    } catch { /* show static FAQ only */ }
-
-    // If API returned nothing, serve local group-stage schedule
-    if (upcoming.length === 0) {
-      localUpcoming = getUpcomingGroupFixtures().slice(0, 48);
-    }
-  }
+  try {
+    const data = await getWCAuthorityMatchesCached();
+    upcoming = data.matches
+      .filter((m) => m.status === 'SCHEDULED' || m.status === 'TIMED')
+      .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
+      .slice(0, 48);
+  } catch { /* empty state renders below */ }
 
   const byDay = groupByDay(upcoming);
-  const days = Array.from(byDay.keys()).sort().slice(0, 14); // next 14 days
-
-  const localByDay = groupLocalByDay(localUpcoming);
-  const localDays  = Array.from(localByDay.keys()).sort().slice(0, 14);
+  const days = Array.from(byDay.keys()).sort().slice(0, 14);
 
   const jsonLdFaq = {
     '@context': 'https://schema.org',
@@ -324,41 +301,23 @@ export default async function WC2026SchedulePage() {
           </section>
         )}
 
-        {/* Local static schedule — shown when API is unavailable */}
-        {days.length === 0 && localDays.length > 0 && (
+        {/* Empty state — no upcoming SCHEDULED/TIMED matches */}
+        {days.length === 0 && (
           <section className="mb-8">
-            <h2 className="text-xl font-bold text-white mb-1">Group Stage Schedule</h2>
-            <p className="text-xs text-gray-600 mb-4">
-              ℹ️ Showing scheduled kickoff times. Live match links will appear once the tournament begins.
-            </p>
-            {localDays.map((day) => {
-              const dayFixtures = localByDay.get(day) ?? [];
-              return (
-                <div key={day} className="mb-6">
-                  <p className="text-xs font-bold text-yellow-400 uppercase tracking-wider mb-3">
-                    {formatDay(day + 'T00:00:00Z')}
-                  </p>
-                  <div className="space-y-2">
-                    {dayFixtures.map((f) => (
-                      <div key={f.localId}
-                        className="flex items-center justify-between bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span className="text-[10px] text-gray-600 font-mono shrink-0">
-                            {utcToLocal(f.utcDate, -4)} ET
-                          </span>
-                          <span className="text-sm text-white font-semibold truncate">
-                            {f.homeFlag} {f.homeLabel} <span className="text-gray-500 font-normal">vs</span> {f.awayLabel} {f.awayFlag}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-[10px] text-gray-600">Group {f.group} · MD{f.matchday}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center space-y-3">
+              <p className="text-gray-300 text-sm font-semibold">No upcoming fixtures scheduled</p>
+              <p className="text-gray-600 text-xs leading-relaxed">
+                Fixtures for the next round will appear here once the current round concludes and match slots are confirmed.
+              </p>
+              <div className="flex justify-center gap-4 pt-2 text-sm">
+                <Link href="/world-cup-2026" className="text-yellow-500 hover:text-yellow-300 transition-colors font-medium">
+                  Live scores →
+                </Link>
+                <Link href="/world-cup-2026/bracket" className="text-yellow-500 hover:text-yellow-300 transition-colors font-medium">
+                  Knockout bracket →
+                </Link>
+              </div>
+            </div>
           </section>
         )}
 

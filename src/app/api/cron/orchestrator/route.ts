@@ -26,6 +26,7 @@ import {
 import { prewarmWorldCup, type WorldCupPrewarmResult } from '@/lib/prewarm/worldcup';
 import { readRateSafeFromKV, isRateSafeModeActive, getRateSafeState } from '@/lib/rate-safe';
 import { COMPETITIONS } from '@/lib/types';
+import { revalidateWCPaths, type RevalidationRecord } from '@/lib/revalidation';
 
 export const dynamic = 'force-dynamic';
 
@@ -223,6 +224,30 @@ export async function GET(req: NextRequest) {
     console.error('[Cron] orchestrator: WC seeding threw', err instanceof Error ? err.message : String(err));
   }
 
+  // ── DATA-9: On-demand ISR revalidation ───────────────────────────────────
+  // Trigger only when at least one WC data task (fixtures or standings) succeeded.
+  // This clears stale HTML caches immediately after fresh KV data is available.
+  // Never triggered if all WC tasks failed — stale HTML beats incorrect HTML.
+  let revalidationRecord: RevalidationRecord | null = null;
+  const wcTasksOk = taskResults.some(
+    (t) =>
+      t.status === 'ok' &&
+      (t.label.startsWith('wc-') || t.label === 'standings-wc'),
+  );
+  if (wcTasksOk) {
+    try {
+      const triggeredByStr = triggeredBy ?? 'unknown';
+      revalidationRecord = await revalidateWCPaths('orchestrator', triggeredByStr);
+      console.log(
+        `[ISR] orchestrator: revalidated ${revalidationRecord.revalidated} WC paths | success=${revalidationRecord.success}`,
+      );
+    } catch (err) {
+      console.error('[ISR] orchestrator: revalidation threw', err instanceof Error ? err.message : String(err));
+    }
+  } else {
+    console.log('[ISR] orchestrator: skipping revalidation — no WC tasks succeeded');
+  }
+
   const totalElapsed = Date.now() - started;
   console.log(`[Cron] orchestrator done | total=${totalElapsed}ms`);
 
@@ -276,5 +301,12 @@ export async function GET(req: NextRequest) {
       errors:            seedResult.errors,
     } : null,
     timestamp: new Date().toISOString(),
+    // DATA-9
+    revalidation: revalidationRecord ? {
+      success:     revalidationRecord.success,
+      revalidated: revalidationRecord.revalidated,
+      paths:       revalidationRecord.paths,
+      ...(revalidationRecord.error ? { error: revalidationRecord.error } : {}),
+    } : { skipped: true, reason: 'no WC tasks succeeded' },
   });
 }
