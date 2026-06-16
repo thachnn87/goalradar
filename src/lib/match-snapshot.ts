@@ -49,7 +49,8 @@ import { recordDataSource, getDataSourceStats } from './data-source-tracker';
 import { recordSnapshotFetch }                  from './match-perf-tracker';
 import { getStaticGroupMatches } from '@/data/worldcup/loader';
 import { readKVLiveMatches } from './live-cache';
-import { AF_ENRICHMENT_ENABLED, enrichMatchWithAFEvents } from './af-id-map';
+import { AF_ENRICHMENT_ENABLED, enrichMatchWithAFEvents }   from './af-id-map';
+import { ESPN_ENRICHMENT_ENABLED, enrichMatchWithEspnEvents } from './espn-id-map';
 
 import {
   getMatchDetail,
@@ -352,18 +353,23 @@ async function buildSnapshot(matchId: string): Promise<MatchSnapshot> {
     match = await getMatchDetail(matchId); // withCache → withKVCache → provider
   }
 
-  // DATA-11B: Enrich FINISHED WC matches with api-football event data
+  // DATA-11B / DATA-13: Enrich FINISHED WC matches with event data
   // (goals, bookings, substitutions) which football-data.org free tier omits.
-  // Guard: FINISHED + WC competition + no goals already present (FD free tier
-  // always returns empty events, but this guard respects a future Tier 2 upgrade).
+  // Guard: FINISHED + WC competition + no goals already present.
+  // Provider order: api-football first (DATA-11B), ESPN fallback (DATA-13).
   // Best-effort: any failure returns unenriched match; snapshot still writes.
-  if (
-    AF_ENRICHMENT_ENABLED &&
+  const needsEnrichment =
     match.status === 'FINISHED' &&
     match.competition?.code === 'WC' &&
-    (match.goals?.length ?? 0) === 0
-  ) {
+    (match.goals?.length ?? 0) === 0;
+
+  if (needsEnrichment && AF_ENRICHMENT_ENABLED) {
     match = await enrichMatchWithAFEvents(match);
+  }
+
+  // ESPN enrichment: runs when AF enrichment is disabled or produced no events.
+  if (needsEnrichment && ESPN_ENRICHMENT_ENABLED && (match.goals?.length ?? 0) === 0) {
+    match = await enrichMatchWithEspnEvents(match);
   }
 
   // LIVE-2 / LIVE-2B: overlay score + status from live cache.
