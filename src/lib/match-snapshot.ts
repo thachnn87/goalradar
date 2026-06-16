@@ -656,13 +656,18 @@ export function getGroupTable(snapshot: MatchSnapshot): StandingEntry[] | null {
 
 /**
  * Manually invalidate a match's KV snapshot (e.g. after a score update).
+ * Also clears the ESPN event cache so re-enrichment fetches fresh data.
  * No-op if KV is not configured.
  */
 export async function invalidateMatchSnapshot(matchId: string): Promise<void> {
   if (!KV_ENABLED) return;
   try {
-    await kv.del(kvKey(matchId));
-    console.log(`[Snapshot] INVALIDATED match:${matchId}`);
+    const { espnEventKvKey } = await import('./espn-id-map');
+    await Promise.all([
+      kv.del(kvKey(matchId)),
+      kv.del(espnEventKvKey(matchId)),
+    ]);
+    console.log(`[Snapshot] INVALIDATED match:${matchId} + espn-event-cache`);
   } catch {
     // best-effort
   }
