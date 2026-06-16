@@ -15,8 +15,8 @@
  */
 
 import { kv }                                  from '@vercel/kv';
-import { findEspnMatch, getEspnMatchEvents }   from './providers/espn';
-import type { EspnMatchEvents }                from './providers/espn';
+import { findEspnMatch, getEspnMatchEvents, normaliseName } from './providers/espn';
+import type { EspnMatchEvents }                             from './providers/espn';
 import type { MatchDetail }                    from './types';
 
 // ---------------------------------------------------------------------------
@@ -199,10 +199,26 @@ export async function enrichMatchWithEspnEvents(match: MatchDetail): Promise<Mat
 }
 
 function applyEspnEvents(match: MatchDetail, events: CachedEspnEvents): MatchDetail {
+  // ESPN team IDs differ from FD team IDs. Resolve each event's team back to
+  // the FD team object so that MatchStatistics (which filters by team.id) works.
+  const normHome = normaliseName(match.homeTeam.name);
+  const normAway = normaliseName(match.awayTeam.name);
+
+  function resolveTeam<T extends { name: string; shortName?: string }>(
+    espnTeam: T | null | undefined,
+  ): typeof match.homeTeam | T | null | undefined {
+    if (!espnTeam) return espnTeam;
+    const n = normaliseName(espnTeam.name);
+    const ns = normaliseName(espnTeam.shortName ?? '');
+    if (n === normHome || ns === normHome) return match.homeTeam;
+    if (n === normAway || ns === normAway) return match.awayTeam;
+    return espnTeam;
+  }
+
   return {
     ...match,
-    goals:         events.goals,
-    bookings:      events.bookings,
-    substitutions: events.substitutions,
+    goals:         events.goals?.map((g) => ({ ...g, team: resolveTeam(g.team) ?? g.team })),
+    bookings:      events.bookings?.map((b) => ({ ...b, team: resolveTeam(b.team) ?? b.team })),
+    substitutions: events.substitutions?.map((s) => ({ ...s, team: resolveTeam(s.team) ?? s.team })),
   };
 }

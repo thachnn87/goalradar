@@ -102,7 +102,7 @@ const ESPN_ALIASES: Record<string, string> = {
   'república dominicana':'dominican republic',
 };
 
-function normaliseName(name: string): string {
+export function normaliseName(name: string): string {
   const stripped = name
     .toLowerCase()
     .normalize('NFD')
@@ -283,7 +283,7 @@ export async function getEspnMatchEvents(espnMatchId: string): Promise<EspnMatch
 
   return {
     espnMatchId,
-    goals:         parseGoals(keyEvents.filter((e) => e.type?.id === '70')),
+    goals:         parseGoals(keyEvents.filter((e) => e.scoringPlay === true)),
     bookings:      parseBookings(keyEvents.filter((e) => ['94', '95', '96'].includes(e.type?.id ?? ''))),
     substitutions: parseSubstitutions(keyEvents.filter((e) => e.type?.id === '76')),
   };
