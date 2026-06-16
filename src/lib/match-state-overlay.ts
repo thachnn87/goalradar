@@ -56,13 +56,13 @@ export function mergeSnapshotState(listMatch: Match, snapMatch: Match | undefine
   const listRank = STATE_RANK[listMatch.status] ?? 0;
   const snapRank = STATE_RANK[snapMatch.status] ?? 0;
 
-  // Snapshot ahead in the state machine → adopt status + score.
+  // Snapshot ahead in the state machine → adopt status + score + minute.
   if (snapRank > listRank) {
-    return { ...listMatch, status: snapMatch.status, score: snapMatch.score, lastUpdated: snapMatch.lastUpdated };
+    return { ...listMatch, status: snapMatch.status, score: snapMatch.score, minute: snapMatch.minute, lastUpdated: snapMatch.lastUpdated };
   }
   // Same live state → snapshot usually has the fresher score/minute.
   if (snapRank === listRank && (snapMatch.status === 'IN_PLAY' || snapMatch.status === 'PAUSED')) {
-    return { ...listMatch, score: snapMatch.score, lastUpdated: snapMatch.lastUpdated };
+    return { ...listMatch, score: snapMatch.score, minute: snapMatch.minute, lastUpdated: snapMatch.lastUpdated };
   }
   return listMatch;
 }
