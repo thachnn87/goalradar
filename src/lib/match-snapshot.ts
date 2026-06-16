@@ -351,28 +351,32 @@ async function buildSnapshot(matchId: string): Promise<MatchSnapshot> {
     match = await getMatchDetail(matchId); // withCache → withKVCache → provider
   }
 
-  // LIVE-2: overlay score + status from live cache for IN_PLAY/PAUSED matches.
-  // goalradar:live:matches (30s TTL) is fresher than goalradar:/matches/{id}
-  // (60s SWR). Reading KV-direct via readKVLiveMatches() (no L1, no provider)
-  // ensures the SSR first-paint score matches what /live and /api/live-score
-  // show, eliminating the up-to-60s stale window on initial page load.
-  // Overlay is ephemeral — write guard still prevents caching live snapshots.
-  if (isLiveStatus(match.status)) {
-    try {
-      const kvLive = await readKVLiveMatches();
-      const numId  = parseInt(matchId, 10);
-      const live   = kvLive?.find((m) => m.id === numId);
-      if (live) {
+  // LIVE-2 / LIVE-2B: overlay score + status from live cache.
+  // Condition guards on live.status (NOT match.status) so the overlay fires
+  // even when the detail key still shows SCHEDULED — the "detail stale at
+  // kickoff" race (LIVE-2B) where goalradar:live:matches is already IN_PLAY
+  // but goalradar:/matches/{id} SWR hasn't refreshed yet.
+  // Reading KV-direct (no L1, no provider) keeps SSR first-paint consistent
+  // with /live and /api/live-score. Overlay is ephemeral — write guard still
+  // prevents caching live snapshots.
+  try {
+    const kvLive = await readKVLiveMatches();
+    if (kvLive) {
+      const numId = parseInt(matchId, 10);
+      const live  = kvLive.find((m) => m.id === numId);
+      if (live && isLiveStatus(live.status)) {
+        const prevStatus = match.status;
         match = { ...match, score: live.score, status: live.status };
         console.log(
           `[Snapshot] LIVE-OVERLAY match:${matchId}` +
           ` | score=${live.score?.fullTime?.home ?? '?'}-${live.score?.fullTime?.away ?? '?'}` +
-          ` | status=${live.status}`,
+          ` | status=${live.status}` +
+          ` | detailWas=${prevStatus}`,
         );
       }
-    } catch {
-      // live cache unavailable — use detail score as-is (graceful degradation)
     }
+  } catch {
+    // live cache unavailable — use detail score as-is (graceful degradation)
   }
 
   return assembleSnapshot(matchId, match, detailSource, t0);
