@@ -84,10 +84,12 @@ export async function resolveEspnMatchId(match: MatchDetail): Promise<string | n
 
   try {
     // 1. Lookup KV cache
-    const cached = await kv.get<string | null>(lookupKey);
-    if (cached !== undefined) {
-      // null stored explicitly = previous miss, avoid repeat scoreboard call
-      return cached;
+    // kv.get() returns null for missing keys (not undefined), so we use a
+    // sentinel string '__NOT_FOUND__' to distinguish an explicit miss from absent.
+    const cached = await kv.get<string>(lookupKey);
+    if (cached !== null) {
+      // '__NOT_FOUND__' stored explicitly = previous miss, avoid repeat scoreboard call
+      return cached === '__NOT_FOUND__' ? null : cached;
     }
 
     // 2. Query ESPN scoreboard
@@ -97,8 +99,8 @@ export async function resolveEspnMatchId(match: MatchDetail): Promise<string | n
       match.utcDate,
     );
 
-    // 3. Store result (including null to suppress repeat misses for 30 days)
-    kv.set(lookupKey, espnId, { ex: ESPN_LOOKUP_TTL_SEC }).catch((err) =>
+    // 3. Store result (sentinel '__NOT_FOUND__' for misses to suppress repeat scoreboard calls)
+    kv.set(lookupKey, espnId ?? '__NOT_FOUND__', { ex: ESPN_LOOKUP_TTL_SEC }).catch((err) =>
       console.error(`[ESPN-ID-MAP] lookup-write failed match:${fdId}:`, err),
     );
 

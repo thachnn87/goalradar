@@ -55,33 +55,23 @@ interface EspnScoreboardResponse {
   events?: EspnEvent[];
 }
 
-// Participant type is a string or an object depending on ESPN API version
-interface EspnParticipant {
-  athlete: { id: string; displayName: string; shortName?: string };
-  type:    { id?: string; text: string } | string;
-}
 
-interface EspnScoringPlay {
+// keyEvents is the actual event array returned by the ESPN summary endpoint for WC 2026.
+// scoringPlays and plays are NOT present in WC 2026 summary responses.
+interface EspnKeyEvent {
   id:           string;
-  type:         { id?: string; text: string };
+  type:         { id: string; text: string; type?: string };
+  text?:        string;
+  shortText?:   string;
   period:       { number: number };
-  clock:        { displayValue: string };
-  team:         EspnTeam;
-  participants?: EspnParticipant[];
-}
-
-interface EspnPlay {
-  id:            string;
-  type:          { id?: string; text: string };
-  period:        { number: number };
-  clock:         { displayValue: string };
-  team?:         EspnTeam;
-  participants?: EspnParticipant[];
+  clock:        { value?: number; displayValue: string };
+  scoringPlay?: boolean;
+  team?:        EspnTeam;
+  participants?: Array<{ athlete: { id: string; displayName: string; shortName?: string } }>;
 }
 
 interface EspnSummaryResponse {
-  scoringPlays?: EspnScoringPlay[];
-  plays?:        EspnPlay[];
+  keyEvents?: EspnKeyEvent[];
 }
 
 // ---------------------------------------------------------------------------
@@ -156,14 +146,6 @@ function buildTeam(espnTeam: EspnTeam): Team {
 }
 
 // ---------------------------------------------------------------------------
-// Participant helpers
-// ---------------------------------------------------------------------------
-
-function participantTypeText(p: EspnParticipant): string {
-  return typeof p.type === 'string' ? p.type : (p.type?.text ?? '');
-}
-
-// ---------------------------------------------------------------------------
 // Fetch helper
 // ---------------------------------------------------------------------------
 
@@ -196,21 +178,28 @@ async function espnFetch<T>(url: string): Promise<T> {
  * Returns the ESPN event ID string, or null if not found.
  * Throws on network/parse failure (caller should catch and return null).
  */
-export async function findEspnMatch(
-  homeTeamName: string,
-  awayTeamName: string,
-  utcDate:      string,
-): Promise<string | null> {
-  // YYYYMMDD from UTC date string
-  const dateStr = utcDate.slice(0, 10).replace(/-/g, '');
-  const url     = `${ESPN_BASE}/${ESPN_LEAGUE}/scoreboard?dates=${dateStr}`;
+/** Convert a UTC ISO date string to an ESPN YYYYMMDD string. */
+function toEspnDateStr(utcDate: string): string {
+  return utcDate.slice(0, 10).replace(/-/g, '');
+}
 
-  const data = await espnFetch<EspnScoreboardResponse>(url);
-  const events = data.events ?? [];
+/** Subtract one calendar day from a YYYYMMDD string. */
+function prevDayStr(dateStr: string): string {
+  const year  = parseInt(dateStr.slice(0, 4), 10);
+  const month = parseInt(dateStr.slice(4, 6), 10) - 1;
+  const day   = parseInt(dateStr.slice(6, 8), 10);
+  const d     = new Date(Date.UTC(year, month, day - 1));
+  const y     = d.getUTCFullYear();
+  const m     = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const da    = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}${m}${da}`;
+}
 
-  const normHome = normaliseName(homeTeamName);
-  const normAway = normaliseName(awayTeamName);
-
+function matchInScoreboard(
+  events: EspnEvent[],
+  normHome: string,
+  normAway: string,
+): string | null {
   for (const event of events) {
     const competition = event.competitions?.[0];
     if (!competition) continue;
@@ -219,24 +208,56 @@ export async function findEspnMatch(
     const away = competition.competitors.find((c) => c.homeAway === 'away');
     if (!home || !away) continue;
 
-    const espnHome = normaliseName(home.team.displayName);
-    const espnAway = normaliseName(away.team.displayName);
-
-    if (espnHome === normHome && espnAway === normAway) {
+    if (
+      normaliseName(home.team.displayName) === normHome &&
+      normaliseName(away.team.displayName) === normAway
+    ) {
       return event.id;
     }
 
     // Fallback: check shortDisplayName
-    const espnHomeShort = normaliseName(home.team.shortDisplayName ?? '');
-    const espnAwayShort = normaliseName(away.team.shortDisplayName ?? '');
-    if (espnHomeShort === normHome && espnAwayShort === normAway) {
+    if (
+      normaliseName(home.team.shortDisplayName ?? '') === normHome &&
+      normaliseName(away.team.shortDisplayName ?? '') === normAway
+    ) {
       return event.id;
+    }
+  }
+  return null;
+}
+
+export async function findEspnMatch(
+  homeTeamName: string,
+  awayTeamName: string,
+  utcDate:      string,
+): Promise<string | null> {
+  const normHome = normaliseName(homeTeamName);
+  const normAway = normaliseName(awayTeamName);
+
+  // ESPN groups events by US local time (~UTC-5/6). Matches at 01:00–02:00Z
+  // UTC appear on the previous calendar day. Try UTC date first, then prev day.
+  const dateStr  = toEspnDateStr(utcDate);
+  const prevDate = prevDayStr(dateStr);
+
+  const dates = [dateStr, prevDate];
+
+  for (const d of dates) {
+    const url  = `${ESPN_BASE}/${ESPN_LEAGUE}/scoreboard?dates=${d}`;
+    const data = await espnFetch<EspnScoreboardResponse>(url);
+    const events = data.events ?? [];
+
+    const found = matchInScoreboard(events, normHome, normAway);
+    if (found) {
+      if (d !== dateStr) {
+        console.log(`[ESPN] found match on prev-day ${d} (utcDate=${dateStr})`);
+      }
+      return found;
     }
   }
 
   console.warn(
-    `[ESPN] no match found for "${homeTeamName}" vs "${awayTeamName}" on ${dateStr}` +
-    ` (${events.length} events in scoreboard)`,
+    `[ESPN] no match found for "${homeTeamName}" vs "${awayTeamName}"` +
+    ` on ${dateStr} or ${prevDate}`,
   );
   return null;
 }
@@ -248,9 +269,9 @@ export async function findEspnMatch(
 /**
  * Fetch goals, bookings, and substitutions for an ESPN event ID.
  *
- * Goals:          scoringPlays array (reliable, ESPN-maintained)
- * Bookings:       plays array filtered by type text
- * Substitutions:  plays array filtered by type text
+ * ESPN WC 2026 summary responses do not include `scoringPlays` or `plays`.
+ * All events are in the `keyEvents` array, filtered by type.id:
+ *   70 = Goal, 76 = Substitution, 94 = Yellow Card, 95/96 = Red Card variants
  *
  * Returns null on network/parse failure (caller should handle).
  */
@@ -258,40 +279,40 @@ export async function getEspnMatchEvents(espnMatchId: string): Promise<EspnMatch
   const url  = `${ESPN_BASE}/${ESPN_LEAGUE}/summary?event=${espnMatchId}`;
   const data = await espnFetch<EspnSummaryResponse>(url);
 
+  const keyEvents = data.keyEvents ?? [];
+
   return {
     espnMatchId,
-    goals:         parseGoals(data.scoringPlays ?? []),
-    bookings:      parseBookings(data.plays ?? []),
-    substitutions: parseSubstitutions(data.plays ?? []),
+    goals:         parseGoals(keyEvents.filter((e) => e.type?.id === '70')),
+    bookings:      parseBookings(keyEvents.filter((e) => ['94', '95', '96'].includes(e.type?.id ?? ''))),
+    substitutions: parseSubstitutions(keyEvents.filter((e) => e.type?.id === '76')),
   };
 }
 
 // ---------------------------------------------------------------------------
-// Event parsers
+// Event parsers — all operate on pre-filtered EspnKeyEvent[] slices
 // ---------------------------------------------------------------------------
 
-function parseGoals(plays: EspnScoringPlay[]): Goal[] {
+// keyEvents participants carry no type labels — roles are positional:
+//   Goal:         participants[0] = scorer, participants[1] = assist (optional)
+//   Substitution: participants[0] = playerIn,  participants[1] = playerOut
+//   Card:         participants[0] = recipient (single)
+
+function parseGoals(events: EspnKeyEvent[]): Goal[] {
   const goals: Goal[] = [];
 
-  for (const play of plays) {
-    const typeText = play.type?.text?.toLowerCase() ?? '';
-    // Scoring plays include goals and own goals; skip penalty shootout markers
-    if (!typeText.includes('goal')) continue;
+  for (const ev of events) {
+    if (!ev.team) continue;
 
-    const minute    = espnClockToMinute(play.clock?.displayValue ?? '0:00', play.period?.number ?? 1);
-    const team      = buildTeam(play.team);
+    const minute    = espnClockToMinute(ev.clock?.displayValue ?? '0:00', ev.period?.number ?? 1);
+    const team      = buildTeam(ev.team);
+    const typeText  = ev.type?.text?.toLowerCase() ?? '';
     const isOwnGoal = typeText.includes('own');
 
-    const participants = play.participants ?? [];
-    const scorer = participants.find(
-      (p) => participantTypeText(p).toLowerCase().includes('scorer') ||
-             participantTypeText(p).toLowerCase().includes('goal'),
-    );
-    const assist = participants.find(
-      (p) => participantTypeText(p).toLowerCase().includes('assist'),
-    );
+    const participants = ev.participants ?? [];
+    const scorer       = participants[0]; // always the scorer
+    const assist       = participants[1]; // present only when there is an assist
 
-    // Skip plays with no scorer info (data gap)
     if (!scorer) continue;
 
     goals.push({
@@ -312,26 +333,26 @@ function parseGoals(plays: EspnScoringPlay[]): Goal[] {
   return goals;
 }
 
-function parseBookings(plays: EspnPlay[]): Booking[] {
+function parseBookings(events: EspnKeyEvent[]): Booking[] {
   const bookings: Booking[] = [];
 
-  const CARD_TYPES: Record<string, Booking['card']> = {
-    'yellow card':        'YELLOW',
-    'red card':           'RED',
-    'second yellow card': 'YELLOW_RED',
-    'yellow-red card':    'YELLOW_RED',
+  // type.id 94 = Yellow, 95 = Red, 96 = Second Yellow / Yellow-Red
+  const CARD_BY_TYPE_ID: Record<string, Booking['card']> = {
+    '94': 'YELLOW',
+    '95': 'RED',
+    '96': 'YELLOW_RED',
   };
 
-  for (const play of plays) {
-    const typeText = play.type?.text?.toLowerCase() ?? '';
-    const card     = CARD_TYPES[typeText];
-    if (!card || !play.team) continue;
+  for (const ev of events) {
+    if (!ev.team) continue;
 
-    const minute = espnClockToMinute(play.clock?.displayValue ?? '0:00', play.period?.number ?? 1);
-    const team   = buildTeam(play.team);
+    const card = CARD_BY_TYPE_ID[ev.type?.id ?? ''];
+    if (!card) continue;
 
-    const participants = play.participants ?? [];
-    const recipient    = participants[0]; // typically only one participant for cards
+    const minute       = espnClockToMinute(ev.clock?.displayValue ?? '0:00', ev.period?.number ?? 1);
+    const team         = buildTeam(ev.team);
+    const participants = ev.participants ?? [];
+    const recipient    = participants[0];
     if (!recipient) continue;
 
     bookings.push({
@@ -348,32 +369,21 @@ function parseBookings(plays: EspnPlay[]): Booking[] {
   return bookings;
 }
 
-function parseSubstitutions(plays: EspnPlay[]): Substitution[] {
+function parseSubstitutions(events: EspnKeyEvent[]): Substitution[] {
   const substitutions: Substitution[] = [];
 
-  for (const play of plays) {
-    const typeText = play.type?.text?.toLowerCase() ?? '';
-    if (!typeText.includes('substitution') && !typeText.includes('sub ')) continue;
-    if (!play.team) continue;
+  for (const ev of events) {
+    if (!ev.team) continue;
 
-    const minute = espnClockToMinute(play.clock?.displayValue ?? '0:00', play.period?.number ?? 1);
-    const team   = buildTeam(play.team);
+    const minute       = espnClockToMinute(ev.clock?.displayValue ?? '0:00', ev.period?.number ?? 1);
+    const team         = buildTeam(ev.team);
+    const participants = ev.participants ?? [];
 
-    const participants = play.participants ?? [];
-    const playerOut    = participants.find(
-      (p) => participantTypeText(p).toLowerCase().includes('out') ||
-             participantTypeText(p).toLowerCase().includes('replaced'),
-    );
-    const playerIn     = participants.find(
-      (p) => participantTypeText(p).toLowerCase().includes('in') ||
-             participantTypeText(p).toLowerCase().includes('replacement'),
-    );
-
-    // Some ESPN feeds list sub participants without explicit in/out labels
-    // Fall back to positional order: index 0 = out, index 1 = in
-    const pOut = playerOut ?? participants[0];
-    const pIn  = playerIn  ?? participants[1];
-    if (!pOut || !pIn) continue;
+    // Positional: index 0 = coming on (playerIn), index 1 = going off (playerOut)
+    // Validated from event text: "Nilson Angulo replaces Alan Minda" → [0]=Angulo, [1]=Minda
+    const pIn  = participants[0];
+    const pOut = participants[1];
+    if (!pIn || !pOut) continue;
 
     substitutions.push({
       minute,

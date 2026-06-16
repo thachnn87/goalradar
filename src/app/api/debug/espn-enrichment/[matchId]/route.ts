@@ -107,9 +107,9 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     );
   }
 
-  // lookupRaw: undefined = key absent, null = explicit miss stored, string = ESPN ID
-  const lookupHit   = lookupRaw !== undefined;
-  const espnMatchId = (typeof lookupRaw === 'string' ? lookupRaw : null);
+  // lookupRaw: null = key absent (kv.get miss), '__NOT_FOUND__' = explicit miss stored, string = ESPN ID
+  const lookupHit   = lookupRaw !== null;
+  const espnMatchId = (typeof lookupRaw === 'string' && lookupRaw !== '__NOT_FOUND__' ? lookupRaw : null);
 
   // KV doesn't expose write time; use enrichedAt in the event payload as a proxy
   if (events?.enrichedAt) {
