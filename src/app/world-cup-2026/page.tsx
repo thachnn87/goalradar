@@ -22,6 +22,7 @@ import WCRelatedLinks from '@/components/WCRelatedLinks';
 import AdSlot from '@/components/AdSlot';
 import NewsletterSignup from '@/components/NewsletterSignup';
 import { WC_ALL_TEAMS } from '@/lib/wc-all-teams';
+import { WC_ROUNDS } from '@/lib/wc-rounds';
 // getStaticUpcomingMatches is no longer needed here — fallback is handled inside getUpcomingMatchesCached
 import PushNotificationButton from '@/components/PushNotificationButton';
 
@@ -540,7 +541,25 @@ export default async function WorldCup2026Page() {
         />
 
         {/* ── Crawler discovery — static links for all groups, fixtures, teams ── */}
-        <nav aria-label="World Cup 2026 groups and teams" className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5 space-y-5">
+        <nav aria-label="World Cup 2026 knockout rounds, groups and teams" className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5 space-y-5">
+          {/* Knockout Rounds */}
+          <div>
+            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
+              Knockout Rounds
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {WC_ROUNDS.map((r) => (
+                <Link
+                  key={r.slug}
+                  href={`/world-cup-2026/${r.slug}`}
+                  className="px-3 py-1.5 rounded-lg border border-gray-700 bg-gray-800 text-xs font-semibold text-gray-300 hover:text-white hover:border-gray-600 transition-colors"
+                >
+                  {r.icon} {r.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+
           {/* Groups A–L */}
           <div>
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">

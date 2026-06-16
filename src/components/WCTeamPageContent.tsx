@@ -15,10 +15,10 @@ import Link from 'next/link';
 import type { WCTeam } from '@/lib/wc-teams';
 import { findTeamGroupFromMatches } from '@/lib/wc-teams';
 import {
-  getUpcomingMatches,
-  getRecentMatches,
-  getWCLiveMatches,
-  getStandings,
+  getUpcomingMatchesCached,
+  getRecentMatchesCached,
+  getWCLiveMatchesCached,
+  getStandingsCached,
 } from '@/lib/api';
 import type { Match, StandingEntry, StandingTable } from '@/lib/types';
 import { matchPath } from '@/lib/url';
@@ -662,10 +662,10 @@ function JsonLd({ team, group }: { team: WCTeam; group: string | null }) {
 export default async function WCTeamPageContent({ team }: { team: WCTeam }) {
   // Parallel fetches — gracefully degrade on error
   const [upcomingRes, recentRes, standingsRes, liveRes] = await Promise.allSettled([
-    getUpcomingMatches('WC'),
-    getRecentMatches('WC'),
-    getStandings('WC'),
-    getWCLiveMatches(),
+    getUpcomingMatchesCached('WC'),
+    getRecentMatchesCached('WC'),
+    getStandingsCached('WC'),
+    getWCLiveMatchesCached(),
   ]);
 
   const allUpcoming: Match[] =

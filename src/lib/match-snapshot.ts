@@ -49,6 +49,7 @@ import { recordDataSource, getDataSourceStats } from './data-source-tracker';
 import { recordSnapshotFetch }                  from './match-perf-tracker';
 import { getStaticGroupMatches } from '@/data/worldcup/loader';
 import { readKVLiveMatches } from './live-cache';
+import { AF_ENRICHMENT_ENABLED, enrichMatchWithAFEvents } from './af-id-map';
 
 import {
   getMatchDetail,
@@ -349,6 +350,20 @@ async function buildSnapshot(matchId: string): Promise<MatchSnapshot> {
     console.log(`[Snapshot] kv-detail-miss match:${matchId} — calling provider`);
     detailSource = 'provider';
     match = await getMatchDetail(matchId); // withCache → withKVCache → provider
+  }
+
+  // DATA-11B: Enrich FINISHED WC matches with api-football event data
+  // (goals, bookings, substitutions) which football-data.org free tier omits.
+  // Guard: FINISHED + WC competition + no goals already present (FD free tier
+  // always returns empty events, but this guard respects a future Tier 2 upgrade).
+  // Best-effort: any failure returns unenriched match; snapshot still writes.
+  if (
+    AF_ENRICHMENT_ENABLED &&
+    match.status === 'FINISHED' &&
+    match.competition?.code === 'WC' &&
+    (match.goals?.length ?? 0) === 0
+  ) {
+    match = await enrichMatchWithAFEvents(match);
   }
 
   // LIVE-2 / LIVE-2B: overlay score + status from live cache.
