@@ -12,6 +12,15 @@ function formatTime(utcDate: string) {
   });
 }
 
+/** Returns a short phase label for the bottom of a live card. */
+function matchProgress(status: Match['status'], minute: number | null | undefined): string | null {
+  if (status === 'PAUSED') return 'Half Time';
+  if (status !== 'IN_PLAY' || minute == null) return null;
+  if (minute <= 45) return 'First Half';
+  if (minute <= 90) return 'Second Half';
+  return 'Stoppage Time';
+}
+
 function StatusBadge({
   status,
   duration,
@@ -131,6 +140,11 @@ export default function MatchCard({ match }: { match: Match }) {
           bold={status === 'FINISHED' ? awayWins : true}
         />
       </div>
+      {matchProgress(status, match.minute) && (
+        <p className="text-[10px] text-gray-500 mt-2 text-right">
+          {matchProgress(status, match.minute)}
+        </p>
+      )}
     </div>
   );
 

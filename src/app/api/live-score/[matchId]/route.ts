@@ -80,6 +80,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       matchId: match.id,
       status: match.status,
       score: match.score,
+      minute: match.minute ?? null,
       lastUpdated: match.lastUpdated ?? null,
       source: 'snapshot',
     });

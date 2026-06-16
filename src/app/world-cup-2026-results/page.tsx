@@ -73,8 +73,10 @@ function formatScore(m: Match): string {
 }
 
 function statusBadge(m: Match): { label: string; cls: string } {
-  if (m.status === 'IN_PLAY' || m.status === 'PAUSED')
-    return { label: 'LIVE', cls: 'bg-red-500/20 text-red-400 border-red-500/30' };
+  if (m.status === 'IN_PLAY')
+    return { label: m.minute != null ? `${m.minute}'` : 'LIVE', cls: 'bg-red-500/20 text-red-400 border-red-500/30' };
+  if (m.status === 'PAUSED')
+    return { label: 'HT', cls: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' };
   if (m.status === 'FINISHED')
     return { label: 'FT', cls: 'bg-gray-700 text-gray-300 border-gray-600' };
   return { label: m.status ?? '', cls: 'bg-gray-800 text-gray-500 border-gray-700' };

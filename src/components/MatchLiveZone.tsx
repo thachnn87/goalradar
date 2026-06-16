@@ -24,6 +24,14 @@ interface Props {
   initialMinute?: number | null;
 }
 
+function matchProgress(status: MatchStatus, minute: number | null): string | null {
+  if (status === 'PAUSED') return 'Half Time';
+  if (status !== 'IN_PLAY' || minute === null) return null;
+  if (minute <= 45) return 'First Half';
+  if (minute <= 90) return 'Second Half';
+  return 'Stoppage Time';
+}
+
 function StatusBadge({ status, minute }: { status: MatchStatus; minute: number | null }) {
   if (status === 'IN_PLAY') {
     const clockLabel = minute != null ? `${minute}'` : 'LIVE';
@@ -123,8 +131,11 @@ export default function MatchLiveZone({ matchId, initialStatus, initialScore, in
 
   return (
     <>
-      <div className="flex justify-center mb-4">
+      <div className="flex flex-col items-center gap-1 mb-4">
         <StatusBadge status={status} minute={minute} />
+        {matchProgress(status, minute) && (
+          <span className="text-[11px] text-gray-500">{matchProgress(status, minute)}</span>
+        )}
       </div>
 
       {showScore ? (
