@@ -53,13 +53,13 @@ interface KVEntry<T> {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const rawId = params.id;
+  const { id: rawId } = await params;
   const matchId = /^\d+$/.test(rawId) ? rawId : (/^(\d+)/.exec(rawId)?.[1] ?? null);
   if (!matchId) {
     return NextResponse.json({ error: `Invalid match id: ${rawId}` }, { status: 400 });
