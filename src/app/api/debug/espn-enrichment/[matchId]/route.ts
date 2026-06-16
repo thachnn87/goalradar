@@ -131,12 +131,15 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     source = 'not-finished';
   } else if (!snapshotMatch) {
     source = 'no-snapshot';
+  } else if (events !== null) {
+    // Event cache is the authoritative signal — check it before the lookup key.
+    // The lookup KV key may be null (stale from pre-DATA-13C buggy code) even
+    // when events ARE cached and enrichment IS applied.
+    source = 'kv-cache';
   } else if (!espnMatchId) {
     source = 'lookup-miss';
-  } else if (events) {
-    source = 'kv-cache';
   } else {
-    source = 'espn-fresh'; // would be fetched on next snapshot build
+    source = 'espn-fresh'; // ESPN ID known but events not yet cached
   }
 
   return NextResponse.json({
