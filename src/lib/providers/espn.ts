@@ -14,7 +14,7 @@
  * League slug: fifa.world (overridable via ESPN_WC_LEAGUE env var).
  */
 
-import type { Goal, Booking, Substitution, Team } from '@/lib/types';
+import type { Goal, Booking, Substitution, Team, Lineup, LineupPlayer } from '@/lib/types';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -70,8 +70,32 @@ interface EspnKeyEvent {
   participants?: Array<{ athlete: { id: string; displayName: string; shortName?: string } }>;
 }
 
+interface EspnRosterEntry {
+  active?:        boolean;
+  starter?:       boolean;
+  jersey?:        string;
+  subbedIn?:      boolean;
+  subbedOut?:     boolean;
+  formationPlace?: number;
+  athlete?: {
+    id:           string;
+    displayName:  string;
+    shortName?:   string;
+  };
+  position?: {
+    name?:         string;
+    abbreviation?: string;
+  };
+}
+
+interface EspnRoster {
+  team?:   EspnTeam;
+  roster?: EspnRosterEntry[];
+}
+
 interface EspnSummaryResponse {
   keyEvents?: EspnKeyEvent[];
+  rosters?:   EspnRoster[];
 }
 
 // ---------------------------------------------------------------------------
@@ -83,6 +107,7 @@ export interface EspnMatchEvents {
   goals:         Goal[];
   bookings:      Booking[];
   substitutions: Substitution[];
+  lineups:       { home: Lineup; away: Lineup } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -287,6 +312,7 @@ export async function getEspnMatchEvents(espnMatchId: string): Promise<EspnMatch
     goals:         parseGoals(keyEvents.filter((e) => e.scoringPlay === true)),
     bookings:      parseBookings(keyEvents.filter((e) => ['94', '95', '96'].includes(e.type?.id ?? ''))),
     substitutions: parseSubstitutions(keyEvents.filter((e) => e.type?.id === '76')),
+    lineups:       parseLineups(data.rosters ?? []),
   };
 }
 
@@ -395,4 +421,50 @@ function parseSubstitutions(events: EspnKeyEvent[]): Substitution[] {
   }
 
   return substitutions;
+}
+
+// ---------------------------------------------------------------------------
+// parseLineups — roster data from ESPN summary `rosters` array (DATA-16)
+// ---------------------------------------------------------------------------
+
+function parseRosterEntry(entry: EspnRosterEntry): LineupPlayer | null {
+  if (!entry.athlete?.id) return null;
+  return {
+    id:             parseInt(entry.athlete.id, 10) || 0,
+    name:           entry.athlete.displayName,
+    position:       entry.position?.abbreviation ?? null,
+    jersey:         entry.jersey ?? null,
+    starter:        entry.starter === true,
+    formationPlace: entry.starter ? (entry.formationPlace ?? null) : null,
+    subbedIn:       entry.subbedIn === true,
+    subbedOut:      entry.subbedOut === true,
+  };
+}
+
+function parseLineups(rosters: EspnRoster[]): { home: Lineup; away: Lineup } | null {
+  if (!rosters || rosters.length < 2) return null;
+
+  // ESPN rosters[0] and rosters[1] correspond to the two teams.
+  // We identify home vs away by matching the order used in the competition
+  // competitors array (home appears first in standard ESPN responses).
+  // Use the index directly since ESPN always returns [home, away].
+  const build = (r: EspnRoster): Lineup | null => {
+    if (!r.team) return null;
+    const players: LineupPlayer[] = (r.roster ?? [])
+      .map(parseRosterEntry)
+      .filter((p): p is LineupPlayer => p !== null)
+      // starters before bench, then sort starters by formationPlace
+      .sort((a, b) => {
+        if (a.starter !== b.starter) return a.starter ? -1 : 1;
+        if (a.starter && b.starter) return (a.formationPlace ?? 99) - (b.formationPlace ?? 99);
+        return 0;
+      });
+    if (!players.length) return null;
+    return { team: buildTeam(r.team), players };
+  };
+
+  const home = build(rosters[0]);
+  const away = build(rosters[1]);
+  if (!home || !away) return null;
+  return { home, away };
 }

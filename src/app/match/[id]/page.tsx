@@ -905,13 +905,66 @@ function MatchStatistics({ match }: { match: MatchDetail }) {
 // Lineups
 // ---------------------------------------------------------------------------
 
-function LineupsSection() {
+function LineupsSection({ match }: { match: MatchDetail }) {
+  const lineups = match.lineups;
+  if (!lineups) {
+    return (
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+        {sectionTitle('Lineups')}
+        <p className="text-sm text-gray-500 text-center py-6">
+          Detailed starting lineups are not available from the current data provider.
+        </p>
+      </div>
+    );
+  }
+
+  const renderTeam = (lineup: typeof lineups.home, label: string) => {
+    const starters = lineup.players.filter((p) => p.starter);
+    const bench    = lineup.players.filter((p) => !p.starter);
+    return (
+      <div className="flex-1 min-w-0">
+        <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-2 text-center">
+          {label}
+        </p>
+        <div className="space-y-1">
+          {starters.map((p) => (
+            <div key={p.id} className="flex items-center gap-2 text-sm">
+              <span className="text-gray-500 w-5 text-right text-xs">{p.jersey ?? ''}</span>
+              <span className="text-white truncate">{p.name}</span>
+              {p.position && (
+                <span className="text-gray-500 text-xs ml-auto shrink-0">{p.position}</span>
+              )}
+              {p.subbedOut && <span className="text-orange-400 text-xs shrink-0">↓</span>}
+            </div>
+          ))}
+          {bench.length > 0 && (
+            <>
+              <p className="text-xs text-gray-600 pt-2 pb-1">Substitutes</p>
+              {bench.map((p) => (
+                <div key={p.id} className="flex items-center gap-2 text-sm opacity-60">
+                  <span className="text-gray-500 w-5 text-right text-xs">{p.jersey ?? ''}</span>
+                  <span className="text-gray-300 truncate">{p.name}</span>
+                  {p.position && (
+                    <span className="text-gray-600 text-xs ml-auto shrink-0">{p.position}</span>
+                  )}
+                  {p.subbedIn && <span className="text-green-400 text-xs shrink-0">↑</span>}
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
       {sectionTitle('Lineups')}
-      <p className="text-sm text-gray-500 text-center py-6">
-        Detailed starting lineups are not available from the current data provider.
-      </p>
+      <div className="flex gap-6">
+        {renderTeam(lineups.home, match.homeTeam.shortName || match.homeTeam.name)}
+        <div className="w-px bg-gray-800 self-stretch" />
+        {renderTeam(lineups.away, match.awayTeam.shortName || match.awayTeam.name)}
+      </div>
     </div>
   );
 }
@@ -2251,7 +2304,7 @@ async function BelowTheFoldDeferred({ matchId }: { matchId: string }) {
 
         <SubstitutionsSection match={match} />
 
-        <LineupsSection />
+        <LineupsSection match={match} />
       </LazySection>
 
       {/* Head-to-head — deferred: streams in after snapshot resolves. */}

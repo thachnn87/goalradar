@@ -40,7 +40,7 @@ export const ESPN_ENRICHMENT_ENABLED =
 // ---------------------------------------------------------------------------
 
 export const ESPN_LOOKUP_TTL_SEC = 30 * 24 * 3600; // 30 days — positive: ESPN IDs don't change
-export const ESPN_EVENT_TTL_SEC  = 12 * 3600;       // 12 hours — events are final after match
+export const ESPN_EVENT_TTL_SEC  = 30 * 24 * 3600; // 30 days — FINISHED events never change (DATA-16)
 
 /**
  * DATA-15C — Negative-cache backoff schedule.
@@ -108,6 +108,7 @@ export interface CachedEspnEvents {
   goals:         MatchDetail['goals'];
   bookings:      MatchDetail['bookings'];
   substitutions: MatchDetail['substitutions'];
+  lineups:       MatchDetail['lineups'];
   espnMatchId:   string;
   enrichedAt:    number; // epoch ms
 }
@@ -257,6 +258,7 @@ export async function enrichMatchWithEspnEvents(match: MatchDetail): Promise<Mat
       goals:         raw.goals,
       bookings:      raw.bookings,
       substitutions: raw.substitutions,
+      lineups:       raw.lineups ?? null,
       espnMatchId:   espnId,
       enrichedAt:    Date.now(),
     };
@@ -300,10 +302,25 @@ function applyEspnEvents(match: MatchDetail, events: CachedEspnEvents): MatchDet
     return espnTeam;
   }
 
+  // Obj 6 (DATA-16): validate goal count against FD score; log a warning if mismatch.
+  const ftH = match.score?.fullTime?.home ?? 0;
+  const ftA = match.score?.fullTime?.away ?? 0;
+  const scoreTotal = ftH + ftA;
+  const goalCount  = events.goals?.length ?? 0;
+  if (scoreTotal > 0 && goalCount !== scoreTotal) {
+    console.warn(
+      `[ESPN-ENRICH] STATS-MISMATCH match:${match.id}` +
+      ` | fdScore=${ftH}-${ftA} (total=${scoreTotal})` +
+      ` | espnGoals=${goalCount}` +
+      ` | espnId=${events.espnMatchId}`,
+    );
+  }
+
   return {
     ...match,
     goals:         events.goals?.map((g) => ({ ...g, team: resolveTeam(g.team) ?? g.team })),
     bookings:      events.bookings?.map((b) => ({ ...b, team: resolveTeam(b.team) ?? b.team })),
     substitutions: events.substitutions?.map((s) => ({ ...s, team: resolveTeam(s.team) ?? s.team })),
+    lineups:       events.lineups ?? null,
   };
 }

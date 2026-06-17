@@ -106,10 +106,27 @@ export interface Referee {
   nationality: string | null;
 }
 
+export interface LineupPlayer {
+  id:             number;
+  name:           string;
+  position:       string | null; // abbreviated position: 'G', 'CB', 'CM', 'CF', etc.
+  jersey:         string | null;
+  starter:        boolean;
+  formationPlace: number | null; // 1–11 (1=GK), null for bench
+  subbedIn:       boolean;
+  subbedOut:      boolean;
+}
+
+export interface Lineup {
+  team:    Team;
+  players: LineupPlayer[]; // starters (starter=true) first, then bench
+}
+
 export interface MatchDetail extends Match {
   goals: Goal[];
   bookings: Booking[];
   substitutions: Substitution[];
+  lineups?: { home: Lineup; away: Lineup } | null;
   venue: string | null;
   referees: Referee[];
 }

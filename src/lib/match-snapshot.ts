@@ -261,6 +261,33 @@ async function writeKVSnapshot(matchId: string, snapshot: MatchSnapshot): Promis
     return;
   }
 
+  // DATA-16 downgrade guard: if we're about to write a FINISHED snapshot with
+  // 0 goals for a scored match, check the disaster-recovery key for a richer
+  // version. Prevents unenriched rebuilds (e.g. after event cache expiry) from
+  // pinning a goalless snapshot for 7 days.
+  const ftH = snapshot.match.score?.fullTime?.home ?? 0;
+  const ftA = snapshot.match.score?.fullTime?.away ?? 0;
+  if (
+    snapshot.match.status === 'FINISHED' &&
+    ftH + ftA > 0 &&
+    (snapshot.match.goals?.length ?? 0) === 0
+  ) {
+    const dr = await readDRSnapshot(matchId);
+    if (dr && (dr.match.goals?.length ?? 0) > 0) {
+      console.warn(
+        `[Snapshot] DOWNGRADE-GUARD match:${matchId}` +
+        ` | score=${ftH}-${ftA} but rebuilt=0 goals` +
+        ` | DR has ${dr.match.goals!.length} goals — preserving enriched snapshot`,
+      );
+      await kv.set(kvKey(matchId), dr, { ex: getSnapshotTtlSec(dr.match) });
+      return;
+    }
+    console.warn(
+      `[Snapshot] DOWNGRADE-GUARD match:${matchId}` +
+      ` | score=${ftH}-${ftA} rebuilt=0 goals and no DR rescue — writing unenriched`,
+    );
+  }
+
   const ttl = getSnapshotTtlSec(snapshot.match);
   try {
     await kv.set(kvKey(matchId), snapshot, { ex: ttl });
