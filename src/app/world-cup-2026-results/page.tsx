@@ -7,9 +7,9 @@
 
 import type { Metadata } from 'next';
 import Link from 'next/link';
-// DATA-16D: use stable getWCResultsCached (key: /competitions/WC/matches?status=FINISHED)
-// getRecentMatchesCached used a date-scoped key that rotated daily at midnight UTC with no DR fallback.
-import { getWCResultsCached, getWCLiveMatchesCached } from '@/lib/api';
+// DATA-17: single authority source — all 104 WC matches in authoritative state.
+import { getWCAuthorityMatches } from '@/lib/api';
+import { classifyMatchState } from '@/lib/match-classify';
 import type { Match } from '@/lib/types';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -84,22 +84,16 @@ function statusBadge(m: Match): { label: string; cls: string } {
 }
 
 export default async function WC2026ResultsPage() {
-  let results: Match[] = [];
-  let live: Match[]    = [];
+  // DATA-17: single authority source. getWCAuthorityMatches() merges Live →
+  // Snapshot (ESPN-enriched) → WC results feed → WC upcoming feed, so one call
+  // replaces the previous getWCResultsCached + getWCLiveMatchesCached pair.
+  const today = new Date().toISOString().split('T')[0];
+  const authorityData = await getWCAuthorityMatches().catch(() => ({ matches: [] as Match[] }));
+  const classify = (m: Match) => classifyMatchState(m, today);
 
-  // allSettled — each source fails independently so a live-data 403 does not
-  // also wipe out the results list (and vice versa).
-  const [rResult, lResult] = await Promise.allSettled([
-    getWCResultsCached(),
-    getWCLiveMatchesCached(),
-  ]);
-  if (rResult.status === 'fulfilled') results = rResult.value.matches;
-  if (lResult.status === 'fulfilled') live    = lResult.value.matches;
-
-  // Only FINISHED matches — filter out any SCHEDULED/TIMED that might appear via overlay.
-  // Deduplicate against the live set (IN_PLAY/PAUSED matches are shown separately above).
-  const liveIds = new Set(live.map((m) => m.id));
-  const finishedResults = results.filter((m) => m.status === 'FINISHED' && !liveIds.has(m.id));
+  const live: Match[]    = authorityData.matches.filter((m) => classify(m) === 'live');
+  const finishedResults  = authorityData.matches.filter((m) => classify(m) === 'finished')
+    .sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime());
 
   // Statistics
   let totalGoals = 0, homeWins = 0, awayWins = 0, draws = 0;

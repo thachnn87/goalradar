@@ -502,6 +502,17 @@ export async function getTodayMatchesCached(): Promise<{ matches: Match[] }> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// DATA-17: Canonical match type
+// ---------------------------------------------------------------------------
+
+/**
+ * A Match that has passed through the full authority stack:
+ *   Live cache (30s) → per-match snapshot (ESPN-enriched, 7d) → FD bulk feeds
+ * Named alias makes the intent explicit at call sites and in return types.
+ */
+export type CanonicalMatch = Match;
+
 /**
  * Single authoritative WC match list — DATA-4 unified authority.
  *
@@ -559,6 +570,26 @@ export async function getWCAuthorityMatchesCached(): Promise<{ matches: Match[] 
   // Snapshot overlay runs last — advances IN_PLAY scores and catches any
   // FINISHED transitions the bulk feeds haven't propagated yet.
   return { matches: await overlayMatchStates([...byId.values()]) };
+}
+
+/**
+ * DATA-17: Single World Cup authority entry point.
+ *
+ * Public alias of getWCAuthorityMatchesCached() with explicit CanonicalMatch
+ * return type. All WC pages must call this function — never the separate
+ * getUpcomingMatchesCached / getRecentMatchesCached / getWCResultsCached calls.
+ *
+ * Merge priority (higher STATE_RANK wins):
+ *   1. Live cache       (IN_PLAY/PAUSED, 30 s TTL)
+ *   2. WC results feed  (FINISHED, 12 h TTL, stable key)
+ *   3. WC upcoming feed (SCHEDULED/TIMED, 30 min TTL)
+ *   4. Snapshot overlay (per-match ESPN-enriched snapshots, 7 d TTL for FINISHED)
+ *
+ * Returns all 104 WC matches in their authoritative state. Pages split them
+ * into display buckets using classifyMatchState(m, today).
+ */
+export async function getWCAuthorityMatches(): Promise<{ matches: CanonicalMatch[] }> {
+  return getWCAuthorityMatchesCached();
 }
 
 /**

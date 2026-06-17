@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
-// PERF-4.5 / DATA-4 unified authority
-import { getWCAuthorityMatchesCached } from '@/lib/api';
+// DATA-17: single authority source
+import { getWCAuthorityMatches } from '@/lib/api';
+import { classifyMatchState } from '@/lib/match-classify';
 import type { Match } from '@/lib/types';
 import { matchPath } from '@/lib/url';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -148,13 +149,13 @@ function JsonLd({ matches }: { matches: Match[] }) {
 export default async function WCFixturesPage() {
   let fixtures: Match[] = [];
   try {
-    // DATA-4 unified: authority function merges SCHEDULED/TIMED + FINISHED feeds.
-    // Fixtures page shows all WC matches grouped by date with correct status/score.
-    const data = await getWCAuthorityMatchesCached();
+    // DATA-17: single authority source — all 104 WC matches in authoritative state.
+    const data = await getWCAuthorityMatches();
     fixtures = [...data.matches].sort(
       (a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()
     );
   } catch { /* graceful degradation */ }
+  const today = new Date().toISOString().split('T')[0];
 
   const byDate = groupByDate(fixtures);
   const dates  = Object.keys(byDate).sort();
@@ -240,15 +241,15 @@ export default async function WCFixturesPage() {
                             {m.homeTeam?.crest && <img src={m.homeTeam.crest} alt="" width={18} height={18} className="object-contain shrink-0" />}
                             <span className="text-gray-200 text-sm font-medium truncate text-right group-hover:text-white">{hn}</span>
                           </div>
-                          {/* DATA-4: show score for finished matches, kickoff separator for upcoming */}
-                          {m.status === 'FINISHED' ? (
+                          {/* DATA-17: classifyMatchState() for display bucket */}
+                          {classifyMatchState(m, today) === 'finished' ? (
                             <div className="flex flex-col items-center shrink-0 gap-0">
                               <span className="text-white font-bold text-sm font-mono leading-tight">
                                 {m.score.fullTime.home ?? '–'}&nbsp;–&nbsp;{m.score.fullTime.away ?? '–'}
                               </span>
                               <span className="text-gray-600 text-[10px] leading-tight">FT</span>
                             </div>
-                          ) : m.status === 'IN_PLAY' || m.status === 'PAUSED' ? (
+                          ) : classifyMatchState(m, today) === 'live' ? (
                             <div className="flex flex-col items-center shrink-0 gap-0">
                               <span className="text-red-400 font-bold text-sm font-mono leading-tight">
                                 {m.score.fullTime.home ?? '0'}&nbsp;–&nbsp;{m.score.fullTime.away ?? '0'}

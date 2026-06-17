@@ -2,8 +2,9 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
-// PERF-4.5
-import { getStandingsCached, getUpcomingMatchesCached, getRecentMatchesCached } from '@/lib/api';
+// DATA-17: single authority source — replaces getUpcomingMatchesCached + getRecentMatchesCached.
+import { getStandingsCached, getWCAuthorityMatches } from '@/lib/api';
+import { classifyMatchState } from '@/lib/match-classify';
 import type { WCGroupFixture } from '@/lib/wc-fixtures';
 import { WC_ALL_TEAMS } from '@/lib/wc-all-teams';
 import { matchPath } from '@/lib/url';
@@ -657,13 +658,18 @@ export default async function WCGroupPage({ params }: Params) {
   const label    = slugToLabel(slug);
   const letter   = letterFromSlug(slug);
 
-  const [standingsResult, upcomingResult, recentResult] = await Promise.allSettled([
+  // DATA-17: single authority call — no more getUpcomingMatchesCached + getRecentMatchesCached.
+  // getWCAuthorityMatches() merges Live → Snapshot → FINISHED feed → SCHEDULED/TIMED feed,
+  // so FINISHED matches always take precedence over stale SCHEDULED entries for the same ID.
+  const today = new Date().toISOString().split('T')[0];
+  const classify = (m: Match) => classifyMatchState(m, today);
+
+  const [standingsResult, authorityResult] = await Promise.allSettled([
     getStandingsCached('WC'),
-    getUpcomingMatchesCached('WC'),
-    getRecentMatchesCached('WC'),
+    getWCAuthorityMatches(),
   ]);
 
-  // Group standings table — fall back to static (zeroed) table if API fails
+  // Group standings table — fall back to empty table if API fails
   const liveGroupTable =
     standingsResult.status === 'fulfilled'
       ? standingsResult.value.standings.find(
@@ -674,16 +680,16 @@ export default async function WCGroupPage({ params }: Params) {
   const tableEntries: StandingEntry[] = liveGroupTable?.table ?? [];
   const isStaticStandings = false;
 
-  // All group matches — for JSON-LD and stats
-  const allGroupUpcoming: Match[] =
-    upcomingResult.status === 'fulfilled'
-      ? upcomingResult.value.matches.filter((m) => m.group === apiGroup)
+  // All group matches from authority — filter to this group, then classify
+  const allGroupAuthority: Match[] =
+    authorityResult.status === 'fulfilled'
+      ? authorityResult.value.matches.filter((m) => m.group === apiGroup)
       : [];
 
-  const allGroupResults: Match[] =
-    recentResult.status === 'fulfilled'
-      ? recentResult.value.matches.filter((m) => m.group === apiGroup && m.status === 'FINISHED')
-      : [];
+  const allGroupUpcoming = allGroupAuthority.filter(
+    (m) => { const b = classify(m); return b === 'today' || b === 'upcoming'; }
+  );
+  const allGroupResults = allGroupAuthority.filter((m) => classify(m) === 'finished');
 
   const upcoming = [...allGroupUpcoming].sort(
     (a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()
@@ -694,7 +700,7 @@ export default async function WCGroupPage({ params }: Params) {
 
   const localFixtures: WCGroupFixture[] = [];
 
-  const allMatches = [...allGroupResults, ...allGroupUpcoming];
+  const allMatches = allGroupAuthority;
   const totalGroupMatches = 6; // each WC group plays 6 matches (4 teams × 3 rounds C(4,2))
   const playedMatches = results.length;
 
