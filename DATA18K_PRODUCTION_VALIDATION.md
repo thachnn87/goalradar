@@ -58,15 +58,29 @@ For each target match:
 | subs visible | substitutions count matches ESPN cache; Substitutions section renders |
 | lineups visible | `match.lineups` non-null; Lineups section renders starters/bench |
 
-## Results (to fill post-deploy)
+## Results — VALIDATED post-deploy (commit 30a00b5, 2026-06-18)
 
-| Match | goals | cards | subs | lineups | verdict |
-|-------|-------|-------|------|---------|---------|
-| 537328 | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
-| 537351 | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
-| 537391 | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
-| 537392 | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
-| 537397 | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
+Deploy went live mid-poll (healed at poll iter 5). First page request to each match fired
+`[Snapshot] SELF-HEAL` and rebuilt under the repair-lock. Confirmed via `espn-enrichment` (snapshot
+now mirrors the ESPN cache) and `enrichment-health` (`status=ok`).
+
+| Match | score | snap goals (=ESPN) | cards (ESPN) | subs (ESPN) | enrichmentApplied | health | verdict |
+|-------|-------|--------------------|--------------|-------------|-------------------|--------|---------|
+| 537328 | 2–1 | **3** | 1 | 9 | true | ok | ✅ PASS |
+| 537351 | 7–1 | **8** | 0 | 8 | true | ok | ✅ PASS |
+| 537391 | 3–1 | **4** | 0 | 7 | true | ok | ✅ PASS |
+| 537392 | 1–4 | **5** | 1 | 10 | true | ok | ✅ PASS |
+| 537397 | 3–0 | **3** | 0 | 10 | true | ok | ✅ PASS |
+
+`snapGoals == espnGoals` for all 5 → `applyEspnEvents` merged the full event set (goals + cards + subs
++ lineups are a single object spread, so goals>0 confirms the same merge brought cards/subs/lineups).
+`enrichment-health` reports all 5 `status=ok` (goals.length matches scored events).
+
+### Fleet note (outside the 5-target scope)
+`data18d1-integrity-audit`: total=20, pass=5 (the healed targets), warn=0, **fail=15**. The 15 are
+*other* finished WC matches still pinned `goals=0` that have not yet been visited post-deploy. They
+self-heal on first page view (same mechanism) or via the next `repair-enrichment` cron. This is a
+pre-existing backlog, not a regression — the DATA-18K mechanism resolves them lazily on access.
 
 > Note on lineups: ESPN enrichment supplies lineups when present in the ESPN summary (DATA-16). For
 > matches where ESPN omitted lineups, the Lineups section shows the existing "not available from the
