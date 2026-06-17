@@ -3,6 +3,7 @@
 
 Date: 2026-06-17
 Status: Design only — no implementation activated.
+Updated: 2026-06-17 DATA-18A.2 — B5 fix: shadow comparison mandatory; S4 split into S4a + S4b.
 
 ---
 
@@ -10,12 +11,13 @@ Status: Design only — no implementation activated.
 
 | Stage | Name | What changes | Risk | Activation |
 |-------|------|-------------|------|-----------|
-| S0 | Dormant | Types + architecture docs committed, nothing imported | None | This PR |
-| S1 | Side-by-side | `canonical-match.ts` + `buildCanonicalMatch()` + authority cache writer | None (nothing reads new code) | Explicit PR |
-| S2 | Shadow validation | Authority cache written alongside existing; compare outputs | None (pages still read old path) | Explicit PR + flag |
-| S3 | Page opt-in | One page (Results) migrated to read `CanonicalMatch[]`; others unchanged | Low | Explicit PR |
-| S4 | Full cutover | All WC pages read `CanonicalMatch[]`; `getWCAuthorityMatchesCached()` writes authority cache | Medium | Explicit PR |
-| S5 | Legacy removal | `overlayMatchStates()`, `getRecentMatchesCached()`, `type CanonicalMatch = Match` removed | Low (after S4 stable) | Explicit PR |
+| S0 | Dormant | Types + architecture docs committed, nothing imported | None | DATA-18A ✅ |
+| S1 | Side-by-side | `buildAllCanonicalMatches()` + `authority-cache.ts` + `getWCAuthorityMatchesV2()` | None | DATA-18B |
+| S2 | Shadow validation | Orchestrator writes authority cache (flag-gated); **mandatory** parity gate blocks S3 | None | DATA-18C |
+| S3 | Page opt-in | Results page migrated; `statusBadge()` updated to read `m.state` | Low | DATA-18D |
+| S4a | Hub + Schedule cutover | Hub + Schedule pages migrated; live refresh loop active | Medium | DATA-18E |
+| S4b | Fixtures + Group cutover | Fixtures + Group pages migrated (separate PR from S4a) | Medium | DATA-18E |
+| S5 | Legacy removal | Remove `overlayMatchStates` WC path, `getWCAuthorityMatchesCached`, type alias | Low | DATA-18F |
 
 ---
 
@@ -107,10 +109,11 @@ Delete `src/lib/authority-cache.ts`. Revert `canonical-match.ts` additions.
    - Writes `goalradar:wc:authority:v1` + DR copy
    - Does NOT affect page reads
 
-2. Shadow comparison endpoint (optional, internal-only):
+2. Shadow comparison endpoint (**required**, internal-only):
    - `/api/debug/authority-compare` — reads both old (`getWCAuthorityMatches()`) and
      new (`getWCAuthorityMatchesV2()`) for the same 4 benchmark matches and diffs them
    - Protected by `INTERNAL_TOKEN` header; not indexed by Google
+   - **S3 is BLOCKED until this endpoint returns all-GREEN for all 4 benchmark matches**
    - Removed in S5
 
 ### What does NOT change
@@ -119,19 +122,20 @@ Delete `src/lib/authority-cache.ts`. Revert `canonical-match.ts` additions.
 - No ISR changes
 - `AUTHORITY_CACHE_ENABLED` defaults false in production until this stage
 
-### Validation checks
+### S2 mandatory gate — S3 is BLOCKED until ALL of the following pass
 
-For all 4 benchmark matches, shadow endpoint must show:
+For all 4 benchmark matches (537397, 537392, 537391, 537351), shadow endpoint must show:
 - Identical `score.fullTime` between old and new paths
-- `enrichmentApplied=true` for FINISHED WC matches
-- `goals` array non-empty for matches that show goals on the match page
-- `state` matches `classifyMatchState()` output on old path
+- `enrichmentApplied=true` for all 4 (all are FINISHED WC matches with confirmed enrichment)
+- `goals` array length matches match-page display for each match
+- `state === 'finished'` for all 4
+- `integrity.status === 'ok'` for all 4 (C2 team IDs reconciled, C3 score non-null)
+
+If any check fails → file DATA-18C.1 remediation; do NOT proceed to S3.
 
 ### Risk level: None
 
-Pages read zero bytes from the new cache. Worst case: orchestrator cron takes
-slightly longer due to the extra write. Can be disabled by setting
-`AUTHORITY_CACHE_ENABLED=false`.
+Pages read zero bytes from the new cache. Can be disabled by `AUTHORITY_CACHE_ENABLED=false`.
 
 ### Rollback
 
@@ -155,8 +159,32 @@ Set `AUTHORITY_CACHE_ENABLED=false`. No page behaviour changes.
 ### Why Results page first
 
 - Results page is the highest-value page for score correctness (DATA-16D motivation)
-- It has no events rendering (only scores) — so field-access changes are minimal
-- It is easy to visually verify: check all 4 benchmark matches show correct scores
+- It has no events rendering (only scores) — field-access changes are minimal
+- Easy to visually verify: check all 4 benchmark matches show correct scores
+
+### Required field migration in S3 — `statusBadge()` must be updated
+
+`statusBadge()` in `world-cup-2026-results/page.tsx` reads `m.status` (a raw FD
+protocol string). `CanonicalMatch` does not have a `status` field — it uses `m.state`.
+This function **must** be updated before S3 deploys or all matches will render with
+a blank status badge.
+
+Migration:
+```typescript
+// Before (Match shape):
+if (m.status === 'IN_PLAY') return { label: m.minute != null ? `${m.minute}'` : 'LIVE', ... };
+if (m.status === 'PAUSED')  return { label: 'HT', ... };
+if (m.status === 'FINISHED') return { label: 'FT', ... };
+
+// After (CanonicalMatch shape):
+if (m.state === 'live')     return { label: m.minute != null ? `${m.minute}'` : 'LIVE', ... };
+if (m.state === 'live' && ...) return { label: 'HT', ... };  // PAUSED: needs m.source to distinguish
+if (m.state === 'finished') return { label: 'FT', ... };
+```
+
+Note: `CanonicalMatch.state` collapses IN_PLAY and PAUSED into `'live'`. If the
+Results page needs to distinguish them, either keep the raw FD status as a separate
+field on `CanonicalMatch`, or derive PAUSED from `m.minute` context. Resolve in S3 scope.
 
 ### Risk level: Low
 
@@ -177,55 +205,72 @@ Revert the one import line in Results page.
 
 ---
 
-## S4 — Full Cutover
+## S4a — Hub + Schedule Cutover
 
-**New task: DATA-18E**
+**New task: DATA-18E (first PR)**
+
+S4 is split into two sub-stages (DATA-18A.2 recommendation R9).
+S4a covers simpler pages with no group filtering. S4b covers pages with more
+complex state logic. Each is a separate PR with independent rollback.
+
+**Prerequisite: Live refresh loop must be active before S4a.** The Hub page
+(`revalidate=30`) must serve fresh live scores from the authority cache. The live
+refresh loop writes the authority cache every 30s during live matches.
 
 ### What changes
 
-1. All remaining WC pages migrated to `getWCAuthorityMatchesV2()`:
-   - `/world-cup-2026` (Hub)
-   - `/world-cup-2026-schedule`
-   - `/world-cup-2026/fixtures`
-   - `/world-cup-2026/[group]`
-
-2. `src/lib/api.ts`:
-   - `getWCAuthorityMatches()` rewritten to return from `readAuthorityCache()` directly
-     (replacing the inline merge + `overlayMatchStates()` call)
-   - `getWCAuthorityMatchesV2()` becomes the implementation; `getWCAuthorityMatches()`
-     becomes the public alias (maintains API surface unchanged for pages)
-   - `CanonicalMatch` type alias `= Match` replaced with the real interface import
-
-3. `src/lib/match-state-overlay.ts`:
-   - `overlayMatchStates()` no longer called from the authority path
-   - Still used by `getUpcomingMatchesCached()` and other non-WC paths — NOT removed in S4
-
-4. All pages: field access changes from `Match` shape to `CanonicalMatch` shape:
-   - `m.status === 'FINISHED'` → `m.state === 'finished'` (already using `classifyMatchState()` on current path, minimal change)
-   - `classify(m)` call sites → `m.state` (direct field access, no function call)
+1. `/world-cup-2026` (Hub) — migrated to `getWCAuthorityMatchesV2()`
+2. `/world-cup-2026-schedule` — migrated to `getWCAuthorityMatchesV2()`
+3. `src/lib/api.ts`:
+   - `CanonicalMatch` type alias `= Match` replaced with real interface import
+   - `getWCAuthorityMatchesCached()` deprecated but NOT removed (S5 removes it)
 
 ### Risk level: Medium
 
-All WC pages on new path. Mitigated by:
-- S3 validation already confirmed Results page works
-- S2 shadow comparison confirmed output parity for all 4 benchmark matches
-- `AUTHORITY_CACHE_ENABLED` must be stable in production since S2
-- `buildCanonicalMatch()` has unit test coverage from S1
+Hub + Schedule on new path. Results page (S3) already validated.
+Mitigated by: S2 shadow parity confirmed; S3 working in production.
 
 ### Validation checks
 
-Post-deploy production check:
-1. All 4 benchmark matches show correct scores on Hub, Results, Group pages
-2. Hub "Recent Results" section shows same matches as Results page
-3. Schedule page shows no FINISHED matches in upcoming section
-4. Group J page shows Argentina 3-0 Algeria in Results section
-5. `npx tsc --noEmit` → 0 errors
+1. Hub "Recent Results" and "Today's Matches" sections show same matches as Results page
+2. Schedule page shows no FINISHED matches in upcoming section
+3. Live score updates on Hub within 30s of a goal during a live match
+4. `npx tsc --noEmit` → 0 errors
 
 ### Rollback
 
-Revert all page imports to `getWCAuthorityMatches()` (old implementation).
-The old implementation remains in the codebase throughout S4 — no net removal.
-Revert is a 5-file import change.
+Revert 2 page imports + revert `CanonicalMatch` type change in `api.ts`.
+
+---
+
+## S4b — Fixtures + Group Cutover
+
+**New task: DATA-18E (second PR, after S4a stable ≥24h)**
+
+### What changes
+
+1. `/world-cup-2026/fixtures` — migrated to `getWCAuthorityMatchesV2()`
+2. `/world-cup-2026/[group]` — migrated to `getWCAuthorityMatchesV2()`
+
+Group page note: `m.group` field access is identical on `Match` and `CanonicalMatch`.
+Group filtering `authorityResult.value.matches.filter(m => m.group === apiGroup)`
+works unchanged.
+
+### Risk level: Medium
+
+Group page is the most complex (group filter + multi-section + standings join).
+Running as a separate PR from S4a limits blast radius.
+
+### Validation checks
+
+1. Group J page shows Argentina 3-0 Algeria in Results section
+2. Group E page shows Iraq 1-4 Norway in Results section
+3. Fixtures page shows all upcoming matches in date order
+4. `npx tsc --noEmit` → 0 errors
+
+### Rollback
+
+Revert 2 page imports.
 
 ---
 
@@ -265,10 +310,11 @@ grep -r getRecentMatchesCached src/       → 0 results (if removed)
 | Stage | Rollback action | Time to revert |
 |-------|----------------|---------------|
 | S0 | Delete `src/lib/canonical-match.ts` | < 1 min |
-| S1 | Delete `authority-cache.ts`, revert `canonical-match.ts` | < 2 min |
-| S2 | Set `AUTHORITY_CACHE_ENABLED=false` (env var, no deploy) | < 1 min |
-| S3 | Revert 1 import line in Results page | < 2 min |
-| S4 | Revert 5 page import lines; old path still in codebase | < 5 min |
+| S1 | Delete `authority-cache.ts`, revert `canonical-match.ts` additions | < 2 min |
+| S2 | Set `AUTHORITY_CACHE_ENABLED=false` (env var, no deploy needed) | < 1 min |
+| S3 | Revert Results page import + `statusBadge()` change | < 2 min |
+| S4a | Revert 2 page imports + `CanonicalMatch` type alias in `api.ts` | < 3 min |
+| S4b | Revert 2 page imports | < 2 min |
 | S5 | Git revert of S5 commit | < 2 min |
 
 ---

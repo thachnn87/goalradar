@@ -1,19 +1,28 @@
 /**
  * DATA-18A: Canonical Match type definitions + merge engine (dormant).
+ * DATA-18A.2: B1–B4 blocking issues resolved.
  *
- * This file is NOT imported by any page or API module.
- * It defines the target architecture for DATA-18B through S4 cutover.
+ * DO NOT IMPORT — this module is dormant until DATA-18B activates it.
+ * Importing this file in a page or API module before S3 is a migration error.
+ *
+ * Fixes applied in DATA-18A.2:
+ *   B1 — Score staleness: snapshot score only preferred when snapshot is newer than FD feed
+ *   B2 — Dead deriveState branch removed: SCHEDULED/TIMED always returns 'scheduled'
+ *   B3 — inferFdFeed() removed: caller passes fdFeed explicitly
+ *   B4 — Dual live params replaced with single liveEntry object
  *
  * Constraints enforced by design:
  *   - FD always owns fixture identity (id, teams, utcDate, competitionCode)
  *   - ESPN never owns score (score only from FD feeds or snapshot.match.score)
  *   - State promotion is forward-only (STATE_RANK — never downgrade)
  *   - buildCanonicalMatch() is pure: zero KV reads, zero network calls
+ *   - Lineups are NOT stored in CanonicalMatch — listing pages never display them;
+ *     match detail pages read lineups directly from the per-match snapshot.
  *
  * Must pass: npx tsc --noEmit
  */
 
-import type { Match, MatchDetail, Score, Goal, Booking, Substitution, Lineup, Referee, MatchStatus } from './types';
+import type { Match, MatchDetail, Score, Goal, Booking, Substitution, Referee, MatchStatus } from './types';
 import type { MatchSnapshot } from './match-snapshot';
 import { STATE_RANK } from './match-state-overlay';
 
@@ -21,7 +30,7 @@ import { STATE_RANK } from './match-state-overlay';
 // Supporting types
 // ---------------------------------------------------------------------------
 
-/** FD-authoritative team record. Identical shape to Team from types.ts. */
+/** FD-authoritative team record. */
 export interface CanonicalTeam {
   id:        number;
   name:      string;
@@ -40,39 +49,65 @@ export type CanonicalGoal = Goal;
 export type CanonicalCard = Booking;
 
 /** Substitution event. */
-export type CanonicalSubstitution = Substitution;
-
-/** Lineup data from ESPN enrichment. */
-export type CanonicalLineups = { home: Lineup; away: Lineup };
+export type CanonicalSubstitution = Pick<
+  import('./types').Substitution,
+  'minute' | 'team' | 'playerOut' | 'playerIn'
+>;
 
 /** Referee from FD match detail. */
 export type CanonicalReferee = Pick<Referee, 'id' | 'name' | 'nationality'>;
 
 /**
+ * Live cache entry for a single match.
+ * Passed into buildCanonicalMatch() as a single object (B4 fix).
+ */
+export interface LiveEntry {
+  status: MatchStatus;
+  minute?: number;
+}
+
+/**
  * Provenance record — which data layers contributed to this canonical object.
- * Immutable after construction (built by buildCanonicalMatch()).
+ * Immutable after construction.
  */
 export interface CanonicalMatchSource {
-  /** Which FD bulk feed provided the base match record. */
+  /**
+   * Which FD bulk feed provided the base match record.
+   * Passed explicitly by the caller (B3 fix — not inferred from status).
+   */
   fdBulkFeed: 'scheduled' | 'results' | 'all';
 
-  /** Present if the live cache contained an entry for this match at build time. */
+  /** Present if the live cache had an entry for this match at build time. */
   liveCache?: { observedAt: string };
 
   /**
    * Present if a per-match snapshot existed in KV at build time.
-   * snapshotVersion is reserved for future schema migrations.
    */
   snapshot?: {
-    /** Epoch-ms when the snapshot was built (MatchSnapshot.generatedAt). */
     generatedAt: number;
-    /** 'espn' = ESPN enrichment applied; 'none' = snapshot had no event data. */
     enrichmentSource: 'espn' | 'af' | 'none';
     snapshotVersion: number;
   };
 
-  /** ISO-8601 timestamp when buildCanonicalMatch() ran. */
+  /** ISO-8601 timestamp when buildCanonicalMatch() ran. Passed in by caller. */
   builtAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Integrity layer (DATA-18A.1 recommendation)
+// ---------------------------------------------------------------------------
+
+export type IntegrityStatus = 'ok' | 'warning' | 'degraded';
+
+export interface IntegrityCheck {
+  id:       string;
+  result:   'pass' | 'warn' | 'fail';
+  message?: string;
+}
+
+export interface IntegrityResult {
+  status: IntegrityStatus;
+  checks: IntegrityCheck[];
 }
 
 // ---------------------------------------------------------------------------
@@ -80,21 +115,29 @@ export interface CanonicalMatchSource {
 // ---------------------------------------------------------------------------
 
 /**
- * DATA-18A: Real CanonicalMatch interface.
+ * DATA-18A: Real CanonicalMatch interface (not a Match alias).
  *
  * A match that has passed through the full authority stack:
  *   FD bulk feeds (identity + status + score)
  *   + live cache overlay (IN_PLAY/PAUSED + minute)
- *   + per-match snapshot (ESPN-enriched goals/cards/subs/lineups)
+ *   + per-match snapshot (ESPN-enriched goals/cards/subs)
  *
- * `state` is the derived display bucket — not the raw FD protocol status string.
- * `enrichmentApplied` is true iff at least one event (goal/card/sub) was populated
- * from a provider enrichment pass.
+ * Design decisions:
+ *   - `state` is the derived display bucket, not the raw FD status string.
+ *   - `lineups` are intentionally absent — listing pages never render them.
+ *     Match detail pages read lineups directly from the per-match snapshot.
+ *   - `enrichmentApplied` is true iff at least one event was populated from a
+ *     provider enrichment pass (goals, cards, or substitutions non-empty).
+ *   - `enrichmentAttempted` is true iff a snapshot with enrichment infrastructure
+ *     was present — distinguishes "enriched 0-0 match" from "never enriched".
+ *   - `integrity` carries the result of validateCanonicalMatch() at build time.
  */
 export interface CanonicalMatch {
   // ── Identity (FD authority, never from ESPN or AF) ─────────────────────────
   id:              number;
+  /** Explicit copy of id — makes FD provenance clear at call sites. */
   fdMatchId:       number;
+  /** ESPN event ID, lazily resolved. Absent until resolved. */
   espnMatchId?:    string;
   competitionCode: string;
   utcDate:         string;
@@ -102,13 +145,13 @@ export interface CanonicalMatch {
   // ── State ─────────────────────────────────────────────────────────────────
   /**
    * Derived display bucket.
-   * 'scheduled' = SCHEDULED/TIMED, kickoff in future
+   * 'scheduled' = SCHEDULED/TIMED (any future or past-kickoff pre-finish)
    * 'live'      = IN_PLAY/PAUSED
    * 'finished'  = FINISHED
    * 'cancelled' = POSTPONED/CANCELLED/SUSPENDED
    */
-  state:    'scheduled' | 'live' | 'finished' | 'cancelled';
-  minute?:  number;
+  state:   'scheduled' | 'live' | 'finished' | 'cancelled';
+  minute?: number;
 
   // ── Teams (FD authority) ──────────────────────────────────────────────────
   homeTeam: CanonicalTeam;
@@ -121,16 +164,45 @@ export interface CanonicalMatch {
   goals:         CanonicalGoal[];
   cards:         CanonicalCard[];
   substitutions: CanonicalSubstitution[];
-  lineups:       CanonicalLineups | null;
+  /**
+   * Lineups intentionally excluded from CanonicalMatch.
+   * Listing pages (Hub/Results/Schedule/Fixtures/Group) never display lineups.
+   * Match detail pages read lineups directly from goalradar:match:{id} snapshot.
+   * Excluding lineups reduces the authority cache bulk payload by ~8 KB per match
+   * (from ~1.1 MB to ~200 KB for a fully-enriched 104-match tournament payload).
+   */
 
   // ── Venue & officials ─────────────────────────────────────────────────────
-  venue:    string | null;
-  referee:  CanonicalReferee | null;
+  venue:   string | null;
+  referee: CanonicalReferee | null;
 
   // ── Provenance ────────────────────────────────────────────────────────────
-  source:            CanonicalMatchSource;
-  lastUpdated:       string;
+  source:      CanonicalMatchSource;
+  lastUpdated: string;
+
+  // ── Enrichment flags ──────────────────────────────────────────────────────
+  /**
+   * True iff at least one of goals/cards/substitutions came from a provider.
+   * Note: false for a genuinely 0-0 match even if enrichment ran successfully.
+   * Use enrichmentAttempted to distinguish "enriched but no events" from "never enriched".
+   */
   enrichmentApplied: boolean;
+
+  /**
+   * True iff a snapshot with enrichment infrastructure was present at build time.
+   * Distinguishes:
+   *   enrichmentAttempted=false → match was never enriched (pre-kickoff, or snapshot absent)
+   *   enrichmentAttempted=true  + enrichmentApplied=false → enriched, genuinely 0 events
+   *   enrichmentAttempted=true  + enrichmentApplied=true  → enriched with events
+   */
+  enrichmentAttempted: boolean;
+
+  // ── Integrity ─────────────────────────────────────────────────────────────
+  /**
+   * Result of validateCanonicalMatch() run at build time.
+   * Carries structured checks for score consistency, team ID reconciliation, etc.
+   */
+  integrity: IntegrityResult;
 
   // ── Tournament context ────────────────────────────────────────────────────
   matchday: number | null;
@@ -139,35 +211,91 @@ export interface CanonicalMatch {
 }
 
 // ---------------------------------------------------------------------------
-// State derivation helpers
+// State derivation helper
 // ---------------------------------------------------------------------------
 
 /**
- * Convert a raw FD MatchStatus + utcDate into the CanonicalMatch `state` bucket.
- * Matches classifyMatchState() semantics but returns the CanonicalMatch union.
+ * Map raw FD MatchStatus to the CanonicalMatch `state` bucket.
+ *
+ * B2 fix: removed the dead conditional branch that compared matchDay to todayUTC
+ * and returned 'scheduled' in both cases. Both SCHEDULED and TIMED map to
+ * 'scheduled' regardless of whether kickoff has passed (the live cache is the
+ * authority for the moment of transition to 'live').
  */
-function deriveState(
-  status:   MatchStatus,
-  utcDate:  string,
-  todayUTC: string,
-): CanonicalMatch['state'] {
-  if (status === 'IN_PLAY' || status === 'PAUSED') return 'live';
-  if (status === 'FINISHED') return 'finished';
-  if (status === 'SCHEDULED' || status === 'TIMED') {
-    const matchDay = utcDate.split('T')[0];
-    return matchDay <= todayUTC ? 'scheduled' : 'scheduled';
-  }
-  return 'cancelled';
+function deriveState(status: MatchStatus): CanonicalMatch['state'] {
+  if (status === 'IN_PLAY' || status === 'PAUSED')     return 'live';
+  if (status === 'FINISHED')                           return 'finished';
+  if (status === 'SCHEDULED' || status === 'TIMED')    return 'scheduled';
+  return 'cancelled'; // POSTPONED, CANCELLED, SUSPENDED
 }
 
+// ---------------------------------------------------------------------------
+// Integrity validation
+// ---------------------------------------------------------------------------
+
 /**
- * Infer which FD bulk feed provided the base match record.
- * Used to populate CanonicalMatchSource.fdBulkFeed.
+ * Validate the internal consistency of a freshly-built CanonicalMatch.
+ * Pure function — no KV reads, no network calls.
+ *
+ * Minimum viable checks (DATA-18A.1 recommendation):
+ *   C2 — event team IDs reconciled to FD team IDs (DATA-14A regression guard)
+ *   C3 — FINISHED match has non-null fullTime score
+ *
+ * Extended checks (low-priority, can be added in DATA-18C):
+ *   C1 — score vs goal count consistency
+ *   C4 — duplicate event detection
+ *   C5 — ESPN ID vs enrichment consistency
+ *   C6 — state vs score consistency
  */
-function inferFdFeed(status: MatchStatus): CanonicalMatchSource['fdBulkFeed'] {
-  if (status === 'FINISHED') return 'results';
-  if (status === 'SCHEDULED' || status === 'TIMED') return 'scheduled';
-  return 'all';
+export function validateCanonicalMatch(m: Omit<CanonicalMatch, 'integrity'>): IntegrityResult {
+  const checks: IntegrityCheck[] = [];
+
+  // ── C3 — Score completeness ───────────────────────────────────────────────
+  if (
+    m.state === 'finished' &&
+    (m.score.fullTime.home === null || m.score.fullTime.away === null)
+  ) {
+    checks.push({
+      id:      'C3_SCORE_NULL',
+      result:  'fail',
+      message: `FINISHED match ${m.id} has null fullTime score`,
+    });
+  } else {
+    checks.push({ id: 'C3_SCORE_NULL', result: 'pass' });
+  }
+
+  // ── C2 — Event team ID reconciliation ────────────────────────────────────
+  const validIds = new Set([m.homeTeam.id, m.awayTeam.id]);
+  const unreconciled: number[] = [];
+
+  for (const g of m.goals) {
+    if (!validIds.has(g.team.id)) unreconciled.push(g.team.id);
+  }
+  for (const c of m.cards) {
+    if (!validIds.has(c.team.id)) unreconciled.push(c.team.id);
+  }
+  for (const s of m.substitutions) {
+    if (!validIds.has(s.team.id)) unreconciled.push(s.team.id);
+  }
+
+  if (unreconciled.length > 0) {
+    checks.push({
+      id:      'C2_TEAM_ID',
+      result:  'fail',
+      message: `${unreconciled.length} event(s) have unreconciled team IDs: [${[...new Set(unreconciled)].join(', ')}]`,
+    });
+  } else {
+    checks.push({ id: 'C2_TEAM_ID', result: 'pass' });
+  }
+
+  // ── Derive overall status ─────────────────────────────────────────────────
+  const hasFail = checks.some(c => c.result === 'fail');
+  const hasWarn = checks.some(c => c.result === 'warn');
+
+  return {
+    status: hasFail ? 'degraded' : hasWarn ? 'warning' : 'ok',
+    checks,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -175,43 +303,47 @@ function inferFdFeed(status: MatchStatus): CanonicalMatchSource['fdBulkFeed'] {
 // ---------------------------------------------------------------------------
 
 /**
- * DATA-18A: Build a single CanonicalMatch from all available data layers.
+ * DATA-18A.2: Build a single CanonicalMatch from all available data layers.
  *
  * Pure function — zero KV reads, zero network calls.
  * All inputs are read by the caller before invoking this function.
+ *
+ * API changes from DATA-18A (B3, B4 fixes):
+ *   - `fdFeed` replaces the removed `inferFdFeed()` — caller states which feed
+ *     the match came from, eliminating incorrect inference from status.
+ *   - `liveEntry` replaces separate `liveStatus` + `liveMinute` parameters —
+ *     prevents callers from passing an inconsistent (liveStatus, undefined minute) pair.
  *
  * Merge precedence:
  *   1. Live cache   (IN_PLAY/PAUSED — STATE_RANK=2)
  *   2. Snapshot     (can advance SCHEDULED→FINISHED — STATE_RANK forward-only)
  *   3. FD bulk feed (base, STATE_RANK=0–3)
  *
- * Score:  FD results feed > snapshot.match.score (both FD-sourced; ESPN never writes score)
- * Events: snapshot.match.goals/cards/subs (ESPN-enriched, team IDs reconciled per DATA-14A)
- * State:  derived via STATE_RANK, then mapped to CanonicalMatch.state bucket
+ * Score resolution (B1 fix):
+ *   Snapshot score preferred for FINISHED only when snapshot is NEWER than FD feed.
+ *   Without this guard, a 7-day-old snapshot could overwrite a corrected FD score.
  *
- * @param fdMatch   - Match from FD bulk feeds (SCHEDULED/TIMED/FINISHED)
- * @param snapshot  - Per-match snapshot from KV (ESPN-enriched, may be null on miss)
- * @param liveStatus - Status from live cache if present, null otherwise
- * @param liveMinute - Minute from live cache if present, undefined otherwise
- * @param espnMatchId - Resolved ESPN event ID from espn:lookup cache, undefined if unresolved
- * @param todayUTC  - 'YYYY-MM-DD' string for state derivation
- * @param builtAt   - ISO-8601 timestamp when this call was made (passed in, not Date.now())
+ * @param fdMatch   - Match from FD bulk feeds
+ * @param fdFeed    - Which FD feed this match came from (explicitly provided by caller)
+ * @param snapshot  - Per-match KV snapshot (ESPN-enriched). Null on cache miss.
+ * @param liveEntry - Live cache entry if present. Null if match is not live.
+ * @param espnMatchId - Resolved ESPN event ID. Undefined if unresolved.
+ * @param builtAt   - ISO-8601 timestamp — passed in, never Date.now() (determinism)
  */
 export function buildCanonicalMatch(
   fdMatch:      Match,
+  fdFeed:       'scheduled' | 'results' | 'all',
   snapshot:     MatchSnapshot | null,
-  liveStatus:   MatchStatus | null,
-  liveMinute:   number | undefined,
+  liveEntry:    LiveEntry | null,
   espnMatchId:  string | undefined,
-  todayUTC:     string,
   builtAt:      string,
 ): CanonicalMatch {
 
-  // ── Step 1: Resolve status via STATE_RANK (forward-only) ─────────────────
+  // ── Step 1: State resolution (forward-only via STATE_RANK) ────────────────
   let resolvedStatus: MatchStatus = fdMatch.status;
   let resolvedMinute: number | undefined = fdMatch.minute ?? undefined;
 
-  // Advance via snapshot
+  // Advance via snapshot (never downgrade — FINISHED stays FINISHED)
   if (snapshot !== null) {
     const snapStatus = snapshot.match.status;
     if ((STATE_RANK[snapStatus] ?? 0) > (STATE_RANK[resolvedStatus] ?? 0)) {
@@ -220,49 +352,53 @@ export function buildCanonicalMatch(
     }
   }
 
-  // Advance via live cache
-  if (liveStatus !== null) {
-    if ((STATE_RANK[liveStatus] ?? 0) > (STATE_RANK[resolvedStatus] ?? 0)) {
-      resolvedStatus = liveStatus;
-      resolvedMinute = liveMinute;
+  // Advance via live cache (IN_PLAY/PAUSED overrides SCHEDULED/TIMED)
+  if (liveEntry !== null) {
+    if ((STATE_RANK[liveEntry.status] ?? 0) > (STATE_RANK[resolvedStatus] ?? 0)) {
+      resolvedStatus = liveEntry.status;
+      resolvedMinute = liveEntry.minute;
     }
   }
 
-  // ── Step 2: Derive display state bucket ──────────────────────────────────
-  const state = deriveState(resolvedStatus, fdMatch.utcDate, todayUTC);
+  // ── Step 2: Display state bucket ──────────────────────────────────────────
+  const state = deriveState(resolvedStatus);
 
-  // ── Step 3: Score (FD authority — ESPN never provides score) ─────────────
+  // ── Step 3: Score resolution (B1 fix — timestamp guard) ───────────────────
+  //
+  // Snapshot score is preferred for FINISHED only when the snapshot is newer
+  // than the FD feed. Without this guard, a 7-day-old snapshot would overwrite
+  // a score correction made by FD after the snapshot was built.
   let score: CanonicalScore = fdMatch.score;
-  if (
-    snapshot !== null &&
-    resolvedStatus === 'FINISHED' &&
-    snapshot.match.score?.fullTime?.home !== null
-  ) {
-    // Snapshot score is preferred for FINISHED: it may have been confirmed
-    // before the bulk results feed propagated.
-    score = snapshot.match.score;
+  if (snapshot !== null && resolvedStatus === 'FINISHED') {
+    const snapTs    = snapshot.generatedAt;
+    const fdTs      = new Date(fdMatch.lastUpdated).getTime();
+    const snapScore = snapshot.match.score;
+    const snapIsNewer = snapTs > fdTs;
+
+    if (snapIsNewer && snapScore?.fullTime?.home !== null && snapScore?.fullTime?.away !== null) {
+      score = snapScore;
+    }
   }
 
-  // ── Step 4: Events (from snapshot, ESPN-enriched) ────────────────────────
+  // ── Step 4: Events (from snapshot, ESPN-enriched, team IDs reconciled) ────
   const matchDetail: MatchDetail | null = snapshot?.match ?? null;
   const goals:         CanonicalGoal[]         = matchDetail?.goals         ?? [];
   const cards:         CanonicalCard[]          = matchDetail?.bookings      ?? [];
   const substitutions: CanonicalSubstitution[]  = matchDetail?.substitutions ?? [];
-  const rawLineups = matchDetail?.lineups ?? null;
-  const lineups: CanonicalLineups | null = rawLineups
-    ? { home: rawLineups.home, away: rawLineups.away }
-    : null;
+  // Lineups intentionally NOT extracted — excluded from CanonicalMatch by design.
+  // (See CanonicalMatch interface comment above.)
 
   // ── Step 5: Venue & referee ───────────────────────────────────────────────
-  const venue:   string | null          = matchDetail?.venue        ?? null;
-  const rawRef: Referee | undefined     = matchDetail?.referees?.[0];
-  const referee: CanonicalReferee | null = rawRef
+  const venue:    string | null          = matchDetail?.venue        ?? null;
+  const rawRef:   typeof matchDetail extends null ? undefined : Referee | undefined
+                                         = matchDetail?.referees?.[0];
+  const referee:  CanonicalReferee | null = rawRef
     ? { id: rawRef.id, name: rawRef.name, nationality: rawRef.nationality ?? null }
     : null;
 
   // ── Step 6: Timestamps ────────────────────────────────────────────────────
-  const fdTs   = new Date(fdMatch.lastUpdated).getTime();
-  const snapTs = snapshot ? snapshot.generatedAt : 0;
+  const fdTs    = new Date(fdMatch.lastUpdated).getTime();
+  const snapTs  = snapshot ? snapshot.generatedAt : 0;
   const lastUpdated = new Date(Math.max(fdTs, snapTs)).toISOString();
 
   // ── Step 7: Provenance ────────────────────────────────────────────────────
@@ -275,8 +411,8 @@ export function buildCanonicalMatch(
     );
 
   const source: CanonicalMatchSource = {
-    fdBulkFeed: inferFdFeed(fdMatch.status),
-    liveCache:  liveStatus !== null ? { observedAt: builtAt } : undefined,
+    fdBulkFeed: fdFeed,
+    liveCache:  liveEntry !== null ? { observedAt: builtAt } : undefined,
     snapshot:   snapshot
       ? {
           generatedAt:      snapshot.generatedAt,
@@ -287,7 +423,12 @@ export function buildCanonicalMatch(
     builtAt,
   };
 
-  return {
+  // ── Step 8: Enrichment flags ──────────────────────────────────────────────
+  const enrichmentApplied  = goals.length > 0 || cards.length > 0 || substitutions.length > 0;
+  const enrichmentAttempted = snapshot !== null; // snapshot present = enrichment infrastructure ran
+
+  // ── Step 9: Assemble (without integrity — passed to validateCanonicalMatch) ─
+  const partial: Omit<CanonicalMatch, 'integrity'> = {
     id:              fdMatch.id,
     fdMatchId:       fdMatch.id,
     espnMatchId,
@@ -301,14 +442,19 @@ export function buildCanonicalMatch(
     goals,
     cards,
     substitutions,
-    lineups,
     venue,
     referee,
     source,
     lastUpdated,
-    enrichmentApplied: goals.length > 0 || cards.length > 0 || substitutions.length > 0,
+    enrichmentApplied,
+    enrichmentAttempted,
     matchday: fdMatch.matchday,
     stage:    fdMatch.stage,
     group:    fdMatch.group,
   };
+
+  // ── Step 10: Integrity validation (pure, in-memory) ───────────────────────
+  const integrity = validateCanonicalMatch(partial);
+
+  return { ...partial, integrity };
 }
