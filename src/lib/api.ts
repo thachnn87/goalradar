@@ -593,6 +593,26 @@ export async function getWCAuthorityMatches(): Promise<{ matches: CanonicalMatch
 }
 
 /**
+ * DATA-18B: Dormant authority-cache read path (S1 side-by-side).
+ *
+ * NOT exported to any page — only read by the shadow diff endpoint in DATA-18B.
+ * Pages will migrate to this function in DATA-18D (S3) and beyond.
+ *
+ * Read chain: goalradar:wc:authority:v1 → DR key → cold rebuild.
+ * Falls back to buildAllCanonicalMatches() on both KV misses — same data,
+ * no page regression risk.
+ *
+ * DO NOT use in pages until DATA-18C validates shadow parity.
+ */
+export async function getWCAuthorityMatchesV2(
+  builtAt: string,
+): Promise<{ matches: import('./canonical-match').CanonicalMatch[] }> {
+  const { readAuthorityCache } = await import('./authority-cache');
+  const matches = await readAuthorityCache(builtAt);
+  return { matches };
+}
+
+/**
  * Page-safe match detail — reads from KV without SWR trigger.
  * Used inside buildSnapshot fallback path only.
  */
