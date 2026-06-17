@@ -405,9 +405,9 @@ export function buildCanonicalMatch(
   const hasEspnEvents =
     snapshot !== null &&
     (
-      snapshot.match.goals.length > 0 ||
-      snapshot.match.bookings.length > 0 ||
-      snapshot.match.substitutions.length > 0
+      (snapshot.match.goals?.length ?? 0) > 0 ||
+      (snapshot.match.bookings?.length ?? 0) > 0 ||
+      (snapshot.match.substitutions?.length ?? 0) > 0
     );
 
   const source: CanonicalMatchSource = {
