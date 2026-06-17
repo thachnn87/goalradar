@@ -46,6 +46,9 @@ import { kv }                 from '@vercel/kv';
 import { providerManager }    from '@/lib/providers/manager';
 import type { Match, MatchDetail, StandingTable } from '@/lib/types';
 import type { MatchSnapshot } from '@/lib/match-snapshot';
+// DATA-18K: guarded snapshot writers — replace the raw kv.set that bypassed
+// the downgrade guard (proven root cause of pinned goals=0 snapshots).
+import { writeKVSnapshot, writeDRSnapshot } from '@/lib/match-snapshot';
 import { enrichMatchWithAFEvents } from '@/lib/af-id-map';
 // DATA-4: forward-only state ranks — prewarm must never regress snapshot state
 import { STATE_RANK } from '@/lib/match-state-overlay';
@@ -110,19 +113,13 @@ const DETAIL_STALE_SEC: Record<MatchTier, number> = {
   'finished': 7 * 24 * 3_600,                                 // 7 d — reseed only when missing
 };
 
-/** Snapshot KV TTL per tier (same gap-free invariant). */
-const SNAPSHOT_STALE_SEC: Record<MatchTier, number> = {
-  'live':     60,
-  'today':    CRON_SAFE_TTL,                                  // 32 min
-  'next-24h': CRON_SAFE_TTL,                                  // 32 min
-  'next-3d':  TIER_REFRESH_SEC['next-3d'] + CRON_SAFE_TTL,    // 2 h 32 min
-  'future':   TIER_REFRESH_SEC['future']  + CRON_SAFE_TTL,    // 12 h 32 min
-  'finished': 7 * 24 * 3_600,                                 // 7 d
-};
+// DATA-18K: snapshot + DR TTLs are now owned by writeKVSnapshot/writeDRSnapshot
+// (tier-aware getSnapshotTtlSec / DR_TTL_SEC). The prewarm-local SNAPSHOT_STALE_SEC
+// and SNAPSHOT_DR_TTL_SEC tables were removed when the raw kv.set writes were
+// replaced by the guarded writers.
 
-/** DR copy TTLs — long-lived safety net. */
+/** DR copy TTL for the detail key — long-lived safety net. */
 const DETAIL_DR_TTL_SEC   = 7 * 24 * 3_600;  // 7 days
-const SNAPSHOT_DR_TTL_SEC = 30 * 24 * 3_600; // 30 days
 
 /** Max individual priority-tier API calls per run (next-24-h matches). */
 const MAX_PRIORITY_FETCHES = 4;
@@ -182,7 +179,6 @@ export interface WorldCupPrewarmResult {
 function detailKey   (id: number): string { return `goalradar:/matches/${id}`; }
 function detailDRKey (id: number): string { return `goalradar:dr:/matches/${id}`; }
 function snapshotKey (id: number): string { return `goalradar:match:${id}`; }
-function snapshotDRKey(id: number): string { return `goalradar:dr:match:${id}`; }
 
 /** The KV key written by refreshEndpoint for the bulk WC all-matches endpoint. */
 const WC_ALL_MATCHES_KV = 'goalradar:/competitions/WC/matches';
@@ -319,7 +315,6 @@ async function seedMatch(
 
   const matchDetail    = toMatchDetail(match);
   const staleSec       = DETAIL_STALE_SEC[tier];
-  const snapshotTtlSec = SNAPSHOT_STALE_SEC[tier];
   const freshSec       = Math.min(staleSec, TIER_REFRESH_SEC[tier]);
 
   const detailEntry: KVEntry<MatchDetail> = {
@@ -374,20 +369,16 @@ async function seedMatch(
         );
       }
 
-      // DATA-18D.2 Phase 4: never write a poisoned DR — an unenriched DR
-      // cannot rescue future downgrade-guard checks and locks in goals=0 for 30d.
-      const kvWrites: Promise<unknown>[] = [
-        kv.set(snapshotKey(match.id), snap, { ex: snapshotTtlSec }),
-      ];
-      if (!isUnenriched) {
-        kvWrites.push(kv.set(snapshotDRKey(match.id), snap, { ex: SNAPSHOT_DR_TTL_SEC }));
-      } else {
-        console.warn(
-          `[Prewarm] SKIP-DR match:${match.id}` +
-          ` | score=${snapFtH}-${snapFtA} goals=0 — refusing to write unenriched DR`,
-        );
-      }
-      await Promise.all(kvWrites);
+      // DATA-18K: write through the guarded writers instead of a raw kv.set.
+      //  - writeKVSnapshot applies the downgrade guard: an unenriched build
+      //    (goals=0) can no longer overwrite an enriched primary — it is
+      //    rescued from the enriched DR copy when one exists.
+      //  - writeDRSnapshot applies the poison guard: it refuses to persist a
+      //    FINISHED scored snapshot with goals=0 into DR.
+      // This is the Phase-1 fix for the proven root cause (seedMatch bypass).
+      // TTL is now derived inside writeKVSnapshot (tier-aware getSnapshotTtlSec).
+      await writeKVSnapshot(String(match.id), snap);
+      writeDRSnapshot(String(match.id), snap);
       seededSnapshot = true;
     } catch (err) {
       errors.push(`snapshot:${match.id}: ${err instanceof Error ? err.message : String(err)}`);
@@ -567,12 +558,16 @@ export async function prewarmWorldCup(): Promise<WorldCupPrewarmResult> {
         freshUntil: now + freshSec * 1000,
       };
       if (KV_ENABLED) {
+        // DATA-18K: detail keys stay raw (not the enrichment surface); the
+        // snapshot + DR writes route through the guarded writers so a
+        // partial/unenriched build cannot clobber an enriched primary or DR.
+        const psnap = buildPartialSnapshot(detail, allMatches, standings);
         await Promise.all([
           kv.set(detailKey(pm.id),   entry, { ex: staleSec }),
           kv.set(detailDRKey(pm.id), entry, { ex: DETAIL_DR_TTL_SEC }),
-          kv.set(snapshotKey(pm.id),   buildPartialSnapshot(detail, allMatches, standings), { ex: SNAPSHOT_STALE_SEC[tier] }),
-          kv.set(snapshotDRKey(pm.id), buildPartialSnapshot(detail, allMatches, standings), { ex: SNAPSHOT_DR_TTL_SEC }),
         ]);
+        await writeKVSnapshot(String(pm.id), psnap);
+        writeDRSnapshot(String(pm.id), psnap);
       }
       priorityRefreshed++;
     } catch (err) {

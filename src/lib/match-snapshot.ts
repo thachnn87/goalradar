@@ -251,8 +251,14 @@ async function readKVSnapshot(matchId: string): Promise<MatchSnapshot | null> {
   }
 }
 
-/** Store snapshot in KV with tier-aware TTL.  Fire-and-forget errors. */
-async function writeKVSnapshot(matchId: string, snapshot: MatchSnapshot): Promise<void> {
+/**
+ * Store snapshot in KV with tier-aware TTL.  Fire-and-forget errors.
+ *
+ * Exported (DATA-18K) so the orchestrator prewarm writes through this guard
+ * instead of a raw kv.set — the downgrade guard below prevents an AF-only /
+ * unenriched build from overwriting an enriched primary snapshot.
+ */
+export async function writeKVSnapshot(matchId: string, snapshot: MatchSnapshot): Promise<void> {
   if (!KV_ENABLED) return;
 
   // Live matches are served from live-cache.ts — never snapshot them
@@ -325,8 +331,13 @@ async function readDRSnapshot(matchId: string): Promise<MatchSnapshot | null> {
   }
 }
 
-/** Write disaster-recovery snapshot (30 days TTL).  Fire-and-forget. */
-function writeDRSnapshot(matchId: string, snapshot: MatchSnapshot): void {
+/**
+ * Write disaster-recovery snapshot (30 days TTL).  Fire-and-forget.
+ *
+ * Exported (DATA-18K) so the prewarm writer reuses the poison guard below
+ * (never persist a FINISHED scored snapshot with goals=0 into DR).
+ */
+export function writeDRSnapshot(matchId: string, snapshot: MatchSnapshot): void {
   if (!KV_ENABLED) return;
   if (isLiveStatus(snapshot.match.status)) return;
 
@@ -606,6 +617,41 @@ export const getOrBuildMatchSnapshot: (matchId: string) => Promise<MatchSnapshot
     // ── 1. KV snapshot ─────────────────────────────────────────────────────
     const kvHit = await readKVSnapshot(matchId);
     if (kvHit) {
+      // DATA-18K self-heal: a FINISHED scored match pinned with goals=0 is a
+      // corrupted (unenriched) snapshot — typically written by the AF-only
+      // prewarm path. Attempt exactly one guarded rebuild, gated by a 30-min
+      // cooldown lock so concurrent/repeat requests can't trigger a rebuild
+      // storm. On any failure we fall back to serving the cached snapshot.
+      const hm   = kvHit.match;
+      const hFt  = (hm.score?.fullTime?.home ?? 0) + (hm.score?.fullTime?.away ?? 0);
+      const pinnedUnenriched =
+        hm.status === 'FINISHED' && hFt > 0 && (hm.goals?.length ?? 0) === 0;
+
+      if (pinnedUnenriched && KV_ENABLED) {
+        const repairLock = `goalradar:repair-lock:${matchId}`;
+        const acquired   = await kv.set(repairLock, '1', { nx: true, ex: 1_800 }).catch(() => null);
+        if (acquired) {
+          console.warn(
+            `[Snapshot] SELF-HEAL match:${matchId} — pinned unenriched` +
+            ` (score-total=${hFt} goals=0) — rebuilding under repair-lock`,
+          );
+          try {
+            const rebuilt = await buildSnapshot(matchId);
+            await writeKVSnapshot(matchId, rebuilt).catch(() => undefined);
+            writeDRSnapshot(matchId, rebuilt);
+            recordSnapshotFetch(Date.now() - t0, 'build-provider');
+            return rebuilt;
+          } catch (healErr) {
+            console.error(
+              `[Snapshot] SELF-HEAL failed match:${matchId}:` +
+              ` ${healErr instanceof Error ? healErr.message : String(healErr)} — serving cached`,
+            );
+            // fall through to serve the cached snapshot
+          }
+        }
+        // lock not acquired → another request is already healing; serve cached
+      }
+
       const kvMs = Date.now() - t0;
       if (BENCH) console.log(`[Snapshot] BENCH match:${matchId} | source=kv | kvMs=${kvMs}`);
       recordSnapshotFetch(kvMs, 'kv');
