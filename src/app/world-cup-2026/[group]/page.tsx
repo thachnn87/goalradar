@@ -2,13 +2,13 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
-// DATA-17: single authority source — replaces getUpcomingMatchesCached + getRecentMatchesCached.
-import { getStandingsCached, getWCAuthorityMatches } from '@/lib/api';
+import { getStandingsCached, getWCAuthorityMatchesV2 } from '@/lib/api';
 import { classifyMatchState } from '@/lib/match-classify';
 import type { WCGroupFixture } from '@/lib/wc-fixtures';
 import { WC_ALL_TEAMS } from '@/lib/wc-all-teams';
 import { matchPath } from '@/lib/url';
-import type { Match, StandingEntry } from '@/lib/types';
+import type { StandingEntry } from '@/lib/types';
+import type { CanonicalMatch } from '@/lib/canonical-match';
 import MatchCard from '@/components/MatchCard';
 import WCGroupTable from '@/components/WCGroupTable';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -106,7 +106,7 @@ function JsonLd({
 }: {
   slug: string;
   label: string;
-  allMatches: Match[];
+  allMatches: CanonicalMatch[];
 }) {
   const pageUrl = `${BASE_URL}/world-cup-2026/${slug}`;
 
@@ -658,15 +658,13 @@ export default async function WCGroupPage({ params }: Params) {
   const label    = slugToLabel(slug);
   const letter   = letterFromSlug(slug);
 
-  // DATA-17: single authority call — no more getUpcomingMatchesCached + getRecentMatchesCached.
-  // getWCAuthorityMatches() merges Live → Snapshot → FINISHED feed → SCHEDULED/TIMED feed,
-  // so FINISHED matches always take precedence over stale SCHEDULED entries for the same ID.
+  const builtAt = new Date().toISOString();
   const today = new Date().toISOString().split('T')[0];
-  const classify = (m: Match) => classifyMatchState(m, today);
+  const classify = (m: CanonicalMatch) => classifyMatchState(m, today);
 
   const [standingsResult, authorityResult] = await Promise.allSettled([
     getStandingsCached('WC'),
-    getWCAuthorityMatches(),
+    getWCAuthorityMatchesV2(builtAt),
   ]);
 
   // Group standings table — fall back to empty table if API fails
@@ -681,7 +679,7 @@ export default async function WCGroupPage({ params }: Params) {
   const isStaticStandings = false;
 
   // All group matches from authority — filter to this group, then classify
-  const allGroupAuthority: Match[] =
+  const allGroupAuthority: CanonicalMatch[] =
     authorityResult.status === 'fulfilled'
       ? authorityResult.value.matches.filter((m) => m.group === apiGroup)
       : [];

@@ -1,10 +1,9 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
-// DATA-17: single authority source
-import { getWCAuthorityMatches } from '@/lib/api';
+import { getWCAuthorityMatchesV2 } from '@/lib/api';
 import { classifyMatchState } from '@/lib/match-classify';
-import type { Match } from '@/lib/types';
+import type { CanonicalMatch } from '@/lib/canonical-match';
 import { matchPath } from '@/lib/url';
 import Breadcrumb from '@/components/Breadcrumb';
 import MatchCard from '@/components/MatchCard';
@@ -59,15 +58,15 @@ function formatKickoff(utcDate: string) {
   }) + ' UTC';
 }
 
-function groupByDate(matches: Match[]): Record<string, Match[]> {
-  return matches.reduce<Record<string, Match[]>>((acc, m) => {
+function groupByDate(matches: CanonicalMatch[]): Record<string, CanonicalMatch[]> {
+  return matches.reduce<Record<string, CanonicalMatch[]>>((acc, m) => {
     const d = m.utcDate.split('T')[0];
     (acc[d] ??= []).push(m);
     return acc;
   }, {});
 }
 
-function topStageLabel(day: Match[]) {
+function topStageLabel(day: CanonicalMatch[]) {
   const ORDER: Record<string,number> = { GROUP_STAGE:0,LAST_32:1,LAST_16:2,QUARTER_FINALS:3,SEMI_FINALS:4,THIRD_PLACE:5,FINAL:6 };
   const stages = [...new Set(day.map(m => m.stage))].sort((a,b)=>(ORDER[b]??0)-(ORDER[a]??0));
   return stages.map(s => STAGE_LABELS[s] ?? s.replace(/_/g,' ')).join(' · ');
@@ -77,7 +76,7 @@ function topStageLabel(day: Match[]) {
 // JSON-LD
 // ---------------------------------------------------------------------------
 
-function JsonLd({ matches }: { matches: Match[] }) {
+function JsonLd({ matches }: { matches: CanonicalMatch[] }) {
   const breadcrumb = {
     '@context': 'https://schema.org', '@type': 'BreadcrumbList',
     itemListElement: [
@@ -147,10 +146,10 @@ function JsonLd({ matches }: { matches: Match[] }) {
 // ---------------------------------------------------------------------------
 
 export default async function WCFixturesPage() {
-  let fixtures: Match[] = [];
+  const builtAt = new Date().toISOString();
+  let fixtures: CanonicalMatch[] = [];
   try {
-    // DATA-17: single authority source — all 104 WC matches in authoritative state.
-    const data = await getWCAuthorityMatches();
+    const data = await getWCAuthorityMatchesV2(builtAt);
     fixtures = [...data.matches].sort(
       (a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()
     );

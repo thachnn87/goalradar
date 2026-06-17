@@ -1,16 +1,14 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
-// PERF-4.5: page-safe *Cached variants — zero provider calls during page render.
-// DATA-4 unified: getWCAuthorityMatchesCached replaces separate upcoming/recent calls.
 import {
-  getWCLiveMatchesCached,
+  getWCAuthorityMatchesV2,
   getWCKnockoutMatchesCached,
-  getWCAuthorityMatchesCached,
   getStandingsCached,
 } from '@/lib/api';
 import { classifyMatchState } from '@/lib/match-classify';
 import type { Match, StandingTable } from '@/lib/types';
+import type { CanonicalMatch } from '@/lib/canonical-match';
 import { matchPath } from '@/lib/url';
 import MatchCard from '@/components/MatchCard';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -145,8 +143,8 @@ function formatResultDate(utcDate: string) {
   });
 }
 
-function groupByDate(matches: Match[]): Record<string, Match[]> {
-  return matches.reduce<Record<string, Match[]>>((acc, m) => {
+function groupByDate(matches: CanonicalMatch[]): Record<string, CanonicalMatch[]> {
+  return matches.reduce<Record<string, CanonicalMatch[]>>((acc, m) => {
     const d = m.utcDate.split('T')[0];
     (acc[d] ??= []).push(m);
     return acc;
@@ -189,7 +187,7 @@ function SectionHeader({
 // Match grid — date-grouped
 // ---------------------------------------------------------------------------
 
-function MatchGrid({ matches, maxDays = 99 }: { matches: Match[]; maxDays?: number }) {
+function MatchGrid({ matches, maxDays = 99 }: { matches: CanonicalMatch[]; maxDays?: number }) {
   const byDate = groupByDate(matches);
   const dates = Object.keys(byDate).sort().slice(0, maxDays);
 
@@ -215,7 +213,7 @@ function MatchGrid({ matches, maxDays = 99 }: { matches: Match[]; maxDays?: numb
 // Recent result row
 // ---------------------------------------------------------------------------
 
-function ResultRow({ match }: { match: Match }) {
+function ResultRow({ match }: { match: CanonicalMatch }) {
   const { score } = match;
   const hn = match.homeTeam?.shortName || match.homeTeam?.name || 'TBD';
   const an = match.awayTeam?.shortName || match.awayTeam?.name || 'TBD';
@@ -279,61 +277,32 @@ function EmptyState({ message, sub }: { message: string; sub?: string }) {
 export default async function WorldCup2026Page() {
   const today = todayUTC();
 
-  // PERF-4.5: all four calls use page-safe *Cached variants.
-  // DATA-4 unified: getWCAuthorityMatchesCached merges the upcoming (SCHEDULED/TIMED)
-  // and recent (FINISHED) feeds so a finished match is never shown as upcoming.
-  const [liveResult, authorityResult, standingsResult, knockoutResult] =
+  const builtAt = new Date().toISOString();
+  const [authorityResult, standingsResult, knockoutResult] =
     await Promise.allSettled([
-      getWCLiveMatchesCached(),
-      getWCAuthorityMatchesCached(),
+      getWCAuthorityMatchesV2(builtAt),
       getStandingsCached('WC'),
       getWCKnockoutMatchesCached(),
     ]);
 
-  // 1. Live matches — getWCLiveMatchesCached is snapshot-overlaid internally
-  // (DATA-2): finished matches are already filtered out of this list.
-  const liveMatches: Match[] =
-    liveResult.status === 'fulfilled' ? liveResult.value.matches : [];
-
-  // 2. Authority set — all WC matches with correct status from merged feeds + overlay.
-  // DATA-4 stray routing: section membership follows STATUS, not feed origin.
-  //   FINISHED  → recentResults   (correct score visible immediately)
-  //   IN_PLAY / PAUSED → liveMatches (merged with live cache below)
-  //   SCHEDULED / TIMED → today / upcoming by UTC day
-  const allAuthority: Match[] =
+  const allAuthority: CanonicalMatch[] =
     authorityResult.status === 'fulfilled'
       ? [...authorityResult.value.matches].sort(
           (a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()
         )
       : [];
 
-  const dedupById = (arr: Match[]): Match[] => {
-    const seen = new Set<number>();
-    return arr.filter((m) => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
-  };
+  const classify = (m: CanonicalMatch) => classifyMatchState(m, today);
 
-  // DATA-16D: use classifyMatchState to bucket matches without duplicating inline checks.
-  const classify = (m: Match) => classifyMatchState(m, today);
-
-  // Live strays: authority knows they're IN_PLAY but live cache may lag — merge.
-  const liveStrays = allAuthority.filter((m) => classify(m) === 'live');
-  const allLive: Match[] = dedupById([...liveMatches, ...liveStrays]);
-
-  // Today's matches — only truly upcoming (today-bucket) ones; live in allLive above.
-  const todayMatches = allAuthority.filter((m) => classify(m) === 'today');
-
-  // Upcoming = upcoming-bucket (starts tomorrow+), capped at 12.
-  const upcomingMatches = allAuthority
-    .filter((m) => classify(m) === 'upcoming')
-    .slice(0, 12);
-
-  // Recent results — finished-bucket from authority set, newest first.
-  const recentResults: Match[] = allAuthority
+  const allLive: CanonicalMatch[] = allAuthority.filter((m) => classify(m) === 'live');
+  const todayMatches               = allAuthority.filter((m) => classify(m) === 'today');
+  const upcomingMatches            = allAuthority.filter((m) => classify(m) === 'upcoming').slice(0, 12);
+  const recentResults: CanonicalMatch[] = allAuthority
     .filter((m) => classify(m) === 'finished')
     .sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime())
     .slice(0, 10);
 
-  // 3. Knockout bracket matches
+  // Knockout bracket matches (still uses legacy feed — not on authority V2 path)
   const knockoutMatches: Match[] =
     knockoutResult.status === 'fulfilled' ? knockoutResult.value.matches : [];
 

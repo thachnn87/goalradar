@@ -8,9 +8,8 @@
 
 import Link from 'next/link';
 import type { Metadata } from 'next';
-// PERF-4.5
-import { getWCResultsCached, getWCLiveMatchesCached, getUpcomingMatchesCached } from '@/lib/api';
-import type { Match } from '@/lib/types';
+import { getWCAuthorityMatchesV2 } from '@/lib/api';
+import type { CanonicalMatch } from '@/lib/canonical-match';
 import { matchPath } from '@/lib/url';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -59,8 +58,8 @@ function formatLocalDate(utcDate: string) {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function StatusBadge({ status }: { status: Match['status'] }) {
-  if (status === 'IN_PLAY') return (
+function StatusBadge({ state }: { state: CanonicalMatch['state'] }) {
+  if (state === 'live') return (
     <span className="inline-flex items-center gap-1.5 bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full text-xs font-bold">
       <span className="relative flex h-1.5 w-1.5">
         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
@@ -69,24 +68,23 @@ function StatusBadge({ status }: { status: Match['status'] }) {
       LIVE
     </span>
   );
-  if (status === 'PAUSED') return <span className="bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-full text-xs font-bold">HT</span>;
-  if (status === 'FINISHED') return <span className="bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full text-xs font-bold">FT</span>;
+  if (state === 'finished') return <span className="bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full text-xs font-bold">FT</span>;
   return <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full text-xs font-bold">UPCOMING</span>;
 }
 
-function MatchRow({ match }: { match: Match }) {
-  const href    = matchPath(match.id, match.homeTeam.name, match.awayTeam.name);
-  const showScore = ['IN_PLAY','PAUSED','FINISHED'].includes(match.status);
-  const group   = match.group ? match.group.replace('GROUP_','Group ') : null;
-  const stage   = match.stage?.replace(/_/g,' ') ?? null;
+function MatchRow({ match }: { match: CanonicalMatch }) {
+  const href      = matchPath(match.id, match.homeTeam.name, match.awayTeam.name);
+  const showScore = match.state === 'live' || match.state === 'finished';
+  const group     = match.group ? match.group.replace('GROUP_','Group ') : null;
+  const stage     = match.stage?.replace(/_/g,' ') ?? null;
 
   return (
     <Link href={href}
       className="group flex items-center gap-3 bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-yellow-700/40 rounded-xl px-4 py-3 transition-all">
       {/* Time / status */}
       <div className="w-20 shrink-0 text-center">
-        <StatusBadge status={match.status} />
-        {(match.status === 'SCHEDULED' || match.status === 'TIMED') && (
+        <StatusBadge state={match.state} />
+        {match.state === 'scheduled' && (
           <p className="text-xs text-gray-500 mt-0.5">{formatTime(match.utcDate)}</p>
         )}
       </div>
@@ -112,7 +110,7 @@ function MatchRow({ match }: { match: Match }) {
 // SportsEvent JSON-LD builder
 // ---------------------------------------------------------------------------
 
-function buildSportsEventSchemas(matches: Match[]) {
+function buildSportsEventSchemas(matches: CanonicalMatch[]) {
   return matches.map((m) => ({
     '@context': 'https://schema.org',
     '@type':    'SportsEvent',
@@ -120,10 +118,7 @@ function buildSportsEventSchemas(matches: Match[]) {
     startDate:  m.utcDate,
     url:        `${BASE_URL}${matchPath(m.id, m.homeTeam.name, m.awayTeam.name)}`,
     sport:      'Soccer',
-    eventStatus:
-      m.status === 'FINISHED'              ? 'https://schema.org/EventMovedOnline' :
-      ['IN_PLAY', 'PAUSED'].includes(m.status) ? 'https://schema.org/EventScheduled' :
-                                             'https://schema.org/EventScheduled',
+    eventStatus: 'https://schema.org/EventScheduled',
     location: {
       '@type':  'StadiumOrArena',
       name:     'FIFA World Cup 2026 Venue',
@@ -146,7 +141,7 @@ function buildSportsEventSchemas(matches: Match[]) {
         ...(m.awayTeam.crest ? { image: m.awayTeam.crest } : {}),
       },
     ],
-    ...(m.status === 'FINISHED' && m.score.fullTime.home !== null ? {
+    ...(m.state === 'finished' && m.score.fullTime.home !== null ? {
       description: `Final score: ${m.homeTeam.name} ${m.score.fullTime.home}–${m.score.fullTime.away} ${m.awayTeam.name}`,
     } : {}),
   }));
@@ -156,7 +151,7 @@ function buildSportsEventSchemas(matches: Match[]) {
 // Kickoff times section
 // ---------------------------------------------------------------------------
 
-function KickoffTimesSection({ matches }: { matches: Match[] }) {
+function KickoffTimesSection({ matches }: { matches: CanonicalMatch[] }) {
   if (matches.length === 0) return null;
 
   // Timezone offsets from UTC for common viewing regions
@@ -192,8 +187,8 @@ function KickoffTimesSection({ matches }: { matches: Match[] }) {
             </thead>
             <tbody>
               {matches.map((m) => {
-                const isFinished = m.status === 'FINISHED';
-                const isLive     = ['IN_PLAY', 'PAUSED'].includes(m.status);
+                const isFinished = m.state === 'finished';
+                const isLive     = m.state === 'live';
                 return (
                   <tr key={m.id} className="border-t border-gray-800 hover:bg-gray-800/30 transition-colors">
                     <td className="px-4 py-3">
@@ -308,57 +303,24 @@ const FAQ_ITEMS = [
 export default async function MatchesTodayPage() {
   const today    = todayUTC();
   const tomorrow = tomorrowUTC();
+  const builtAt  = new Date().toISOString();
 
-  // All three calls are prewarmed by /api/cron/prewarm-worldcup → KV hits.
-  // Replaced getTodayMatches() (fetchDirect, all-competitions, unprewarmed) with
-  // getWCResultsCached() (prewarmed, WC-only finished) + filter getUpcomingMatches to today.
-  const [resultsResult, liveResult, upcomingResult] = await Promise.allSettled([
-    getWCResultsCached(),           // prewarmed → goalradar:/competitions/WC/matches?status=FINISHED
-    getWCLiveMatchesCached(),       // prewarmed → goalradar:live:wc-matches
-    getUpcomingMatchesCached('WC'), // prewarmed → goalradar:/competitions/WC/matches?status=SCHEDULED,TIMED
-  ]);
+  const { matches: allMatches } = await getWCAuthorityMatchesV2(builtAt).catch(() => ({ matches: [] as CanonicalMatch[] }));
 
-  // Build today's WC match list from prewarmed data:
-  //   finished  = getWCResultsCached() filtered to today's date
-  //   scheduled = getUpcomingMatchesCached('WC') filtered to today's date
-  // Live matches are handled separately via getWCLiveMatchesCached() below.
-  const allToday: Match[] = [
-    ...(resultsResult.status === 'fulfilled'
-      ? resultsResult.value.matches.filter((m) => m.utcDate.startsWith(today))
-      : []),
-    ...(upcomingResult.status === 'fulfilled'
-      ? upcomingResult.value.matches.filter((m) => m.utcDate.startsWith(today))
-      : []),
-  ];
+  const allTodayMatches: CanonicalMatch[] = allMatches
+    .filter((m) => m.utcDate.startsWith(today))
+    .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
 
-  // Live WC matches (possibly overlapping with allToday — deduplicate below)
-  const liveMatches: Match[] = liveResult.status === 'fulfilled' ? liveResult.value.matches : [];
-  const liveIds = new Set(liveMatches.map((m) => m.id));
+  const tomorrowMatches: CanonicalMatch[] = allMatches
+    .filter((m) => m.utcDate.startsWith(tomorrow) && m.state !== 'finished')
+    .slice(0, 4);
 
-  // Merge: live matches + scheduled today (no duplicates)
-  const seenIds = new Set<number>(liveIds);
-  const scheduledToday: Match[] = allToday.filter((m) => {
-    if (seenIds.has(m.id)) return false;
-    seenIds.add(m.id);
-    return true;
-  });
-
-  // Tomorrow's fixtures (for the "next up" teaser)
-  const tomorrowMatches: Match[] = upcomingResult.status === 'fulfilled'
-    ? upcomingResult.value.matches.filter((m) => m.utcDate.startsWith(tomorrow)).slice(0, 4)
-    : [];
-
-  const finished = scheduledToday.filter((m) => m.status === 'FINISHED');
-  const upcoming = scheduledToday.filter((m) => m.status === 'SCHEDULED' || m.status === 'TIMED');
-  const hasAny   = liveMatches.length > 0 || scheduledToday.length > 0;
+  const liveMatches  = allTodayMatches.filter((m) => m.state === 'live');
+  const finished     = allTodayMatches.filter((m) => m.state === 'finished');
+  const upcoming     = allTodayMatches.filter((m) => m.state === 'scheduled');
+  const hasAny       = allTodayMatches.length > 0;
 
   const displayDate = formatLocalDate(new Date().toISOString());
-
-  // All today's WC matches for SportsEvent schemas and Kickoff Times section
-  const allTodayMatches: Match[] = [
-    ...liveMatches,
-    ...scheduledToday,
-  ];
 
   // SportsEvent schemas — one per match
   const sportsEventSchemas = buildSportsEventSchemas(allTodayMatches);

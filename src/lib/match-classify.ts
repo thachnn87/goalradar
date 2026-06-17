@@ -19,23 +19,34 @@ export type MatchBucket = 'live' | 'finished' | 'today' | 'upcoming' | 'other';
 /**
  * Classify a match into a display bucket.
  *
- * @param match    — any object with `status` and `utcDate` fields
+ * Accepts both FD Match (`status`) and CanonicalMatch (`state`) shapes.
+ *
+ * @param match    — any object with `status`/`state` and `utcDate` fields
  * @param todayUTC — ISO date string in 'YYYY-MM-DD' format, e.g. new Date().toISOString().split('T')[0]
  */
 export function classifyMatchState(
-  match: { status?: string | null; utcDate: string },
+  match: { status?: string | null; state?: string | null; utcDate: string },
   todayUTC: string,
 ): MatchBucket {
-  const s = match.status ?? '';
+  // CanonicalMatch.state — checked first (V2 authority path).
+  if (match.state === 'live')      return 'live';
+  if (match.state === 'finished')  return 'finished';
+  if (match.state === 'cancelled') return 'other';
+  if (match.state === 'scheduled') {
+    const matchDay = match.utcDate.split('T')[0];
+    if (matchDay === todayUTC) return 'today';
+    if (matchDay > todayUTC)  return 'upcoming';
+    return 'today'; // past kickoff but still scheduled
+  }
 
+  // Legacy Match.status — FD raw feed.
+  const s = match.status ?? '';
   if (s === 'IN_PLAY' || s === 'PAUSED') return 'live';
   if (s === 'FINISHED') return 'finished';
-
   if (s === 'SCHEDULED' || s === 'TIMED') {
     const matchDay = match.utcDate.split('T')[0];
     if (matchDay === todayUTC) return 'today';
-    if (matchDay > todayUTC) return 'upcoming';
-    // Date in the past but still SCHEDULED/TIMED → treat as today so it's not hidden
+    if (matchDay > todayUTC)  return 'upcoming';
     return 'today';
   }
 

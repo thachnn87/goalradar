@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { Match } from '@/lib/types';
+import type { CanonicalMatch } from '@/lib/canonical-match';
 import { matchPath } from '@/lib/url';
 import LiveBannerCTA from '@/components/LiveBannerCTA';
 
@@ -80,7 +80,7 @@ export default function WCCountdown({
   compact?: boolean;
   /** LIVE-2: in-play WC matches, passed by pages that already fetch them
    *  (zero extra fetches). Omitted → CTA defaults to /live. */
-  liveMatches?: Match[];
+  liveMatches?: CanonicalMatch[];
   /** LIVE-2: pathname of the rendering page — used by the self-reference guard. */
   currentPath?: string;
 }) {

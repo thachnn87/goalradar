@@ -16,9 +16,8 @@
 
 import Link from 'next/link';
 import type { Metadata } from 'next';
-// PERF-4.5
-import { getUpcomingMatchesCached } from '@/lib/api';
-import type { Match } from '@/lib/types';
+import { getWCAuthorityMatchesV2 } from '@/lib/api';
+import type { CanonicalMatch } from '@/lib/canonical-match';
 import { matchPath } from '@/lib/url';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -67,7 +66,7 @@ function formatLocalDate(isoDate: string) {
 // SportsEvent JSON-LD — one schema per match
 // ---------------------------------------------------------------------------
 
-function buildSportsEventSchemas(matches: Match[]) {
+function buildSportsEventSchemas(matches: CanonicalMatch[]) {
   return matches.map((m) => ({
     '@context': 'https://schema.org',
     '@type':    'SportsEvent',
@@ -105,7 +104,7 @@ function buildSportsEventSchemas(matches: Match[]) {
 // Match row
 // ---------------------------------------------------------------------------
 
-function KickoffRow({ match }: { match: Match }) {
+function KickoffRow({ match }: { match: CanonicalMatch }) {
   const href  = matchPath(match.id, match.homeTeam.name, match.awayTeam.name);
   const group = match.group ? match.group.replace('GROUP_', 'Group ') : null;
   const stage = match.stage?.replace(/_/g, ' ') ?? null;
@@ -155,7 +154,7 @@ function shiftHour(utcDate: string, offset: number): string {
   return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
-function KickoffTimesSection({ matches }: { matches: Match[] }) {
+function KickoffTimesSection({ matches }: { matches: CanonicalMatch[] }) {
   if (matches.length === 0) return null;
   return (
     <section aria-labelledby="kickoff-heading">
@@ -298,21 +297,16 @@ const FAQ_ITEMS = [
 export default async function MatchesTomorrowPage() {
   const tomorrow = tomorrowUTC();
   const dayAfter = dayAfterUTC();
+  const builtAt  = new Date().toISOString();
 
-  const [upcomingResult] = await Promise.allSettled([
-    getUpcomingMatchesCached('WC'),
-  ]);
+  const { matches: allMatches } = await getWCAuthorityMatchesV2(builtAt).catch(() => ({ matches: [] as CanonicalMatch[] }));
 
-  const upcomingAll: Match[] = upcomingResult.status === 'fulfilled'
-    ? upcomingResult.value.matches
-    : [];
-
-  const tomorrowMatches = upcomingAll
-    .filter((m) => m.utcDate.startsWith(tomorrow))
+  const tomorrowMatches: CanonicalMatch[] = allMatches
+    .filter((m) => m.utcDate.startsWith(tomorrow) && m.state !== 'finished')
     .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
 
-  const dayAfterMatches = upcomingAll
-    .filter((m) => m.utcDate.startsWith(dayAfter))
+  const dayAfterMatches: CanonicalMatch[] = allMatches
+    .filter((m) => m.utcDate.startsWith(dayAfter) && m.state !== 'finished')
     .slice(0, 4);
 
   const displayDate = formatLocalDate(tomorrow);

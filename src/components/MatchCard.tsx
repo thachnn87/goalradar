@@ -1,8 +1,31 @@
-import { Match } from '@/lib/types';
+import type { Match } from '@/lib/types';
+import type { CanonicalMatch } from '@/lib/canonical-match';
 import { matchPath } from '@/lib/url';
 import LocalTime from '@/components/LocalTime';
 // PERF-8: MatchLink = Link with prefetch + hover/touch/viewport snapshot prewarm
 import MatchLink from '@/components/MatchLink';
+
+type MatchInput = Match | CanonicalMatch;
+
+// Map CanonicalMatch.state → FD status string for internal helpers.
+function effectiveStatus(m: MatchInput): Match['status'] {
+  if ('status' in m && m.status) return m.status as Match['status'];
+  if ('state' in m) {
+    if (m.state === 'live')      return 'IN_PLAY';
+    if (m.state === 'finished')  return 'FINISHED';
+    if (m.state === 'cancelled') return 'CANCELLED';
+  }
+  return 'SCHEDULED';
+}
+
+function effectiveCompName(m: MatchInput): string {
+  if ('competition' in m && (m as Match).competition?.name) return (m as Match).competition.name;
+  if ('competitionCode' in m) {
+    const cm = m as CanonicalMatch;
+    return cm.competitionCode === 'WC' ? 'FIFA World Cup' : cm.competitionCode;
+  }
+  return '';
+}
 
 function formatTime(utcDate: string) {
   return new Date(utcDate).toLocaleTimeString('en-GB', {
@@ -98,8 +121,10 @@ function TeamRow({
   );
 }
 
-export default function MatchCard({ match }: { match: Match }) {
-  const { score, status } = match;
+export default function MatchCard({ match }: { match: MatchInput }) {
+  const { score } = match;
+  const status = effectiveStatus(match);
+  const compName = effectiveCompName(match);
   const showScore = status === 'FINISHED' || status === 'IN_PLAY' || status === 'PAUSED';
   const homeWins = score.winner === 'HOME_TEAM';
   const awayWins = score.winner === 'AWAY_TEAM';
@@ -115,7 +140,7 @@ export default function MatchCard({ match }: { match: Match }) {
       }`}
     >
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs text-gray-500 truncate mr-2">{match.competition.name}</span>
+        <span className="text-xs text-gray-500 truncate mr-2">{compName}</span>
         <div className="flex items-center gap-2 shrink-0">
           {!showScore && (
             <div className="flex flex-col items-end gap-0.5">

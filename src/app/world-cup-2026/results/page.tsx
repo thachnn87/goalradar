@@ -1,16 +1,10 @@
 /**
- * /world-cup-2026/results
- *
- * DATA-18D Canary: AUTHORITY_RESULTS_ONLY=true routes this page through
- * getWCAuthorityMatchesV2() (authority cache). All other pages remain on legacy path.
- *
- * When AUTHORITY_RESULTS_ONLY is false/unset, falls back to getWCAuthorityMatches()
- * (same data source as every other WC page).
+ * /world-cup-2026/results — DATA-18E: authority cache single source of truth.
  */
 
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { getWCAuthorityMatches, getWCAuthorityMatchesV2 } from '@/lib/api';
+import { getWCAuthorityMatchesV2 } from '@/lib/api';
 import type { CanonicalMatch } from '@/lib/canonical-match';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -53,13 +47,9 @@ interface ResultsEntry {
 }
 
 // ---------------------------------------------------------------------------
-// Data adapters
+// Data adapter
 // ---------------------------------------------------------------------------
 
-/**
- * Adapt a CanonicalMatch to ResultsEntry.
- * CanonicalScore = Score so score fields are structurally identical.
- */
 function fromCanonical(m: CanonicalMatch): ResultsEntry {
   return {
     id:       m.id,
@@ -70,28 +60,6 @@ function fromCanonical(m: CanonicalMatch): ResultsEntry {
     minute:   m.minute,
     utcDate:  m.utcDate,
     _path:    'authority',
-  };
-}
-
-/**
- * Adapt a legacy Match to ResultsEntry.
- * Converts FD status string to the same state bucket as CanonicalMatch.
- */
-function fromMatch(m: import('@/lib/types').Match): ResultsEntry {
-  const state: ResultsEntry['state'] =
-    m.status === 'IN_PLAY' || m.status === 'PAUSED'   ? 'live'
-    : m.status === 'FINISHED'                          ? 'finished'
-    : m.status === 'CANCELLED' || m.status === 'POSTPONED' || m.status === 'SUSPENDED' ? 'cancelled'
-    : 'scheduled';
-  return {
-    id:       m.id,
-    homeTeam: { name: m.homeTeam?.name ?? '' },
-    awayTeam: { name: m.awayTeam?.name ?? '' },
-    score:    m.score,
-    state,
-    minute:   m.minute ?? undefined,
-    utcDate:  m.utcDate,
-    _path:    'legacy',
   };
 }
 
@@ -121,22 +89,12 @@ function statusBadge(e: ResultsEntry): { label: string; cls: string } {
 // Page
 // ---------------------------------------------------------------------------
 
-export default async function WC2026ResultsCanaryPage() {
+export default async function WC2026ResultsPage() {
   const builtAt = new Date().toISOString();
-  const CANARY  = process.env.AUTHORITY_RESULTS_ONLY === 'true';
 
   let entries: ResultsEntry[] = [];
-
-  if (CANARY) {
-    // DATA-18D: authority cache path (canary)
-    const { matches } = await getWCAuthorityMatchesV2(builtAt).catch(() => ({ matches: [] as CanonicalMatch[] }));
-    console.log(`[DATA-18D] results page | path=authority | matches=${matches.length} | builtAt=${builtAt}`);
-    entries = matches.map(fromCanonical);
-  } else {
-    // Legacy path — same source as all other WC listing pages
-    const { matches } = await getWCAuthorityMatches().catch(() => ({ matches: [] }));
-    entries = matches.map(fromMatch);
-  }
+  const { matches } = await getWCAuthorityMatchesV2(builtAt).catch(() => ({ matches: [] as CanonicalMatch[] }));
+  entries = matches.map(fromCanonical);
 
   const live     = entries.filter((e) => e.state === 'live');
   const finished = entries
@@ -242,14 +200,7 @@ export default async function WC2026ResultsCanaryPage() {
         {/* Finished results */}
         {finished.length > 0 && (
           <section className="mb-8">
-            <h2 className="text-lg font-bold text-white mb-4">
-              Results
-              {CANARY && (
-                <span className="ml-2 text-[10px] font-normal text-yellow-600 border border-yellow-800 rounded px-1.5 py-0.5">
-                  authority cache
-                </span>
-              )}
-            </h2>
+            <h2 className="text-lg font-bold text-white mb-4">Results</h2>
             <div className="space-y-2">
               {finished.slice(0, 40).map((e) => {
                 const { label, cls } = statusBadge(e);
