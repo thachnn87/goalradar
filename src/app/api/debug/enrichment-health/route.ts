@@ -6,6 +6,9 @@
  * For each match where score > 0 and goals.length === 0, reports:
  *   matchId, score, goalsCount, snapshotAge, enrichmentStatus
  *
+ * Match list is read dynamically from the FINISHED feed KV key so this endpoint
+ * stays current as the tournament progresses without manual ID list updates.
+ *
  * Auth: CRON_SECRET (Bearer or ?secret=) or NODE_ENV=development
  *
  * Example:
@@ -15,8 +18,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kv }                        from '@vercel/kv';
 import type { MatchSnapshot }        from '@/lib/match-snapshot';
+import type { Match }                from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
+
+const FINISHED_FEED_KEY = '/competitions/WC/matches?status=FINISHED';
+
+interface KVEntry<T> {
+  data:       T;
+  fetchedAt:  number;
+  freshUntil: number;
+}
 
 function isAuthorized(req: NextRequest): boolean {
   if (process.env.NODE_ENV === 'development') return true;
@@ -26,13 +38,6 @@ function isAuthorized(req: NextRequest): boolean {
   if (auth === `Bearer ${secret}`) return true;
   return new URL(req.url).searchParams.get('secret') === secret;
 }
-
-// All finished WC 2026 match IDs — updated as the tournament progresses.
-const WC_FINISHED_IDS = [
-  537327, 537328, 537333, 537334, 537339, 537340, 537345, 537346,
-  537351, 537352, 537357, 537358, 537363, 537364, 537369, 537370,
-  537391, 537392, 537397, 537398,
-];
 
 interface MatchHealth {
   matchId:          number;
@@ -61,22 +66,42 @@ export async function GET(req: NextRequest) {
 
   const now = Date.now();
 
-  // Batch-read all snapshots in parallel
+  // ── 1. Read finished match IDs from KV feed (dynamic — no hardcoded list) ──
+  const feedEntry = await kv.get<KVEntry<{ matches: Match[] }>>(`goalradar:${FINISHED_FEED_KEY}`);
+
+  if (!feedEntry) {
+    return NextResponse.json({
+      error:    'FINISHED feed not in KV',
+      kvKey:    `goalradar:${FINISHED_FEED_KEY}`,
+      hint:     'Run the WC orchestrator cron to populate the feed',
+    }, { status: 503 });
+  }
+
+  // Filter to actual FINISHED matches only (feed may contain TIMED anomalies)
+  const finishedMatches = (feedEntry.data?.matches ?? []).filter(
+    (m) => m.status === 'FINISHED',
+  );
+
+  const feedAgeHours = Math.round((now - feedEntry.fetchedAt) / 3_600_000 * 10) / 10;
+  const finishedIds  = finishedMatches.map((m) => m.id);
+
+  // ── 2. Batch-read all snapshots in parallel ──────────────────────────────────
   const snapshots = await Promise.allSettled(
-    WC_FINISHED_IDS.map((id) => kv.get<MatchSnapshot>(`goalradar:match:${id}`)),
+    finishedIds.map((id) => kv.get<MatchSnapshot>(`goalradar:match:${id}`)),
   );
 
   const results: MatchHealth[] = [];
 
-  for (let i = 0; i < WC_FINISHED_IDS.length; i++) {
-    const id  = WC_FINISHED_IDS[i];
+  for (let i = 0; i < finishedIds.length; i++) {
+    const id  = finishedIds[i];
     const res = snapshots[i];
 
     if (res.status === 'rejected' || !res.value) {
+      const feedMatch = finishedMatches[i];
       results.push({
         matchId:          id,
-        home:             '?',
-        away:             '?',
+        home:             feedMatch.homeTeam?.shortName || feedMatch.homeTeam?.name || '?',
+        away:             feedMatch.awayTeam?.shortName || feedMatch.awayTeam?.name || '?',
         score:            '?',
         scoreTotal:       0,
         goalsCount:       0,
@@ -87,13 +112,13 @@ export async function GET(req: NextRequest) {
       continue;
     }
 
-    const snap    = res.value;
-    const match   = snap.match;
-    const ftH     = match.score?.fullTime?.home ?? 0;
-    const ftA     = match.score?.fullTime?.away ?? 0;
-    const total   = ftH + ftA;
-    const goals   = match.goals?.length ?? 0;
-    const ageHrs  = Math.round((now - snap.generatedAt) / 3_600_000 * 10) / 10;
+    const snap  = res.value;
+    const match = snap.match;
+    const ftH   = match.score?.fullTime?.home ?? 0;
+    const ftA   = match.score?.fullTime?.away ?? 0;
+    const total = ftH + ftA;
+    const goals = match.goals?.length ?? 0;
+    const ageHrs = Math.round((now - snap.generatedAt) / 3_600_000 * 10) / 10;
 
     results.push({
       matchId:          id,
@@ -114,12 +139,12 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     checkedAt:      new Date(now).toISOString(),
-    total:          WC_FINISHED_IDS.length,
+    feedAgeHours,
+    total:          finishedIds.length,
     ok:             ok.length,
     unenriched:     unenriched.length,
     noSnapshot:     noSnapshot.length,
     matches:        results,
-    // Convenience: list only the degraded IDs for the repair-enrichment cron
     degradedIds:    [...unenriched, ...noSnapshot].map((r) => r.matchId),
   });
 }
