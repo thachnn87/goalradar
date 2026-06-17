@@ -129,10 +129,9 @@ function diffMatches(oldMatch: OldMatch | undefined, newMatch: CanonicalMatch | 
     oldMatch.score?.fullTime?.away === newMatch.score?.fullTime?.away;
 
   const enrichmentApplied  = newMatch.enrichmentApplied;
-  // Goals length: old path Match has no goals array on listing output, so we compare new only.
-  // The check verifies new path populated goals (>= 0 is always true; we check >=1 for
-  // FINISHED WC matches with confirmed enrichment — these 4 benchmark matches all have goals).
-  const goalsLengthMatch   = newMatch.goals.length > 0;
+  // Goals length: for scored matches require goals.length > 0; 0-0 draws correctly have 0 goals.
+  const scoreTotal = (newMatch.score?.fullTime?.home ?? 0) + (newMatch.score?.fullTime?.away ?? 0);
+  const goalsLengthMatch   = scoreTotal === 0 ? true : newMatch.goals.length > 0;
   const stateFinished      = newMatch.state === 'finished';
   const integrityOk        = newMatch.integrity.status === 'ok';
 
