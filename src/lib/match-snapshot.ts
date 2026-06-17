@@ -330,6 +330,22 @@ function writeDRSnapshot(matchId: string, snapshot: MatchSnapshot): void {
   if (!KV_ENABLED) return;
   if (isLiveStatus(snapshot.match.status)) return;
 
+  // DATA-18D.2 Phase 4: never write a poisoned DR (FINISHED, score > 0, goals = 0).
+  // An unenriched DR cannot rescue the downgrade guard and locks in goals=0 for 30 days.
+  const ftH = snapshot.match.score?.fullTime?.home ?? 0;
+  const ftA = snapshot.match.score?.fullTime?.away ?? 0;
+  if (
+    snapshot.match.status === 'FINISHED' &&
+    ftH + ftA > 0 &&
+    (snapshot.match.goals?.length ?? 0) === 0
+  ) {
+    console.warn(
+      `[DR] SKIP-POISON match:${matchId}` +
+      ` | score=${ftH}-${ftA} goals=0 — refusing to write unenriched DR`,
+    );
+    return;
+  }
+
   kv.set(drKey(matchId), snapshot, { ex: DR_TTL_SEC })
     .then(() => console.log(`[DR] SAVE match:${matchId} | ttl=${DR_TTL_SEC}s`))
     .catch((err) =>

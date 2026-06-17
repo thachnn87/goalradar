@@ -1,25 +1,27 @@
 /**
  * DATA-18B: Shadow diff endpoint (S2 mandatory gate).
  *
- * Reads the same 4 benchmark WC matches from BOTH authority paths and
- * diffs them. S3 is BLOCKED until this endpoint returns all-GREEN.
+ * Reads WC matches from BOTH authority paths and diffs them.
+ * S3 is BLOCKED until this endpoint returns all-GREEN.
  *
  * Authentication: requires X-Internal-Token header matching INTERNAL_TOKEN env var.
  * Not indexed by Google (no-index header returned).
  * Removed in DATA-18F (S5).
  *
- * Benchmark matches (from DATA18A_MIGRATION_PLAN.md S2 gate):
- *   537397, 537392, 537391, 537351
+ * Modes:
+ *   Default:     checks 4 hardcoded benchmark matches (DATA-18A S2 gate)
+ *   ?scope=all:  checks ALL FINISHED matches from the dynamic KV feed (DATA-18D.1)
  *
- * Gate criteria (all must pass for all 4 matches):
+ * Gate criteria (all must pass for all checked matches):
  *   ✓ score.fullTime identical between old and new paths
- *   ✓ enrichmentApplied === true for all 4 (FINISHED, confirmed enrichment)
+ *   ✓ enrichmentApplied === true (or scoreTotal === 0 for 0-0 draws)
  *   ✓ goals array length matches between paths
  *   ✓ state === 'finished'
  *   ✓ integrity.status === 'ok'
  */
 
 import { NextResponse } from 'next/server';
+import { kv }           from '@vercel/kv';
 import { getWCAuthorityMatches, getWCAuthorityMatchesV2 } from '@/lib/api';
 import type { CanonicalMatch } from '@/lib/canonical-match';
 import type { Match } from '@/lib/types';
@@ -28,10 +30,18 @@ import type { Match } from '@/lib/types';
 type OldMatch = Match;
 
 // ---------------------------------------------------------------------------
-// Benchmark match IDs (DATA-18A migration plan S2 gate)
+// Benchmark match IDs (DATA-18A migration plan S2 gate — default mode only)
 // ---------------------------------------------------------------------------
 
 const BENCHMARK_IDS = [537397, 537392, 537391, 537351] as const;
+
+const FINISHED_FEED_KEY = 'goalradar:/competitions/WC/matches?status=FINISHED';
+
+interface KVEntry<T> {
+  data:       T;
+  fetchedAt:  number;
+  freshUntil: number;
+}
 
 // ---------------------------------------------------------------------------
 // Auth guard
@@ -154,8 +164,37 @@ export async function GET(req: Request): Promise<NextResponse> {
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
   }
 
+  const url   = new URL((req as import('next/server').NextRequest).url);
+  const scope = url.searchParams.get('scope') ?? 'benchmark';
   const builtAt = new Date().toISOString();
 
+  // ── Determine which match IDs to check ────────────────────────────────────
+  let checkIds: number[];
+  let feedAgeHours: number | null = null;
+
+  if (scope === 'all') {
+    // DATA-18D.1: read all FINISHED matches from dynamic KV feed
+    try {
+      const feedEntry = await kv.get<KVEntry<{ matches: Match[] }>>(FINISHED_FEED_KEY);
+      if (!feedEntry) {
+        return NextResponse.json({
+          error: 'FINISHED feed not in KV — cannot run scope=all',
+          kvKey: FINISHED_FEED_KEY,
+        }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+      }
+      const finished = (feedEntry.data?.matches ?? []).filter((m) => m.status === 'FINISHED');
+      checkIds     = finished.map((m) => m.id);
+      feedAgeHours = Math.round((Date.now() - feedEntry.fetchedAt) / 3_600_000 * 10) / 10;
+    } catch (err) {
+      return NextResponse.json({
+        error: `FINISHED feed read error: ${err instanceof Error ? err.message : String(err)}`,
+      }, { status: 500, headers: { 'Cache-Control': 'no-store' } });
+    }
+  } else {
+    checkIds = [...BENCHMARK_IDS];
+  }
+
+  // ── Run both data paths ────────────────────────────────────────────────────
   const [oldResult, newResult] = await Promise.allSettled([
     getWCAuthorityMatches(),
     getWCAuthorityMatchesV2(builtAt),
@@ -176,24 +215,30 @@ export async function GET(req: Request): Promise<NextResponse> {
   const oldById = new Map<number, OldMatch>(oldMatches.map(m => [m.id, m]));
   const newById = new Map<number, CanonicalMatch>(newMatches.map(m => [m.id, m]));
 
-  const diffs: MatchDiff[] = BENCHMARK_IDS.map(id =>
+  const diffs: MatchDiff[] = checkIds.map(id =>
     diffMatches(oldById.get(id), newById.get(id), id),
   );
 
-  const overallGate: 'GREEN' | 'RED' = diffs.every(d => d.gate === 'GREEN') ? 'GREEN' : 'RED';
+  const greenCount    = diffs.filter(d => d.gate === 'GREEN').length;
+  const redCount      = diffs.filter(d => d.gate === 'RED').length;
+  const overallGate: 'GREEN' | 'RED' = redCount === 0 ? 'GREEN' : 'RED';
 
   return NextResponse.json(
     {
       gate:           overallGate,
+      scope,
       checkedAt:      builtAt,
-      benchmarkCount: BENCHMARK_IDS.length,
+      benchmarkCount: checkIds.length,
+      greenCount,
+      redCount,
       oldPathCount:   oldMatches.length,
       newPathCount:   newMatches.length,
+      feedAgeHours:   feedAgeHours ?? undefined,
       errors:         errors.length > 0 ? errors : undefined,
       diffs,
       note: overallGate === 'RED'
-        ? 'S3 is BLOCKED. Fix all RED checks before proceeding.'
-        : 'All benchmark matches GREEN — S3 gate passed.',
+        ? `${redCount} match(es) RED — fix before global activation.`
+        : `All ${greenCount} matches GREEN.`,
     },
     {
       headers: {

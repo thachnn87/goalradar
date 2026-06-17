@@ -46,6 +46,7 @@ import { kv }                 from '@vercel/kv';
 import { providerManager }    from '@/lib/providers/manager';
 import type { Match, MatchDetail, StandingTable } from '@/lib/types';
 import type { MatchSnapshot } from '@/lib/match-snapshot';
+import { enrichMatchWithAFEvents } from '@/lib/af-id-map';
 // DATA-4: forward-only state ranks — prewarm must never regress snapshot state
 import { STATE_RANK } from '@/lib/match-state-overlay';
 import {
@@ -342,11 +343,51 @@ async function seedMatch(
     }
 
     try {
-      const snap = buildPartialSnapshot(matchDetail, allMatches, standings);
-      await Promise.all([
-        kv.set(snapshotKey(match.id),   snap, { ex: snapshotTtlSec }),
-        kv.set(snapshotDRKey(match.id), snap, { ex: SNAPSHOT_DR_TTL_SEC }),
-      ]);
+      // DATA-18D.2 Phase 2: for new FINISHED scored matches, attempt AF enrichment
+      // before writing — eliminates the 24h unenriched window.
+      let matchDetailForSnap = matchDetail;
+      if (tier === 'finished' && process.env.ENABLE_AF_ENRICHMENT === 'true') {
+        const ftH = matchDetail.score?.fullTime?.home ?? 0;
+        const ftA = matchDetail.score?.fullTime?.away ?? 0;
+        if (ftH + ftA > 0) {
+          try {
+            matchDetailForSnap = await enrichMatchWithAFEvents(matchDetail);
+          } catch {
+            // best-effort — proceed with unenriched if AF throws
+          }
+        }
+      }
+
+      const snap = buildPartialSnapshot(matchDetailForSnap, allMatches, standings);
+
+      // DATA-18D.2 Phase 3: warn when first build is unenriched (AF unavailable).
+      const snapFtH = matchDetailForSnap.score?.fullTime?.home ?? 0;
+      const snapFtA = matchDetailForSnap.score?.fullTime?.away ?? 0;
+      const isUnenriched =
+        tier === 'finished' &&
+        snapFtH + snapFtA > 0 &&
+        (snap.match.goals?.length ?? 0) === 0;
+      if (isUnenriched) {
+        console.warn(
+          `[Prewarm] FIRST_BUILD_UNENRICHED match:${match.id}` +
+          ` | score=${snapFtH}-${snapFtA} goals=0 | AF enrichment unavailable`,
+        );
+      }
+
+      // DATA-18D.2 Phase 4: never write a poisoned DR — an unenriched DR
+      // cannot rescue future downgrade-guard checks and locks in goals=0 for 30d.
+      const kvWrites: Promise<unknown>[] = [
+        kv.set(snapshotKey(match.id), snap, { ex: snapshotTtlSec }),
+      ];
+      if (!isUnenriched) {
+        kvWrites.push(kv.set(snapshotDRKey(match.id), snap, { ex: SNAPSHOT_DR_TTL_SEC }));
+      } else {
+        console.warn(
+          `[Prewarm] SKIP-DR match:${match.id}` +
+          ` | score=${snapFtH}-${snapFtA} goals=0 — refusing to write unenriched DR`,
+        );
+      }
+      await Promise.all(kvWrites);
       seededSnapshot = true;
     } catch (err) {
       errors.push(`snapshot:${match.id}: ${err instanceof Error ? err.message : String(err)}`);
