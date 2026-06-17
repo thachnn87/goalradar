@@ -31,7 +31,7 @@ function isAuthorized(req: NextRequest): boolean {
 const WC_FINISHED_IDS = [
   537327, 537328, 537333, 537334, 537339, 537340, 537345, 537346,
   537351, 537352, 537357, 537358, 537363, 537364, 537369, 537370,
-  537391, 537392,
+  537391, 537392, 537397, 537398,
 ];
 
 interface MatchHealth {
