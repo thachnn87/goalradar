@@ -1788,6 +1788,13 @@ function buildFaqs(match: MatchDetail, h2h: HeadToHead | null): Faq[] {
         q: `Who scored in ${home} vs ${away}?`,
         a: `Goals: ${scorerLines}.`,
       });
+    } else if (ftH + ftA > 0) {
+      // Score is non-zero but no goal events are available (enrichment missing
+      // or not yet applied). NEVER claim "goalless" — that would be false. (DATA-15C.1)
+      faqs.push({
+        q: `Who scored in ${home} vs ${away}?`,
+        a: `${home} ${ftH}–${ftA} ${away}. Detailed scorer information is currently unavailable for this match.`,
+      });
     } else {
       faqs.push({
         q: `Were there any goals in ${home} vs ${away}?`,
