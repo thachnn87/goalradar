@@ -39,8 +39,58 @@ export const ESPN_ENRICHMENT_ENABLED =
 // KV key helpers + TTL constants
 // ---------------------------------------------------------------------------
 
-export const ESPN_LOOKUP_TTL_SEC = 30 * 24 * 3600; // 30 days — ESPN IDs don't change
+export const ESPN_LOOKUP_TTL_SEC = 30 * 24 * 3600; // 30 days — positive: ESPN IDs don't change
 export const ESPN_EVENT_TTL_SEC  = 12 * 3600;       // 12 hours — events are final after match
+
+/**
+ * DATA-15C — Negative-cache backoff schedule.
+ *
+ * A lookup miss is usually transient (match not yet on ESPN, an alias/date gap
+ * later fixed in code). The previous design stored a bare '__NOT_FOUND__'
+ * sentinel with the 30-day positive TTL, cementing false negatives for an
+ * entire tournament (see DATA15B_NEGATIVE_CACHE_AUDIT.md).
+ *
+ * Instead we store a structured LookupMiss and gate re-resolution by an
+ * escalating backoff window computed from the attempt count:
+ *
+ *   attempt 1 → 15 min    attempt 2 → 1 h    attempt 3 → 6 h    attempt 4+ → 24 h
+ *
+ * NOTE on TTL: the backoff is enforced as a *computed retry window*
+ * (now ≥ lastAttemptAt + backoff), NOT as the KV record's own TTL. A literal
+ * per-attempt KV TTL would delete the record on expiry, losing the attempt
+ * counter — so backoff could never escalate past attempt 1 and a permanently
+ * absent match would be re-queried every 15 min forever. The record therefore
+ * persists with a 7-day ceiling TTL (long enough to carry the counter across
+ * retries, short enough to self-clean a match nobody views for a week).
+ */
+export const ESPN_NEG_BACKOFF_SEC = [15 * 60, 60 * 60, 6 * 3600, 24 * 3600] as const;
+export const ESPN_NEG_RECORD_TTL_SEC = 7 * 24 * 3600; // 7 days — ceiling that preserves attempt counter
+
+/** Legacy bare sentinel value written before DATA-15C. Read-compat only. */
+export const ESPN_LEGACY_SENTINEL = '__NOT_FOUND__';
+
+/** Structured negative-cache record (replaces the bare '__NOT_FOUND__' string). */
+export interface LookupMiss {
+  status:        'NOT_FOUND';
+  reason:        string;
+  firstMissAt:   number; // epoch ms — enables true age
+  lastAttemptAt: number; // epoch ms — drives the backoff window
+  attempts:      number; // 1-based; selects the backoff interval
+}
+
+/**
+ * Backoff window (seconds) before the next retry is permitted, for a miss that
+ * has been attempted `attempts` times. Clamps to the last bucket for attempt 4+.
+ */
+export function espnNegBackoffSec(attempts: number): number {
+  const idx = Math.min(Math.max(attempts, 1), ESPN_NEG_BACKOFF_SEC.length) - 1;
+  return ESPN_NEG_BACKOFF_SEC[idx];
+}
+
+/** True when a stored miss is still inside its backoff window (suppress retry). */
+export function espnMissSuppressed(miss: LookupMiss, now: number): boolean {
+  return now < miss.lastAttemptAt + espnNegBackoffSec(miss.attempts) * 1000;
+}
 
 export function espnLookupKvKey(fdMatchId: string | number): string {
   return `goalradar:espn:lookup:${fdMatchId}`;
@@ -69,27 +119,48 @@ export interface CachedEspnEvents {
 /**
  * Return the ESPN event ID for a football-data.org match ID.
  *
- * Flow:
- *   1. Check goalradar:espn:lookup:{fdMatchId} — return immediately on hit
- *   2. Query ESPN scoreboard via findEspnMatch() (1 ESPN API call)
- *   3. Store result (30-day TTL, even if null to suppress repeat misses)
+ * Flow (DATA-15C):
+ *   1. Read goalradar:espn:lookup:{fdMatchId}.
+ *        • positive (ESPN ID string)  → return it.
+ *        • structured LookupMiss still inside its backoff window → return null
+ *          (suppress, no ESPN call).
+ *        • structured LookupMiss past its backoff window, OR a legacy
+ *          '__NOT_FOUND__' sentinel → fall through and re-attempt.
+ *   2. Query ESPN scoreboard via findEspnMatch() (1 ESPN API call).
+ *   3a. Hit  → store the bare ESPN ID (30-day positive TTL).
+ *   3b. Miss → store/update a structured LookupMiss (attempts++, escalating
+ *        backoff; 7-day record ceiling).
  *
  * Returns null if ESPN has no matching event or on any error.
  */
 export async function resolveEspnMatchId(match: MatchDetail): Promise<string | null> {
   if (!KV_ENABLED) return null;
 
-  const fdId     = String(match.id);
+  const fdId      = String(match.id);
   const lookupKey = espnLookupKvKey(fdId);
+  const now       = Date.now();
 
   try {
-    // 1. Lookup KV cache
-    // kv.get() returns null for missing keys (not undefined), so we use a
-    // sentinel string '__NOT_FOUND__' to distinguish an explicit miss from absent.
-    const cached = await kv.get<string>(lookupKey);
-    if (cached !== null) {
-      // '__NOT_FOUND__' stored explicitly = previous miss, avoid repeat scoreboard call
-      return cached === '__NOT_FOUND__' ? null : cached;
+    // 1. Lookup KV cache. Value is one of:
+    //    string  → positive ESPN ID, OR the legacy '__NOT_FOUND__' sentinel
+    //    object  → structured LookupMiss (DATA-15C)
+    //    null    → absent
+    const cached = await kv.get<string | LookupMiss>(lookupKey);
+
+    let priorMiss: LookupMiss | null = null;
+
+    if (typeof cached === 'string') {
+      if (cached !== ESPN_LEGACY_SENTINEL) {
+        return cached; // positive hit — ESPN ID
+      }
+      // Legacy bare sentinel: age unknown and untrustworthy (written with the old
+      // 30-day TTL). Treat as a stale miss and re-attempt now so it self-heals.
+      priorMiss = { status: 'NOT_FOUND', reason: 'legacy-sentinel', firstMissAt: now, lastAttemptAt: 0, attempts: 1 };
+    } else if (cached && typeof cached === 'object' && cached.status === 'NOT_FOUND') {
+      if (espnMissSuppressed(cached, now)) {
+        return null; // inside backoff window — suppress, no ESPN call
+      }
+      priorMiss = cached; // backoff elapsed — re-attempt
     }
 
     // 2. Query ESPN scoreboard
@@ -99,18 +170,32 @@ export async function resolveEspnMatchId(match: MatchDetail): Promise<string | n
       match.utcDate,
     );
 
-    // 3. Store result (sentinel '__NOT_FOUND__' for misses to suppress repeat scoreboard calls)
-    kv.set(lookupKey, espnId ?? '__NOT_FOUND__', { ex: ESPN_LOOKUP_TTL_SEC }).catch((err) =>
-      console.error(`[ESPN-ID-MAP] lookup-write failed match:${fdId}:`, err),
-    );
-
     if (espnId) {
-      console.log(`[ESPN-ID-MAP] resolved match:${fdId} → espnId:${espnId}`);
-    } else {
-      console.warn(`[ESPN-ID-MAP] no espn match found for fd:${fdId}`);
+      // 3a. Positive — bare ID string, 30-day TTL (backward compatible).
+      kv.set(lookupKey, espnId, { ex: ESPN_LOOKUP_TTL_SEC }).catch((err) =>
+        console.error(`[ESPN-ID-MAP] lookup-write failed match:${fdId}:`, err),
+      );
+      const healed = priorMiss ? ' (healed prior miss)' : '';
+      console.log(`[ESPN-ID-MAP] resolved match:${fdId} → espnId:${espnId}${healed}`);
+      return espnId;
     }
 
-    return espnId;
+    // 3b. Miss — structured LookupMiss with escalating backoff.
+    const miss: LookupMiss = {
+      status:        'NOT_FOUND',
+      reason:        'no-scoreboard-match',
+      firstMissAt:   priorMiss ? priorMiss.firstMissAt : now,
+      lastAttemptAt: now,
+      attempts:      (priorMiss?.attempts ?? 0) + 1,
+    };
+    kv.set(lookupKey, miss, { ex: ESPN_NEG_RECORD_TTL_SEC }).catch((err) =>
+      console.error(`[ESPN-ID-MAP] miss-write failed match:${fdId}:`, err),
+    );
+    console.warn(
+      `[ESPN-ID-MAP] no espn match found for fd:${fdId}` +
+      ` | attempt:${miss.attempts} | next-retry-in:${espnNegBackoffSec(miss.attempts)}s`,
+    );
+    return null;
   } catch (err) {
     console.error(
       `[ESPN-ID-MAP] resolve failed match:${fdId}:`,

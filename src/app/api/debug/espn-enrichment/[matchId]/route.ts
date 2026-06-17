@@ -34,9 +34,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { kv }                        from '@vercel/kv';
 import {
   ESPN_ENRICHMENT_ENABLED,
+  ESPN_LOOKUP_TTL_SEC,
+  ESPN_LEGACY_SENTINEL,
   espnLookupKvKey,
   espnEventKvKey,
+  espnNegBackoffSec,
   type CachedEspnEvents,
+  type LookupMiss,
 } from '@/lib/espn-id-map';
 import type { MatchSnapshot } from '@/lib/match-snapshot';
 
@@ -88,17 +92,19 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   const snapshotKey  = `goalradar:match:${matchId}`;
 
   // ── Parallel KV reads ──────────────────────────────────────────────────────
-  let lookupRaw: unknown  = undefined;
+  let lookupRaw: string | LookupMiss | null = null;
   let events:   CachedEspnEvents | null = null;
   let snapshot: MatchSnapshot | null    = null;
+  let lookupTtlRemaining: number | null = null;
   let lookupAgeSeconds: number | null   = null;
   let eventCacheAgeSeconds: number | null = null;
 
   try {
-    [lookupRaw, events, snapshot] = await Promise.all([
-      kv.get(lookupKey),
+    [lookupRaw, events, snapshot, lookupTtlRemaining] = await Promise.all([
+      kv.get<string | LookupMiss>(lookupKey),
       kv.get<CachedEspnEvents>(eventKey),
       kv.get<MatchSnapshot>(snapshotKey),
+      kv.ttl(lookupKey), // seconds remaining; -2 absent, -1 no-expiry
     ]);
   } catch (err) {
     return NextResponse.json(
@@ -107,9 +113,32 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     );
   }
 
-  // lookupRaw: null = key absent (kv.get miss), '__NOT_FOUND__' = explicit miss stored, string = ESPN ID
-  const lookupHit   = lookupRaw !== null;
-  const espnMatchId = (typeof lookupRaw === 'string' && lookupRaw !== '__NOT_FOUND__' ? lookupRaw : null);
+  // Classify the lookup value (DATA-15C):
+  //   string (≠ legacy sentinel) → positive ESPN ID
+  //   string (= legacy sentinel) → pre-DATA-15C bare miss
+  //   object  { status:'NOT_FOUND' } → structured LookupMiss
+  //   null    → absent
+  const lookupHit  = lookupRaw !== null;
+  const isLegacyMiss = lookupRaw === ESPN_LEGACY_SENTINEL;
+  const miss: LookupMiss | null =
+    (lookupRaw && typeof lookupRaw === 'object' && lookupRaw.status === 'NOT_FOUND') ? lookupRaw : null;
+  const espnMatchId =
+    (typeof lookupRaw === 'string' && !isLegacyMiss) ? lookupRaw : null;
+
+  // Negative-cache diagnostics
+  const lookupReason   = miss?.reason ?? (isLegacyMiss ? 'legacy-sentinel' : null);
+  const lookupAttempts = miss?.attempts ?? (isLegacyMiss ? 1 : null);
+  const nextRetryInSec = miss ? Math.max(0,
+    Math.round((miss.lastAttemptAt + espnNegBackoffSec(miss.attempts) * 1000 - now) / 1000),
+  ) : null;
+
+  // Real age: structured miss carries firstMissAt; a positive ID is dated from
+  // its remaining TTL against the known 30-day positive TTL.
+  if (miss?.firstMissAt) {
+    lookupAgeSeconds = Math.round((now - miss.firstMissAt) / 1000);
+  } else if (espnMatchId && typeof lookupTtlRemaining === 'number' && lookupTtlRemaining > 0) {
+    lookupAgeSeconds = Math.max(0, ESPN_LOOKUP_TTL_SEC - lookupTtlRemaining);
+  }
 
   // KV doesn't expose write time; use enrichedAt in the event payload as a proxy
   if (events?.enrichedAt) {
@@ -149,6 +178,10 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     kvEnabled:             KV_ENABLED,
     lookupHit,
     lookupAgeSeconds,
+    lookupTtlRemaining,
+    lookupReason,
+    lookupAttempts,
+    nextRetryInSec,
     eventCacheHit:         events !== null,
     eventCacheAgeSeconds,
     goalsCount:            events?.goals?.length         ?? 0,

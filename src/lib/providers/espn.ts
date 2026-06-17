@@ -100,6 +100,7 @@ const ESPN_ALIASES: Record<string, string> = {
   'bosnia-herzegovina':  'bosnia',
   'cape verde islands':  'cape verde',
   'república dominicana':'dominican republic',
+  'turkey':              'turkiye',   // FD "Turkey" ↔ ESPN "Türkiye" (DATA-15C)
 };
 
 export function normaliseName(name: string): string {
