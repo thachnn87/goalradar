@@ -12,6 +12,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 // DATA-6: authority source only — no static fallbacks.
 import { getWCAuthorityMatchesCached } from '@/lib/api';
+import { classifyMatchState } from '@/lib/match-classify';
 import type { Match } from '@/lib/types';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -132,9 +133,10 @@ export default async function WC2026SchedulePage() {
   // live, paused, or finished matches inside a schedule view.
   let upcoming: Match[] = [];
   try {
+    const today = new Date().toISOString().split('T')[0];
     const data = await getWCAuthorityMatchesCached();
     upcoming = data.matches
-      .filter((m) => m.status === 'SCHEDULED' || m.status === 'TIMED')
+      .filter((m) => { const b = classifyMatchState(m, today); return b === 'today' || b === 'upcoming'; })
       .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
       .slice(0, 48);
   } catch { /* empty state renders below */ }

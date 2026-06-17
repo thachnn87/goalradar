@@ -9,6 +9,7 @@ import {
   getWCAuthorityMatchesCached,
   getStandingsCached,
 } from '@/lib/api';
+import { classifyMatchState } from '@/lib/match-classify';
 import type { Match, StandingTable } from '@/lib/types';
 import { matchPath } from '@/lib/url';
 import MatchCard from '@/components/MatchCard';
@@ -311,27 +312,24 @@ export default async function WorldCup2026Page() {
     return arr.filter((m) => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
   };
 
+  // DATA-16D: use classifyMatchState to bucket matches without duplicating inline checks.
+  const classify = (m: Match) => classifyMatchState(m, today);
+
   // Live strays: authority knows they're IN_PLAY but live cache may lag — merge.
-  const liveStrays = allAuthority.filter((m) => m.status === 'IN_PLAY' || m.status === 'PAUSED');
+  const liveStrays = allAuthority.filter((m) => classify(m) === 'live');
   const allLive: Match[] = dedupById([...liveMatches, ...liveStrays]);
 
-  // Today's matches — only truly upcoming (SCHEDULED/TIMED) ones; live in allLive above.
-  const todayMatches = allAuthority.filter(
-    (m) => m.utcDate.startsWith(today) && (m.status === 'SCHEDULED' || m.status === 'TIMED'),
-  );
+  // Today's matches — only truly upcoming (today-bucket) ones; live in allLive above.
+  const todayMatches = allAuthority.filter((m) => classify(m) === 'today');
 
-  // Upcoming = SCHEDULED/TIMED starting tomorrow, capped at 12.
+  // Upcoming = upcoming-bucket (starts tomorrow+), capped at 12.
   const upcomingMatches = allAuthority
-    .filter(
-      (m) =>
-        m.utcDate.split('T')[0] > today &&
-        (m.status === 'SCHEDULED' || m.status === 'TIMED'),
-    )
+    .filter((m) => classify(m) === 'upcoming')
     .slice(0, 12);
 
-  // Recent results — FINISHED from authority set, newest first.
+  // Recent results — finished-bucket from authority set, newest first.
   const recentResults: Match[] = allAuthority
-    .filter((m) => m.status === 'FINISHED')
+    .filter((m) => classify(m) === 'finished')
     .sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime())
     .slice(0, 10);
 

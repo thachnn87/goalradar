@@ -7,8 +7,9 @@
 
 import type { Metadata } from 'next';
 import Link from 'next/link';
-// PERF-4.5
-import { getRecentMatchesCached, getWCLiveMatchesCached } from '@/lib/api';
+// DATA-16D: use stable getWCResultsCached (key: /competitions/WC/matches?status=FINISHED)
+// getRecentMatchesCached used a date-scoped key that rotated daily at midnight UTC with no DR fallback.
+import { getWCResultsCached, getWCLiveMatchesCached } from '@/lib/api';
 import type { Match } from '@/lib/types';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -89,15 +90,16 @@ export default async function WC2026ResultsPage() {
   // allSettled — each source fails independently so a live-data 403 does not
   // also wipe out the results list (and vice versa).
   const [rResult, lResult] = await Promise.allSettled([
-    getRecentMatchesCached('WC'),
+    getWCResultsCached(),
     getWCLiveMatchesCached(),
   ]);
   if (rResult.status === 'fulfilled') results = rResult.value.matches;
   if (lResult.status === 'fulfilled') live    = lResult.value.matches;
 
-  // Deduplicate live matches from results
+  // Only FINISHED matches — filter out any SCHEDULED/TIMED that might appear via overlay.
+  // Deduplicate against the live set (IN_PLAY/PAUSED matches are shown separately above).
   const liveIds = new Set(live.map((m) => m.id));
-  const finishedResults = results.filter((m) => !liveIds.has(m.id));
+  const finishedResults = results.filter((m) => m.status === 'FINISHED' && !liveIds.has(m.id));
 
   // Statistics
   let totalGoals = 0, homeWins = 0, awayWins = 0, draws = 0;

@@ -98,10 +98,13 @@ function buildTasks(): OrchestratorTask[] {
     },
     {
       label: 'wc-finished',
+      // DATA-16D: use WC_STALE (12 h) as KV TTL — finished results never change,
+      // so a long stale window prevents the "No results" gap when the cron is delayed.
+      // freshSec stays at FIXTURES_FRESH (15 min) so the SWR trigger still fires on reads.
       run:   () => refreshEndpoint(
         '/competitions/WC/matches?status=FINISHED',
         FIXTURES_FRESH,
-        FIXTURES_STALE,
+        WC_STALE,
         { minIntervalSec: WC_MIN_INTERVAL_SEC, caller: CALLER },
       ),
     },

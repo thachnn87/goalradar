@@ -523,9 +523,12 @@ export async function getTodayMatchesCached(): Promise<{ matches: Match[] }> {
  * Constraints: no new KV writes, no provider calls, no new caches, no ISR change.
  */
 export async function getWCAuthorityMatchesCached(): Promise<{ matches: Match[] }> {
+  // DATA-16D: use getWCResultsCached() (stable key: /competitions/WC/matches?status=FINISHED)
+  // instead of getRecentMatchesCached('WC') (date-scoped key that rotates daily at midnight UTC
+  // and has no DR fallback, causing "No results" windows between cron runs).
   const [upcomingResult, recentResult, liveResult] = await Promise.allSettled([
     getUpcomingMatchesCached('WC'),
-    getRecentMatchesCached('WC'),
+    getWCResultsCached(),
     getWCLiveMatches(),
   ]);
 
