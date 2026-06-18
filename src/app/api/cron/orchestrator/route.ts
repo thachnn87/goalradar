@@ -28,6 +28,7 @@ import { readRateSafeFromKV, isRateSafeModeActive, getRateSafeState } from '@/li
 import { COMPETITIONS } from '@/lib/types';
 import { revalidateWCPaths, type RevalidationRecord } from '@/lib/revalidation';
 import { recordCronRun }                             from '@/lib/cron-recorder';
+import { writeAuthorityCache, type AuthorityCacheEnvelope } from '@/lib/authority-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -228,6 +229,23 @@ export async function GET(req: NextRequest) {
     console.error('[Cron] orchestrator: WC seeding threw', err instanceof Error ? err.message : String(err));
   }
 
+  // ── DATA-18C: Authority cache write ──────────────────────────────────────
+  // Runs after prewarmWorldCup() so all per-match snapshot KV keys are fresh.
+  // Gated by AUTHORITY_CACHE_ENABLED=true to allow safe rollback via env toggle.
+  let authorityResult: AuthorityCacheEnvelope | null = null;
+  if (process.env.AUTHORITY_CACHE_ENABLED === 'true') {
+    try {
+      console.log('[Cron] orchestrator: writing authority cache (DATA-18C)');
+      authorityResult = await writeAuthorityCache(new Date().toISOString(), 'cron:orchestrator');
+      console.log(
+        `[Cron] orchestrator: authority cache written | matchCount=${authorityResult.matchCount}` +
+        ` liveCount=${authorityResult.liveCount} ttlTier=${authorityResult.ttlTier}`,
+      );
+    } catch (err) {
+      console.error('[Cron] authority cache write failed:', err instanceof Error ? err.message : String(err));
+    }
+  }
+
   // ── DATA-9: On-demand ISR revalidation ───────────────────────────────────
   // Trigger only when at least one WC data task (fixtures or standings) succeeded.
   // This clears stale HTML caches immediately after fresh KV data is available.
@@ -313,6 +331,13 @@ export async function GET(req: NextRequest) {
       errors:            seedResult.errors,
     } : null,
     timestamp: new Date().toISOString(),
+    // DATA-18C authority cache
+    authorityCache: authorityResult ? {
+      matchCount: authorityResult.matchCount,
+      liveCount:  authorityResult.liveCount,
+      ttlTier:    authorityResult.ttlTier,
+      builtAt:    authorityResult.builtAt,
+    } : process.env.AUTHORITY_CACHE_ENABLED === 'true' ? { error: 'write failed' } : { skipped: 'AUTHORITY_CACHE_ENABLED not set' },
     // DATA-9
     revalidation: revalidationRecord ? {
       success:     revalidationRecord.success,

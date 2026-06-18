@@ -1,8 +1,7 @@
 /**
- * DATA-18B: Authority Cache Builder — dormant until DATA-18C activates it.
+ * DATA-18B/18C: Authority Cache Builder — activated by DATA-18C.1.
  *
- * DO NOT IMPORT — this module is dormant until DATA-18C sets
- * AUTHORITY_CACHE_ENABLED=true and wires writeAuthorityCache() into the cron.
+ * AUTHORITY_CACHE_ENABLED=true + orchestrator wiring added in DATA-18C.1.
  *
  * Responsibilities:
  *   buildAllCanonicalMatches() — batch-build 104 CanonicalMatch objects from
@@ -11,13 +10,14 @@
  *
  *   writeAuthorityCache()      — build + write goalradar:wc:authority:v1 with
  *     a versioned envelope and DR copy. Single-flight guard prevents concurrent
- *     rebuilds from racing.
+ *     rebuilds from racing. Also writes goalradar:authority:last-write record.
  *
  *   readAuthorityCache()       — primary → DR → cold rebuild (single-flight).
  *
  * Cache keys:
  *   goalradar:wc:authority:v1       — primary (TTL: 30s / 300s / 900s)
  *   goalradar:dr:wc:authority:v1    — disaster-recovery (7-day TTL)
+ *   goalradar:authority:last-write  — write audit record (10-day TTL)
  *
  * Versioned envelope (version: 1):
  *   builtAt, matchCount, liveCount, ttlTier, matches[]
@@ -44,6 +44,18 @@ const KV_ENABLED =
 export const AUTHORITY_KEY    = 'goalradar:wc:authority:v1';
 /** Disaster-recovery KV key — 7-day TTL. */
 export const AUTHORITY_DR_KEY = 'goalradar:dr:wc:authority:v1';
+/** Write audit record key — updated on every successful writeAuthorityCache() call. */
+export const AUTHORITY_WRITE_RECORD_KEY = 'goalradar:authority:last-write';
+
+/** Audit record written after each successful cache write. */
+export interface AuthorityWriteRecord {
+  builtAt:    string;
+  matchCount: number;
+  liveCount:  number;
+  ttlTier:    AuthorityCacheEnvelope['ttlTier'];
+  durationMs: number;
+  source:     string;
+}
 
 /** TTL tiers in seconds, matching ISR intervals in the migration plan. */
 const TTL_LIVE   =  30;  // any match is IN_PLAY or PAUSED
@@ -349,16 +361,20 @@ async function coldRebuild(builtAt: string): Promise<CanonicalMatch[]> {
 
 /**
  * Build the full authority cache and write it to KV.
- * Called from the cron orchestrator after bulk feed refresh (DATA-18C).
- * NOT called from any page — dormant until DATA-18C activates.
+ * Called from the cron orchestrator after bulk feed refresh (DATA-18C.1+).
  *
  * Writes:
  *   goalradar:wc:authority:v1       — TTL based on live/today/normal tier
  *   goalradar:dr:wc:authority:v1    — 7-day DR copy
+ *   goalradar:authority:last-write  — audit record (10-day TTL)
  *
  * @param builtAt   ISO-8601 timestamp — passed in by caller for determinism.
+ * @param source    Identifies the caller (e.g. 'cron:orchestrator').
  */
-export async function writeAuthorityCache(builtAt: string): Promise<AuthorityCacheEnvelope> {
+export async function writeAuthorityCache(
+  builtAt: string,
+  source = 'unknown',
+): Promise<AuthorityCacheEnvelope> {
   const writeStart = Date.now();
   const matches    = await coldRebuild(builtAt);
 
@@ -377,6 +393,15 @@ export async function writeAuthorityCache(builtAt: string): Promise<AuthorityCac
   };
 
   if (KV_ENABLED) {
+    const record: AuthorityWriteRecord = {
+      builtAt,
+      matchCount: matches.length,
+      liveCount,
+      ttlTier,
+      durationMs: 0, // filled below after write completes
+      source,
+    };
+
     await Promise.all([
       kv.set(AUTHORITY_KEY, envelope, { ex: ttlSec }).catch((err) =>
         console.error(`[Authority] WRITE error on primary key:`, err instanceof Error ? err.message : String(err)),
@@ -385,6 +410,11 @@ export async function writeAuthorityCache(builtAt: string): Promise<AuthorityCac
         console.error(`[Authority] WRITE error on DR key:`, err instanceof Error ? err.message : String(err)),
       ),
     ]);
+
+    record.durationMs = Date.now() - writeStart;
+    kv.set(AUTHORITY_WRITE_RECORD_KEY, record, { ex: 10 * 24 * 3_600 }).catch((err) =>
+      console.error(`[Authority] WRITE error on audit record:`, err instanceof Error ? err.message : String(err)),
+    );
   }
 
   telemetry.writeCount++;
