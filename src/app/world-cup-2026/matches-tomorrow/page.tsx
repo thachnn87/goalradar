@@ -299,7 +299,7 @@ export default async function MatchesTomorrowPage() {
   const dayAfter = dayAfterUTC();
   const builtAt  = new Date().toISOString();
 
-  const { matches: allMatches } = await getWCAuthorityMatchesV2(builtAt).catch(() => ({ matches: [] as CanonicalMatch[] }));
+  const { matches: allMatches } = await getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026/matches-tomorrow', sourceType: 'page' }).catch(() => ({ matches: [] as CanonicalMatch[] }));
 
   const tomorrowMatches: CanonicalMatch[] = allMatches
     .filter((m) => m.utcDate.startsWith(tomorrow) && m.state !== 'finished')

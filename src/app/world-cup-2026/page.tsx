@@ -280,7 +280,7 @@ export default async function WorldCup2026Page() {
   const builtAt = new Date().toISOString();
   const [authorityResult, standingsResult, knockoutResult] =
     await Promise.allSettled([
-      getWCAuthorityMatchesV2(builtAt),
+      getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026', sourceType: 'page' }),
       getStandingsCached('WC'),
       getWCKnockoutMatchesCached(),
     ]);

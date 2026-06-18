@@ -196,7 +196,7 @@ export async function GET(req: Request): Promise<NextResponse> {
   // ── Run both data paths ────────────────────────────────────────────────────
   const [oldResult, newResult] = await Promise.allSettled([
     getWCAuthorityMatches(),
-    getWCAuthorityMatchesV2(builtAt),
+    getWCAuthorityMatchesV2(builtAt, { source: '/api/debug/authority-compare', sourceType: 'debug' }),
   ]);
 
   const errors: string[] = [];

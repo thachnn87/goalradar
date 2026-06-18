@@ -664,7 +664,7 @@ export default async function WCGroupPage({ params }: Params) {
 
   const [standingsResult, authorityResult] = await Promise.allSettled([
     getStandingsCached('WC'),
-    getWCAuthorityMatchesV2(builtAt),
+    getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026/[group]', sourceType: 'page' }),
   ]);
 
   // Group standings table — fall back to empty table if API fails

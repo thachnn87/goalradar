@@ -93,7 +93,7 @@ export default async function WC2026ResultsPage() {
   const builtAt = new Date().toISOString();
 
   let entries: ResultsEntry[] = [];
-  const { matches } = await getWCAuthorityMatchesV2(builtAt).catch(() => ({ matches: [] as CanonicalMatch[] }));
+  const { matches } = await getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026/results', sourceType: 'page' }).catch(() => ({ matches: [] as CanonicalMatch[] }));
   entries = matches.map(fromCanonical);
 
   const live     = entries.filter((e) => e.state === 'live');

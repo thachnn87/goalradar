@@ -433,11 +433,15 @@ export async function writeAuthorityCache(
  * Read the authority cache from KV.
  * Fall-back chain: primary → DR → cold rebuild.
  *
- * Called by getWCAuthorityMatchesV2() in api.ts (also dormant in DATA-18B).
+ * Called by getWCAuthorityMatchesV2() in api.ts and directly by debug endpoints.
  *
- * @param builtAt   ISO-8601 timestamp passed through to cold rebuild if needed.
+ * @param builtAt      ISO-8601 timestamp passed through to cold rebuild if needed.
+ * @param attribution  DATA-18C.6: optional caller identity for source attribution.
  */
-export async function readAuthorityCache(builtAt: string): Promise<CanonicalMatch[]> {
+export async function readAuthorityCache(
+  builtAt:      string,
+  attribution?: import('./authority-telemetry').AuthorityReadAttribution,
+): Promise<CanonicalMatch[]> {
   const _readStart = Date.now();
 
   if (KV_ENABLED) {
@@ -447,7 +451,7 @@ export async function readAuthorityCache(builtAt: string): Promise<CanonicalMatc
       if (envelope !== null && envelope.version === 1 && Array.isArray(envelope.matches)) {
         telemetry.hits++;
         logHit('primary', envelope);
-        recordAuthorityRead('primary', Date.now() - _readStart, builtAt); // fire-and-forget
+        recordAuthorityRead('primary', Date.now() - _readStart, builtAt, attribution); // fire-and-forget
         return envelope.matches;
       }
     } catch (err) {
@@ -463,7 +467,7 @@ export async function readAuthorityCache(builtAt: string): Promise<CanonicalMatc
       if (drEnvelope !== null && drEnvelope.version === 1 && Array.isArray(drEnvelope.matches)) {
         telemetry.drHits++;
         logHit('dr', drEnvelope);
-        recordAuthorityRead('dr', Date.now() - _readStart, builtAt); // fire-and-forget
+        recordAuthorityRead('dr', Date.now() - _readStart, builtAt, attribution); // fire-and-forget
         return drEnvelope.matches;
       }
     } catch (err) {
@@ -476,6 +480,6 @@ export async function readAuthorityCache(builtAt: string): Promise<CanonicalMatc
 
   // ── 3. Cold rebuild ────────────────────────────────────────────────────
   const matches = await coldRebuild(builtAt);
-  recordAuthorityRead('cold', Date.now() - _readStart, builtAt); // fire-and-forget
+  recordAuthorityRead('cold', Date.now() - _readStart, builtAt, attribution); // fire-and-forget
   return matches;
 }

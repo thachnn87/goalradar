@@ -210,7 +210,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   // ── 1. Read authority cache ────────────────────────────────────────────────
   let allMatches: CanonicalMatch[];
   try {
-    allMatches = await readAuthorityCache(builtAt);
+    allMatches = await readAuthorityCache(builtAt, { source: '/api/debug/authority-drift', sourceType: 'debug' });
   } catch (err) {
     return NextResponse.json({
       error: `Authority cache read failed: ${err instanceof Error ? err.message : String(err)}`,

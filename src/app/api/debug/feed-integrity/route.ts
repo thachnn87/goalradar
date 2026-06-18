@@ -89,7 +89,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const [finishedResult, upcomingResult, authorityResult] = await Promise.allSettled([
     kv.get<KVEntry<{ matches: Match[] }>>(FINISHED_FEED_KEY),
     kv.get<KVEntry<{ matches: Match[] }>>(UPCOMING_FEED_KEY),
-    readAuthorityCache(builtAt),
+    readAuthorityCache(builtAt, { source: '/api/debug/feed-integrity', sourceType: 'debug' }),
   ]);
 
   // Feed availability

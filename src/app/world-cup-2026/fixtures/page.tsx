@@ -149,7 +149,7 @@ export default async function WCFixturesPage() {
   const builtAt = new Date().toISOString();
   let fixtures: CanonicalMatch[] = [];
   try {
-    const data = await getWCAuthorityMatchesV2(builtAt);
+    const data = await getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026/fixtures', sourceType: 'page' });
     fixtures = [...data.matches].sort(
       (a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()
     );

@@ -605,10 +605,11 @@ export async function getWCAuthorityMatches(): Promise<{ matches: CanonicalMatch
  * DO NOT use in pages until DATA-18C validates shadow parity.
  */
 export async function getWCAuthorityMatchesV2(
-  builtAt: string,
+  builtAt:      string,
+  attribution?: import('./authority-telemetry').AuthorityReadAttribution,
 ): Promise<{ matches: import('./canonical-match').CanonicalMatch[] }> {
   const { readAuthorityCache } = await import('./authority-cache');
-  const matches = await readAuthorityCache(builtAt);
+  const matches = await readAuthorityCache(builtAt, attribution);
   return { matches };
 }
 

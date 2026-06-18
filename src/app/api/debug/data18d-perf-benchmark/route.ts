@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
   let newMatches: unknown[] = [];
   let newError: string | null = null;
   try {
-    const result = await getWCAuthorityMatchesV2(builtAt);
+    const result = await getWCAuthorityMatchesV2(builtAt, { source: '/api/debug/data18d-perf-benchmark', sourceType: 'benchmark' });
     newMatches = result.matches;
   } catch (err) {
     newError = err instanceof Error ? err.message : String(err);

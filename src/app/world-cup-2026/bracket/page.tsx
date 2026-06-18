@@ -361,7 +361,7 @@ export default async function WCBracketPage() {
   try {
     if (PILOT_ENABLED) {
       const builtAt = new Date().toISOString();
-      const data = await getWCAuthorityMatchesV2(builtAt);
+      const data = await getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026/bracket', sourceType: 'page' });
       allWCMatches = data.matches.map(canonicalToMatch);
     } else {
       const data = await getWCKnockoutMatchesCached();

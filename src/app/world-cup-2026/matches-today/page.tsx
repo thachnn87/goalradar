@@ -305,7 +305,7 @@ export default async function MatchesTodayPage() {
   const tomorrow = tomorrowUTC();
   const builtAt  = new Date().toISOString();
 
-  const { matches: allMatches } = await getWCAuthorityMatchesV2(builtAt).catch(() => ({ matches: [] as CanonicalMatch[] }));
+  const { matches: allMatches } = await getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026/matches-today', sourceType: 'page' }).catch(() => ({ matches: [] as CanonicalMatch[] }));
 
   const allTodayMatches: CanonicalMatch[] = allMatches
     .filter((m) => m.utcDate.startsWith(today))

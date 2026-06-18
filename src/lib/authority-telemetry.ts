@@ -35,7 +35,9 @@ export const TELEMETRY_KEY_PREFIX = 'goalradar:authority:telemetry:daily:';
 // Types
 // ---------------------------------------------------------------------------
 
-export type AuthorityReadPath = 'primary' | 'dr' | 'cold';
+export type AuthorityReadPath  = 'primary' | 'dr' | 'cold';
+/** DATA-18C.6: who issued the readAuthorityCache() call. */
+export type AuthoritySourceType = 'page' | 'debug' | 'benchmark' | 'unknown';
 
 export interface DailyMetrics {
   date:             string;
@@ -52,6 +54,16 @@ export interface DailyMetrics {
   lastPrimaryHitAt:  string | null;
   lastDrHitAt:       string | null;
   lastColdRebuildAt: string | null;
+  // ── DATA-18C.6: source attribution ───────────────────────────────────────
+  pageReads:        number;
+  debugReads:       number;
+  benchmarkReads:   number;
+  unknownReads:     number;
+  lastPageReadAt:      string | null;
+  lastDebugReadAt:     string | null;
+  lastBenchmarkReadAt: string | null;
+  lastPageReadSource:  string | null;
+  lastDebugReadSource: string | null;
 }
 
 export interface TelemetryReport {
@@ -74,20 +86,28 @@ function dailyKey(isoDate: string): string {
 // Write — fire-and-forget
 // ---------------------------------------------------------------------------
 
+export interface AuthorityReadAttribution {
+  /** Caller identity: route path or label. e.g. '/world-cup-2026', '/api/debug/authority-drift' */
+  source:     string;
+  sourceType: AuthoritySourceType;
+}
+
 /**
  * Record one authority cache read result.
  *
  * NEVER throws. NEVER awaited by the caller.
  * Uses atomic HINCRBY so concurrent serverless instances don't race.
  *
- * @param path       Which fallback tier served this read.
- * @param latencyMs  Wall-clock ms from readAuthorityCache() entry to return.
- * @param timestamp  ISO-8601 timestamp of the read (passed in — no Date.now() here).
+ * @param path         Which fallback tier served this read.
+ * @param latencyMs    Wall-clock ms from readAuthorityCache() entry to return.
+ * @param timestamp    ISO-8601 timestamp of the read (passed in — no Date.now() here).
+ * @param attribution  DATA-18C.6: optional caller identity for source attribution.
  */
 export function recordAuthorityRead(
-  path:       AuthorityReadPath,
-  latencyMs:  number,
-  timestamp:  string,
+  path:         AuthorityReadPath,
+  latencyMs:    number,
+  timestamp:    string,
+  attribution?: AuthorityReadAttribution,
 ): void {
   if (!KV_ENABLED) return;
 
@@ -102,6 +122,34 @@ export function recordAuthorityRead(
                   : path === 'dr'      ? 'lastDrHitAt'
                   : 'lastColdRebuildAt';
 
+  const sourceType = attribution?.sourceType ?? 'unknown';
+  const sourceReadsField =
+    sourceType === 'page'      ? 'pageReads'
+    : sourceType === 'debug'   ? 'debugReads'
+    : sourceType === 'benchmark' ? 'benchmarkReads'
+    : 'unknownReads';
+
+  const sourceLastAtField =
+    sourceType === 'page'      ? 'lastPageReadAt'
+    : sourceType === 'debug'   ? 'lastDebugReadAt'
+    : sourceType === 'benchmark' ? 'lastBenchmarkReadAt'
+    : null;
+
+  const sourceLastSourceField =
+    sourceType === 'page'  ? 'lastPageReadSource'
+    : sourceType === 'debug' ? 'lastDebugReadSource'
+    : null;
+
+  const attributionWrites: Promise<unknown>[] = [
+    kv.hincrby(key, sourceReadsField, 1),
+  ];
+  if (sourceLastAtField) {
+    attributionWrites.push(kv.hset(key, { [sourceLastAtField]: timestamp }));
+  }
+  if (sourceLastSourceField && attribution?.source) {
+    attributionWrites.push(kv.hset(key, { [sourceLastSourceField]: attribution.source }));
+  }
+
   // All writes fire-and-forget — caller must NOT await this function.
   Promise.all([
     kv.hincrby(key, hitField,         1),
@@ -110,6 +158,7 @@ export function recordAuthorityRead(
     kv.hincrby(key, 'latencyCount',   1),
     kv.hset(key, { [lastField]: timestamp }),
     kv.expire(key, RETENTION_SEC),
+    ...attributionWrites,
   ]).catch((err: unknown) =>
     console.error(
       '[AuthorityTelemetry] write error:',
@@ -140,6 +189,15 @@ function parseDailyRecord(
     lastPrimaryHitAt:  null,
     lastDrHitAt:       null,
     lastColdRebuildAt: null,
+    pageReads:        0,
+    debugReads:       0,
+    benchmarkReads:   0,
+    unknownReads:     0,
+    lastPageReadAt:      null,
+    lastDebugReadAt:     null,
+    lastBenchmarkReadAt: null,
+    lastPageReadSource:  null,
+    lastDebugReadSource: null,
   };
 
   if (!raw) return empty;
@@ -172,6 +230,15 @@ function parseDailyRecord(
     lastPrimaryHitAt:  raw['lastPrimaryHitAt']  ?? null,
     lastDrHitAt:       raw['lastDrHitAt']       ?? null,
     lastColdRebuildAt: raw['lastColdRebuildAt'] ?? null,
+    pageReads:        n('pageReads'),
+    debugReads:       n('debugReads'),
+    benchmarkReads:   n('benchmarkReads'),
+    unknownReads:     n('unknownReads'),
+    lastPageReadAt:      raw['lastPageReadAt']      ?? null,
+    lastDebugReadAt:     raw['lastDebugReadAt']     ?? null,
+    lastBenchmarkReadAt: raw['lastBenchmarkReadAt'] ?? null,
+    lastPageReadSource:  raw['lastPageReadSource']  ?? null,
+    lastDebugReadSource: raw['lastDebugReadSource'] ?? null,
   };
 }
 
@@ -184,11 +251,27 @@ function aggregate(days: DailyMetrics[], label: string): DailyMetrics {
       totalReads:    acc.totalReads    + d.totalReads,
       totalLatency:  acc.totalLatency  + (d.avgLatencyMs ?? 0) * (d.totalReads > 0 ? d.totalReads : 0),
       latencyCount:  acc.latencyCount  + (d.avgLatencyMs !== null ? d.totalReads : 0),
-      lastPrimaryHitAt:  acc.lastPrimaryHitAt  ?? d.lastPrimaryHitAt,
-      lastDrHitAt:       acc.lastDrHitAt       ?? d.lastDrHitAt,
-      lastColdRebuildAt: acc.lastColdRebuildAt ?? d.lastColdRebuildAt,
+      pageReads:     acc.pageReads     + d.pageReads,
+      debugReads:    acc.debugReads    + d.debugReads,
+      benchmarkReads: acc.benchmarkReads + d.benchmarkReads,
+      unknownReads:  acc.unknownReads  + d.unknownReads,
+      lastPrimaryHitAt:    acc.lastPrimaryHitAt    ?? d.lastPrimaryHitAt,
+      lastDrHitAt:         acc.lastDrHitAt         ?? d.lastDrHitAt,
+      lastColdRebuildAt:   acc.lastColdRebuildAt   ?? d.lastColdRebuildAt,
+      lastPageReadAt:      acc.lastPageReadAt      ?? d.lastPageReadAt,
+      lastDebugReadAt:     acc.lastDebugReadAt     ?? d.lastDebugReadAt,
+      lastBenchmarkReadAt: acc.lastBenchmarkReadAt ?? d.lastBenchmarkReadAt,
+      lastPageReadSource:  acc.lastPageReadSource  ?? d.lastPageReadSource,
+      lastDebugReadSource: acc.lastDebugReadSource ?? d.lastDebugReadSource,
     }),
-    { primaryHits: 0, drHits: 0, coldRebuilds: 0, totalReads: 0, totalLatency: 0, latencyCount: 0, lastPrimaryHitAt: null as string | null, lastDrHitAt: null as string | null, lastColdRebuildAt: null as string | null },
+    {
+      primaryHits: 0, drHits: 0, coldRebuilds: 0, totalReads: 0, totalLatency: 0, latencyCount: 0,
+      pageReads: 0, debugReads: 0, benchmarkReads: 0, unknownReads: 0,
+      lastPrimaryHitAt: null as string | null, lastDrHitAt: null as string | null,
+      lastColdRebuildAt: null as string | null, lastPageReadAt: null as string | null,
+      lastDebugReadAt: null as string | null, lastBenchmarkReadAt: null as string | null,
+      lastPageReadSource: null as string | null, lastDebugReadSource: null as string | null,
+    },
   );
 
   const tr = totals.totalReads;
@@ -205,9 +288,18 @@ function aggregate(days: DailyMetrics[], label: string): DailyMetrics {
     drHitRatio:       pct(totals.drHits),
     coldRebuildRatio: pct(totals.coldRebuilds),
     avgLatencyMs:     totals.latencyCount > 0 ? Math.round(totals.totalLatency / totals.latencyCount) : null,
-    lastPrimaryHitAt:  totals.lastPrimaryHitAt,
-    lastDrHitAt:       totals.lastDrHitAt,
-    lastColdRebuildAt: totals.lastColdRebuildAt,
+    lastPrimaryHitAt:    totals.lastPrimaryHitAt,
+    lastDrHitAt:         totals.lastDrHitAt,
+    lastColdRebuildAt:   totals.lastColdRebuildAt,
+    pageReads:        totals.pageReads,
+    debugReads:       totals.debugReads,
+    benchmarkReads:   totals.benchmarkReads,
+    unknownReads:     totals.unknownReads,
+    lastPageReadAt:      totals.lastPageReadAt,
+    lastDebugReadAt:     totals.lastDebugReadAt,
+    lastBenchmarkReadAt: totals.lastBenchmarkReadAt,
+    lastPageReadSource:  totals.lastPageReadSource,
+    lastDebugReadSource: totals.lastDebugReadSource,
   };
 }
 
