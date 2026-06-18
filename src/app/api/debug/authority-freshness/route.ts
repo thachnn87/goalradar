@@ -108,7 +108,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         liveCount:  0,
         drPresent:  false,
         verdict:    'RED',
-        note:       'Authority cache absent from KV — cold rebuild will serve next request.',
+        note:       'Authority cache absent from KV — cold rebuild will serve on demand. Non-critical; warm via orchestrator cron.',
       },
       { headers: { 'Cache-Control': 'no-store' } },
     );
@@ -121,9 +121,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const drPresent = dr?.version === 1;
 
   const verdict: 'GREEN' | 'YELLOW' | 'RED' =
-    source === 'absent' ? 'RED'
+    source === 'absent'             ? 'YELLOW' // cache cold — cold rebuild serves correctly
     : stale && source === 'primary' ? 'YELLOW'
-    : stale && source === 'dr'      ? 'RED'   // DR serving = primary evicted = degraded
+    : stale && source === 'dr'      ? 'RED'    // DR serving = primary evicted = degraded
     : 'GREEN';
 
   return NextResponse.json(
@@ -145,7 +145,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         ? `Authority cache stale — ${ageSec}s old vs ${ttlSec}s TTL. Next cron will refresh.`
         : source === 'dr'
         ? `Primary evicted — serving from DR (${ageSec}s old). Orchestrator cron may be down.`
-        : `Authority cache absent. Check AUTHORITY_CACHE_ENABLED and orchestrator cron.`,
+        : `Authority cache absent — cold rebuild serves on demand. Run orchestrator cron to pre-warm.`,
     },
     { headers: { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' } },
   );

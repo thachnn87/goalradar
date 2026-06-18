@@ -137,9 +137,15 @@ export async function GET(req: NextRequest) {
   const noSnapshot = results.filter((r) => r.status === 'no-snapshot');
   const ok         = results.filter((r) => r.status === 'ok');
 
+  const verdict =
+    unenriched.length > 0 ? 'RED'
+    : noSnapshot.length > 0 ? 'YELLOW'
+    : 'GREEN';
+
   return NextResponse.json({
     checkedAt:      new Date(now).toISOString(),
     feedAgeHours,
+    verdict,
     total:          finishedIds.length,
     ok:             ok.length,
     unenriched:     unenriched.length,

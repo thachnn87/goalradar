@@ -50,6 +50,9 @@ interface SubsystemResult {
   verdict:     SubsystemVerdict;
   durationMs:  number;
   summary:     string;
+  source:      string;   // endpoint path
+  timestamp:   string | null;  // checkedAt / auditedAt from subsystem response
+  reason:      string | null;  // note field from subsystem response
   detail?:     Record<string, unknown>;
 }
 
@@ -69,7 +72,7 @@ async function callSubsystem(
     const durationMs = Date.now() - t0;
 
     if (!res.ok) {
-      return { name, verdict: 'ERROR', durationMs, summary: `HTTP ${res.status}` };
+      return { name, verdict: 'ERROR', durationMs, summary: `HTTP ${res.status}`, source: path, timestamp: null, reason: `HTTP ${res.status}` };
     }
 
     const data = await res.json() as Record<string, unknown>;
@@ -81,16 +84,20 @@ async function callSubsystem(
       : raw === 'RED'  || raw === 'FAIL'  ? 'RED'
       : 'ERROR';
 
-    // Build a compact summary from the most relevant scalar fields
-    const summary = buildSummary(name, data);
+    const summary   = buildSummary(name, data);
+    const timestamp = (data.checkedAt ?? data.auditedAt) as string | null ?? null;
+    const reason    = (data.note) as string | null ?? null;
 
-    return { name, verdict, durationMs, summary, detail: data };
+    return { name, verdict, durationMs, summary, source: path, timestamp, reason, detail: data };
   } catch (err) {
     return {
       name,
       verdict:    'ERROR',
       durationMs: Date.now() - t0,
       summary:    err instanceof Error ? err.message : String(err),
+      source:     path,
+      timestamp:  null,
+      reason:     err instanceof Error ? err.message : String(err),
     };
   }
 }
@@ -106,8 +113,8 @@ function buildSummary(name: string, d: Record<string, unknown>): string {
     case 'integrity-audit':
       return `total=${d.totalMatches} pass=${d.pass} warn=${d.warn} fail=${d.fail}`;
     case 'enrichment-health': {
-      const m = d as { totalFinished?: number; unenrichedCount?: number; enrichmentRate?: string };
-      return `totalFinished=${m.totalFinished} unenriched=${m.unenrichedCount} rate=${m.enrichmentRate}`;
+      const m = d as { total?: number; ok?: number; unenriched?: number; noSnapshot?: number };
+      return `total=${m.total} ok=${m.ok} unenriched=${m.unenriched} noSnapshot=${m.noSnapshot}`;
     }
     default:
       return JSON.stringify(d).slice(0, 120);
@@ -169,7 +176,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       verdict,
       subsystems: subsystems.map(s => ({
         name:       s.name,
+        source:     s.source,
         verdict:    s.verdict,
+        timestamp:  s.timestamp,
+        reason:     s.reason,
         durationMs: s.durationMs,
         summary:    s.summary,
       })),
