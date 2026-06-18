@@ -27,6 +27,7 @@
 
 import { kv } from '@vercel/kv';
 import type { Match } from './types';
+import { recordAuthorityRead } from './authority-telemetry';
 import type { MatchSnapshot } from './match-snapshot';
 import { buildCanonicalMatch, type CanonicalMatch, type LiveEntry } from './canonical-match';
 import { espnLookupKvKey, espnMissSuppressed, type LookupMiss } from './espn-id-map';
@@ -437,6 +438,8 @@ export async function writeAuthorityCache(
  * @param builtAt   ISO-8601 timestamp passed through to cold rebuild if needed.
  */
 export async function readAuthorityCache(builtAt: string): Promise<CanonicalMatch[]> {
+  const _readStart = Date.now();
+
   if (KV_ENABLED) {
     // ── 1. Primary key ────────────────────────────────────────────────────
     try {
@@ -444,6 +447,7 @@ export async function readAuthorityCache(builtAt: string): Promise<CanonicalMatc
       if (envelope !== null && envelope.version === 1 && Array.isArray(envelope.matches)) {
         telemetry.hits++;
         logHit('primary', envelope);
+        recordAuthorityRead('primary', Date.now() - _readStart, builtAt); // fire-and-forget
         return envelope.matches;
       }
     } catch (err) {
@@ -459,6 +463,7 @@ export async function readAuthorityCache(builtAt: string): Promise<CanonicalMatc
       if (drEnvelope !== null && drEnvelope.version === 1 && Array.isArray(drEnvelope.matches)) {
         telemetry.drHits++;
         logHit('dr', drEnvelope);
+        recordAuthorityRead('dr', Date.now() - _readStart, builtAt); // fire-and-forget
         return drEnvelope.matches;
       }
     } catch (err) {
@@ -470,5 +475,7 @@ export async function readAuthorityCache(builtAt: string): Promise<CanonicalMatc
   }
 
   // ── 3. Cold rebuild ────────────────────────────────────────────────────
-  return coldRebuild(builtAt);
+  const matches = await coldRebuild(builtAt);
+  recordAuthorityRead('cold', Date.now() - _readStart, builtAt); // fire-and-forget
+  return matches;
 }
