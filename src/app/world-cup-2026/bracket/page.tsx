@@ -2,16 +2,46 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 
 // PERF-4.5
-import { getWCKnockoutMatchesCached } from '@/lib/api';
+import { getWCKnockoutMatchesCached, getWCAuthorityMatchesV2 } from '@/lib/api';
 import { matchPath } from '@/lib/url';
 import AdSlot from '@/components/AdSlot';
 import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
-import type { Match } from '@/lib/types';
+import type { Match, MatchStatus } from '@/lib/types';
+import type { CanonicalMatch } from '@/lib/canonical-match';
 import MatchCard from '@/components/MatchCard';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCBracket from '@/components/WCBracket';
 import { WC_KNOCKOUT_SLOTS, type WCKnockoutSlot } from '@/lib/wc-fixtures';
+
+// DATA-18B.1: Authority cache pilot feature flag.
+// Set AUTHORITY_CACHE_PILOT=true in Vercel env vars to activate.
+// Remove or set to any other value to revert to getWCKnockoutMatchesCached().
+const PILOT_ENABLED = process.env.AUTHORITY_CACHE_PILOT === 'true';
+
+/** Maps CanonicalMatch (authority cache type) to Match (bracket render type). */
+function canonicalToMatch(m: CanonicalMatch): Match {
+  const statusMap: Record<CanonicalMatch['state'], MatchStatus> = {
+    live:      'IN_PLAY',
+    finished:  'FINISHED',
+    scheduled: 'SCHEDULED',
+    cancelled: 'POSTPONED',
+  };
+  return {
+    id: m.id,
+    utcDate: m.utcDate,
+    status: statusMap[m.state],
+    matchday: m.matchday,
+    stage: m.stage,
+    group: m.group,
+    lastUpdated: m.lastUpdated,
+    competition: { id: 2000, name: 'FIFA World Cup', code: 'WC', type: 'CUP', emblem: '', area: { id: 2267, name: 'World', code: 'WLD', flag: null } },
+    homeTeam: m.homeTeam,
+    awayTeam: m.awayTeam,
+    score: m.score,
+    minute: m.minute ?? null,
+  };
+}
 
 export const revalidate = 21600; // align with WC TTL (6 hours) — bracket changes only when knockout results land
 
@@ -326,11 +356,17 @@ function FinalCard({ match }: { match: Match }) {
 // ---------------------------------------------------------------------------
 
 export default async function WCBracketPage() {
-  // getWCKnockoutMatches returns ALL WC matches — filter to knockout stages
+  // DATA-18B.1: pilot gate — authority cache path when AUTHORITY_CACHE_PILOT=true
   let allWCMatches: Match[] = [];
   try {
-    const data = await getWCKnockoutMatchesCached();
-    allWCMatches = data.matches;
+    if (PILOT_ENABLED) {
+      const builtAt = new Date().toISOString();
+      const data = await getWCAuthorityMatchesV2(builtAt);
+      allWCMatches = data.matches.map(canonicalToMatch);
+    } else {
+      const data = await getWCKnockoutMatchesCached();
+      allWCMatches = data.matches;
+    }
   } catch {
     // graceful degradation — fall back to local slot schedule below
   }
