@@ -27,6 +27,7 @@ import { prewarmWorldCup, type WorldCupPrewarmResult } from '@/lib/prewarm/world
 import { readRateSafeFromKV, isRateSafeModeActive, getRateSafeState } from '@/lib/rate-safe';
 import { COMPETITIONS } from '@/lib/types';
 import { revalidateWCPaths, type RevalidationRecord } from '@/lib/revalidation';
+import { recordCronRun }                             from '@/lib/cron-recorder';
 
 export const dynamic = 'force-dynamic';
 
@@ -253,6 +254,14 @@ export async function GET(req: NextRequest) {
 
   const totalElapsed = Date.now() - started;
   console.log(`[Cron] orchestrator done | total=${totalElapsed}ms`);
+
+  // Standard cron recorder — powers /api/debug/cron-status
+  const orcTriggerSource =
+    triggeredBy === 'header'    ? 'github-actions' as const
+    : triggeredBy === 'queryparam' ? 'queryparam' as const
+    : 'unknown' as const;
+  recordCronRun('orchestrator', totalElapsed, failed > 0 ? 'error' : 'ok', orcTriggerSource)
+    .catch(err => console.error('[Cron] recorder write failed:', err instanceof Error ? err.message : String(err)));
 
   // Persist run record — backward-compatible with /api/debug/prewarm-status
   // which reads PREWARM_RECORD_KEY from KV.  PERF-3 enrichment fields are

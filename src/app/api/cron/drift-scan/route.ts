@@ -20,11 +20,12 @@
  *   Schedule: 30 4 * * *  (04:30 UTC daily)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { kv }                        from '@vercel/kv';
-import { readAuthorityCache }        from '@/lib/authority-cache';
-import type { CanonicalMatch }       from '@/lib/canonical-match';
-import type { MatchSnapshot }        from '@/lib/match-snapshot';
+import { NextRequest, NextResponse }          from 'next/server';
+import { kv }                                from '@vercel/kv';
+import { readAuthorityCache }                from '@/lib/authority-cache';
+import type { CanonicalMatch }               from '@/lib/canonical-match';
+import type { MatchSnapshot }                from '@/lib/match-snapshot';
+import { recordCronRun, detectTriggerSource } from '@/lib/cron-recorder';
 
 export const dynamic     = 'force-dynamic';
 export const maxDuration = 60;
@@ -149,11 +150,15 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const _start        = Date.now();
+  const triggerSource = detectTriggerSource(req);
+
   const kvEnabled =
     typeof process.env.KV_REST_API_URL   === 'string' && process.env.KV_REST_API_URL   !== '' &&
     typeof process.env.KV_REST_API_TOKEN === 'string' && process.env.KV_REST_API_TOKEN !== '';
 
   if (!kvEnabled) {
+    await recordCronRun('drift-scan', Date.now() - _start, 'error', triggerSource);
     return NextResponse.json({ error: 'KV not configured' }, { status: 503 });
   }
 
@@ -166,6 +171,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     allMatches = await readAuthorityCache(builtAt);
   } catch (err) {
     console.error(`[DriftScan] authority cache read failed: ${err instanceof Error ? err.message : String(err)}`);
+    await recordCronRun('drift-scan', Date.now() - _start, 'error', triggerSource);
     return NextResponse.json({ error: 'Authority cache unavailable' }, { status: 503 });
   }
 
@@ -213,6 +219,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   if (red > 0) {
     console.error(`[DriftScan] ALERT red=${red} — score/state drift detected, manual repair required`);
   }
+
+  await recordCronRun('drift-scan', Date.now() - _start, 'ok', triggerSource);
 
   return NextResponse.json(
     {

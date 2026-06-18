@@ -1,0 +1,40 @@
+name: health-archive-cron
+
+# DATA-18OPS.2C — Scheduler for /api/cron/health-archive
+#
+# Verified available scheduler: GitHub Actions (same pattern as orchestrator-cron.yml).
+# Vercel Cron was not verified available (dashboard access required — DATA18OPS2B1).
+#
+# Schedule: */15 attempts every 15 min. GitHub Actions schedules are best-effort;
+# measured effective cadence on this repo is ~1-2h. This matches the GREEN
+# threshold (≤4h) in /api/debug/cron-status.
+#
+# The health-archive job is lightweight (~3-10s). No concurrency risk.
+# Writes to KV ZSET goalradar:health:archive — powers SLO compliance and
+# incident detection in the reliability subsystem.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: health-archive
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call health-archive
+        run: |
+          code=$(curl -sS -o /tmp/out.json -w '%{http_code}' \
+            --max-time 60 \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "https://www.goalradar.org/api/cron/health-archive")
+          cat /tmp/out.json
+          echo ""
+          [ "${code}" = "200" ] || { echo "ERROR: HTTP ${code}"; exit 1; }
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}

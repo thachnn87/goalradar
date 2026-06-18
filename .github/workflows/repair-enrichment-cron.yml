@@ -1,0 +1,39 @@
+name: repair-enrichment-cron
+
+# DATA-18OPS.2C — Scheduler for /api/cron/repair-enrichment
+#
+# Verified available scheduler: GitHub Actions (same pattern as orchestrator-cron.yml).
+# Vercel Cron was not verified available (dashboard access required — DATA18OPS2B1).
+#
+# Schedule: 04:00 UTC daily — outside peak match hours, 30 min before drift-scan.
+# GitHub Actions daily schedule is reliable (throttling primarily affects sub-hourly jobs).
+#
+# The repair-enrichment job scans all finished WC matches and invalidates
+# snapshots where score > 0 but goals.length == 0 (enrichment gap).
+# Typical runtime: 5-15s. Writes to KV only if degraded matches found.
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: repair-enrichment
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call repair-enrichment
+        run: |
+          code=$(curl -sS -o /tmp/out.json -w '%{http_code}' \
+            --max-time 60 \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "https://www.goalradar.org/api/cron/repair-enrichment")
+          cat /tmp/out.json
+          echo ""
+          [ "${code}" = "200" ] || { echo "ERROR: HTTP ${code}"; exit 1; }
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}

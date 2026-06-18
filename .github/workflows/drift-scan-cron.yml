@@ -1,0 +1,39 @@
+name: drift-scan-cron
+
+# DATA-18OPS.2C — Scheduler for /api/cron/drift-scan
+#
+# Verified available scheduler: GitHub Actions (same pattern as orchestrator-cron.yml).
+# Vercel Cron was not verified available (dashboard access required — DATA18OPS2B1).
+#
+# Schedule: 04:30 UTC daily — 30 min after repair-enrichment, so any snapshot
+# invalidations from repair-enrichment are complete before drift is scanned.
+#
+# The drift-scan job reads authority cache vs match snapshots for all finished
+# WC matches and logs any score/state/enrichment drift. Logging only — no writes.
+# Typical runtime: 3-8s. Now also writes goalradar:cron:drift-scan:last-run.
+
+on:
+  schedule:
+    - cron: '30 4 * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: drift-scan
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call drift-scan
+        run: |
+          code=$(curl -sS -o /tmp/out.json -w '%{http_code}' \
+            --max-time 60 \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "https://www.goalradar.org/api/cron/drift-scan")
+          cat /tmp/out.json
+          echo ""
+          [ "${code}" = "200" ] || { echo "ERROR: HTTP ${code}"; exit 1; }
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}

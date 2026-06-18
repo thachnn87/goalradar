@@ -25,6 +25,7 @@ import {
   type SubsystemVerdict,
   type Verdict,
 } from '@/lib/health-archive';
+import { recordCronRun, detectTriggerSource } from '@/lib/cron-recorder';
 
 export const dynamic     = 'force-dynamic';
 export const maxDuration = 60;
@@ -76,11 +77,15 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const _start       = Date.now();
+  const triggerSource = detectTriggerSource(req);
+
   const kvEnabled =
     typeof process.env.KV_REST_API_URL   === 'string' && process.env.KV_REST_API_URL   !== '' &&
     typeof process.env.KV_REST_API_TOKEN === 'string' && process.env.KV_REST_API_TOKEN !== '';
 
   if (!kvEnabled) {
+    await recordCronRun('health-archive', Date.now() - _start, 'error', triggerSource);
     return NextResponse.json({ error: 'KV not configured' }, { status: 503 });
   }
 
@@ -154,6 +159,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     `feed=${feed.verdict} fresh=${freshness.verdict}(${freshness.source}) ` +
     `enrich=${enrichment.verdict} pruned=${pruned}`,
   );
+
+  await recordCronRun('health-archive', Date.now() - _start, 'ok', triggerSource);
 
   return NextResponse.json(
     { capturedAt, overall, record, pruned },

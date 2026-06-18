@@ -22,12 +22,13 @@
  *       schedule manually in Vercel dashboard or external scheduler.
  */
 
-import { NextRequest, NextResponse }      from 'next/server';
-import { kv }                             from '@vercel/kv';
-import { espnEventKvKey }                 from '@/lib/espn-id-map';
-import { invalidateMatchSnapshot }        from '@/lib/match-snapshot';
-import type { MatchSnapshot }             from '@/lib/match-snapshot';
-import type { Match }                     from '@/lib/types';
+import { NextRequest, NextResponse }             from 'next/server';
+import { kv }                                   from '@vercel/kv';
+import { espnEventKvKey }                       from '@/lib/espn-id-map';
+import { invalidateMatchSnapshot }              from '@/lib/match-snapshot';
+import type { MatchSnapshot }                   from '@/lib/match-snapshot';
+import type { Match }                           from '@/lib/types';
+import { recordCronRun, detectTriggerSource }   from '@/lib/cron-recorder';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,17 +54,22 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const _start        = Date.now();
+  const triggerSource = detectTriggerSource(req);
+
   const kvEnabled =
     typeof process.env.KV_REST_API_URL   === 'string' && process.env.KV_REST_API_URL   !== '' &&
     typeof process.env.KV_REST_API_TOKEN === 'string' && process.env.KV_REST_API_TOKEN !== '';
 
   if (!kvEnabled) {
+    await recordCronRun('repair-enrichment', Date.now() - _start, 'error', triggerSource);
     return NextResponse.json({ error: 'KV not configured' }, { status: 503 });
   }
 
   // ── Read finished match IDs from dynamic KV feed ─────────────────────────
   const feedEntry = await kv.get<KVEntry<{ matches: Match[] }>>(FINISHED_FEED_KEY);
   if (!feedEntry) {
+    await recordCronRun('repair-enrichment', Date.now() - _start, 'error', triggerSource);
     return NextResponse.json({
       error:   'FINISHED feed not in KV — cannot determine which matches to repair',
       kvKey:   FINISHED_FEED_KEY,
@@ -104,6 +110,7 @@ export async function GET(req: NextRequest) {
   const toRepair = [...degraded, ...missing];
 
   if (!toRepair.length) {
+    await recordCronRun('repair-enrichment', Date.now() - _start, 'ok', triggerSource);
     return NextResponse.json({
       repairedAt: new Date().toISOString(),
       checked:    WC_FINISHED_IDS.length,
@@ -139,6 +146,8 @@ export async function GET(req: NextRequest) {
     ` degraded=${degraded.length} missing=${missing.length}`,
     { succeeded, failed },
   );
+
+  await recordCronRun('repair-enrichment', Date.now() - _start, failed.length > 0 ? 'error' : 'ok', triggerSource);
 
   return NextResponse.json({
     repairedAt:  new Date().toISOString(),
