@@ -233,7 +233,8 @@ export async function GET(req: NextRequest) {
   // Runs after prewarmWorldCup() so all per-match snapshot KV keys are fresh.
   // Gated by AUTHORITY_CACHE_ENABLED=true to allow safe rollback via env toggle.
   let authorityResult: AuthorityCacheEnvelope | null = null;
-  if (process.env.AUTHORITY_CACHE_ENABLED === 'true') {
+  // Default ON — disable by setting AUTHORITY_CACHE_ENABLED=false in Vercel dashboard.
+  if (process.env.AUTHORITY_CACHE_ENABLED !== 'false') {
     try {
       console.log('[Cron] orchestrator: writing authority cache (DATA-18C)');
       authorityResult = await writeAuthorityCache(new Date().toISOString(), 'cron:orchestrator');
@@ -337,7 +338,7 @@ export async function GET(req: NextRequest) {
       liveCount:  authorityResult.liveCount,
       ttlTier:    authorityResult.ttlTier,
       builtAt:    authorityResult.builtAt,
-    } : process.env.AUTHORITY_CACHE_ENABLED === 'true' ? { error: 'write failed' } : { skipped: 'AUTHORITY_CACHE_ENABLED not set' },
+    } : process.env.AUTHORITY_CACHE_ENABLED !== 'false' ? { error: 'write failed' } : { skipped: 'AUTHORITY_CACHE_ENABLED=false' },
     // DATA-9
     revalidation: revalidationRecord ? {
       success:     revalidationRecord.success,
