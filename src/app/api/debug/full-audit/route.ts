@@ -116,11 +116,19 @@ function auditAuthority(m: CanonicalMatch): { gate: MatchGate; issues: string[] 
   if (!VALID_STATES.has(m.state)) {
     issues.push(`invalid state: ${m.state}`);
   }
-  if (!m.homeTeam?.id || m.homeTeam.id === 0) {
-    issues.push('homeTeam.id missing or zero');
-  }
-  if (!m.awayTeam?.id || m.awayTeam.id === 0) {
-    issues.push('awayTeam.id missing or zero');
+  // Knockout scheduled matches legitimately have id=0 (teams not yet determined).
+  // Flag as YELLOW (TBD placeholder) not RED.
+  const isTBDSlot = m.state === 'scheduled' && m.stage !== 'GROUP_STAGE';
+  if (!isTBDSlot) {
+    if (!m.homeTeam?.id || m.homeTeam.id === 0) {
+      issues.push('homeTeam.id missing or zero');
+    }
+    if (!m.awayTeam?.id || m.awayTeam.id === 0) {
+      issues.push('awayTeam.id missing or zero');
+    }
+  } else if (!m.homeTeam?.id || m.homeTeam.id === 0) {
+    // Expected TBD — YELLOW severity only
+    issues.push('TBD: knockout teams not yet determined (expected)');
   }
   if (!m.score?.fullTime) {
     issues.push('score.fullTime missing');
@@ -147,8 +155,8 @@ function auditAuthority(m: CanonicalMatch): { gate: MatchGate; issues: string[] 
     i.startsWith('invalid state') ||
     i.startsWith('score.fullTime.home') ||
     i.startsWith('score.fullTime.away') ||
-    i.startsWith('homeTeam') ||
-    i.startsWith('awayTeam'),
+    (i.startsWith('homeTeam') && !i.includes('TBD')) ||
+    (i.startsWith('awayTeam') && !i.includes('TBD')),
   );
   return { gate: hasRedIssue ? 'RED' : 'YELLOW', issues };
 }
