@@ -66,6 +66,14 @@ const TTL_NORMAL = 900;  // no live or today matches
 /** 7-day disaster-recovery TTL — written on every successful cache write. */
 const DR_TTL_SEC = 7 * 24 * 3_600; // 604 800 s
 
+/**
+ * Maximum age for a DR-sourced authority cache when live matches are present.
+ * After this threshold, readAuthorityCache() triggers a cold rebuild rather than
+ * returning stale 'live' state from DR — prevents hub from showing finished
+ * matches as LIVE during orchestrator cron gaps.
+ */
+const DR_LIVE_STALE_MAX_MS = 120_000; // 2 minutes
+
 // ---------------------------------------------------------------------------
 // Versioned cache envelope (version: 1)
 // ---------------------------------------------------------------------------
@@ -465,10 +473,30 @@ export async function readAuthorityCache(
     try {
       const drEnvelope = await kv.get<AuthorityCacheEnvelope>(AUTHORITY_DR_KEY);
       if (drEnvelope !== null && drEnvelope.version === 1 && Array.isArray(drEnvelope.matches)) {
-        telemetry.drHits++;
-        logHit('dr', drEnvelope);
-        recordAuthorityRead('dr', Date.now() - _readStart, builtAt, attribution); // fire-and-forget
-        return drEnvelope.matches;
+        // WC-LIVE-STATE: if the DR cache has live matches and is older than
+        // DR_LIVE_STALE_MAX_MS, fall through to cold rebuild. Returning stale
+        // 'live' state would cause the hub to show finished matches as LIVE
+        // during orchestrator cron gaps.
+        if (drEnvelope.liveCount > 0) {
+          const drAgeMs = Date.now() - new Date(drEnvelope.builtAt).getTime();
+          if (drAgeMs > DR_LIVE_STALE_MAX_MS) {
+            console.warn(
+              `[Authority] DR stale for live tier | age=${Math.ceil(drAgeMs / 1000)}s | liveCount=${drEnvelope.liveCount}` +
+              ` | forcing cold rebuild to avoid stale live-state`,
+            );
+            // fall through to cold rebuild
+          } else {
+            telemetry.drHits++;
+            logHit('dr', drEnvelope);
+            recordAuthorityRead('dr', Date.now() - _readStart, builtAt, attribution); // fire-and-forget
+            return drEnvelope.matches;
+          }
+        } else {
+          telemetry.drHits++;
+          logHit('dr', drEnvelope);
+          recordAuthorityRead('dr', Date.now() - _readStart, builtAt, attribution); // fire-and-forget
+          return drEnvelope.matches;
+        }
       }
     } catch (err) {
       console.error(
