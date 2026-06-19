@@ -11,10 +11,15 @@
  * so the orchestrator shows correctly before its first post-2C-deploy run.
  *
  * Status thresholds (per job class):
- *   Orchestrator / Health-Archive (GitHub Actions ~2h effective cadence):
+ *   Orchestrator (30-min UptimeRobot hard cadence; GitHub Actions backup ~2h):
+ *     GREEN  : last run ≤ 60 min  (2× the 30-min UptimeRobot cadence)
+ *     YELLOW : 60–120 min         (missed ≥2 UptimeRobot cycles)
+ *     RED    : > 120 min or never
+ *
+ *   Health-Archive (GitHub Actions ~2h effective cadence):
  *     GREEN  : last run ≤ 4h ago
- *     YELLOW : 4–12h ago
- *     RED    : > 12h ago or never
+ *     YELLOW : 4–8h ago
+ *     RED    : > 8h ago or never
  *
  *   Repair-Enrichment / Drift-Scan (daily jobs):
  *     GREEN  : last run ≤ 36h ago
@@ -62,8 +67,8 @@ interface JobConfig {
 }
 
 const JOB_CONFIGS: Record<string, JobConfig> = {
-  'orchestrator':      { label: 'Orchestrator',      greenMaxMin: 240,  yellowMaxMin: 720,  implemented: true  },
-  'health-archive':    { label: 'Health Archive',    greenMaxMin: 240,  yellowMaxMin: 720,  implemented: true  },
+  'orchestrator':      { label: 'Orchestrator',      greenMaxMin: 60,   yellowMaxMin: 120,  implemented: true  },
+  'health-archive':    { label: 'Health Archive',    greenMaxMin: 240,  yellowMaxMin: 480,  implemented: true  },
   'repair-enrichment': { label: 'Repair Enrichment', greenMaxMin: 2160, yellowMaxMin: 4320, implemented: true  },
   'drift-scan':        { label: 'Drift Scan',        greenMaxMin: 2160, yellowMaxMin: 4320, implemented: true  },
   'health-check':      { label: 'Health Check',      greenMaxMin: 60,   yellowMaxMin: 240,  implemented: false },
