@@ -144,7 +144,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const score            = healthScore(allJobs);
   const verdict          = healthScoreVerdict(score);
 
-  const activeOutages    = implementedJobs.filter(j => j.outageStartedAt !== null);
+  const activeOutages    = implementedJobs.filter(j =>
+    (j.health === 'YELLOW' || j.health === 'RED' || j.health === 'UNKNOWN') &&
+    j.outageStartedAt !== null,
+  );
   const mostCriticalBad  = ranked.find(j => j.health === 'RED' || j.health === 'UNKNOWN' || j.health === 'YELLOW') ?? null;
 
   const oldestJob = implementedJobs
