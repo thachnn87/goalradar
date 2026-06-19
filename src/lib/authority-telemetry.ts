@@ -39,6 +39,25 @@ export type AuthorityReadPath  = 'primary' | 'dr' | 'cold';
 /** DATA-18C.6: who issued the readAuthorityCache() call. */
 export type AuthoritySourceType = 'page' | 'debug' | 'benchmark' | 'unknown';
 
+/** DATA-18B.2B: per-route read breakdown (page sourceType only). */
+export interface RouteMetrics {
+  route:          string;
+  reads:          number;
+  primaryHits:    number;
+  drHits:         number;
+  /** Internal accumulator — divide by latencyCount for avg. */
+  totalLatencyMs: number;
+  latencyCount:   number;
+  avgLatencyMs:   number | null;
+  /** % of total page reads that came from this route. */
+  pageShare:      number;
+  /** % of this route's reads served from primary cache. */
+  primaryShare:   number;
+  /** % of this route's reads served from DR cache. */
+  drShare:        number;
+  lastReadAt:     string | null;
+}
+
 export interface DailyMetrics {
   date:             string;
   primaryHits:      number;
@@ -64,6 +83,8 @@ export interface DailyMetrics {
   lastBenchmarkReadAt: string | null;
   lastPageReadSource:  string | null;
   lastDebugReadSource: string | null;
+  // ── DATA-18B.2B: per-route counters ──────────────────────────────────────
+  routes: Record<string, RouteMetrics>;
 }
 
 export interface TelemetryReport {
@@ -150,6 +171,21 @@ export function recordAuthorityRead(
     attributionWrites.push(kv.hset(key, { [sourceLastSourceField]: attribution.source }));
   }
 
+  // DATA-18B.2B: per-route counters (page reads only)
+  if (sourceType === 'page' && attribution?.source) {
+    const rp       = attribution.source;
+    const rpHitFld = path === 'primary' ? `r:${rp}:primaryHits`
+                   : path === 'dr'      ? `r:${rp}:drHits`
+                   : null; // cold rebuilds not tracked per-route
+    attributionWrites.push(
+      kv.hincrby(key, `r:${rp}:reads`, 1),
+      kv.hincrby(key, `r:${rp}:totalLatencyMs`, Math.round(latencyMs)),
+      kv.hincrby(key, `r:${rp}:latencyCount`, 1),
+      kv.hset(key, { [`r:${rp}:lastReadAt`]: timestamp }),
+    );
+    if (rpHitFld) attributionWrites.push(kv.hincrby(key, rpHitFld, 1));
+  }
+
   // All writes fire-and-forget — caller must NOT await this function.
   Promise.all([
     kv.hincrby(key, hitField,         1),
@@ -198,6 +234,7 @@ function parseDailyRecord(
     lastBenchmarkReadAt: null,
     lastPageReadSource:  null,
     lastDebugReadSource: null,
+    routes:           {},
   };
 
   if (!raw) return empty;
@@ -239,10 +276,90 @@ function parseDailyRecord(
     lastBenchmarkReadAt: raw['lastBenchmarkReadAt'] ?? null,
     lastPageReadSource:  raw['lastPageReadSource']  ?? null,
     lastDebugReadSource: raw['lastDebugReadSource'] ?? null,
+    routes: parseRoutes(raw),
   };
 }
 
+function parseRoutes(raw: Record<string, string>): Record<string, RouteMetrics> {
+  const routes: Record<string, RouteMetrics> = {};
+
+  // Collect all route names by scanning for keys matching r:{route}:reads
+  for (const field of Object.keys(raw)) {
+    if (!field.startsWith('r:') || !field.endsWith(':reads')) continue;
+    const route  = field.slice(2, -6); // strip leading 'r:' and trailing ':reads'
+    const reads  = parseInt(raw[field] ?? '0', 10) || 0;
+    if (reads === 0) continue;
+
+    const primaryHits   = parseInt(raw[`r:${route}:primaryHits`]   ?? '0', 10) || 0;
+    const drHits        = parseInt(raw[`r:${route}:drHits`]        ?? '0', 10) || 0;
+    const totalLatency  = parseInt(raw[`r:${route}:totalLatencyMs`] ?? '0', 10) || 0;
+    const latencyCount  = parseInt(raw[`r:${route}:latencyCount`]  ?? '0', 10) || 0;
+    routes[route] = {
+      route,
+      reads,
+      primaryHits,
+      drHits,
+      totalLatencyMs: totalLatency,
+      latencyCount,
+      avgLatencyMs:   latencyCount > 0 ? Math.round(totalLatency / latencyCount) : null,
+      pageShare:      0, // computed after all routes are known
+      primaryShare:   reads > 0 ? Math.round((primaryHits / reads) * 10_000) / 100 : 0,
+      drShare:        reads > 0 ? Math.round((drHits      / reads) * 10_000) / 100 : 0,
+      lastReadAt:     raw[`r:${route}:lastReadAt`] ?? null,
+    };
+  }
+
+  // Compute pageShare once we know all routes
+  const totalPageReads = Object.values(routes).reduce((s, r) => s + r.reads, 0);
+  if (totalPageReads > 0) {
+    for (const r of Object.values(routes)) {
+      r.pageShare = Math.round((r.reads / totalPageReads) * 10_000) / 100;
+    }
+  }
+
+  return routes;
+}
+
 function aggregate(days: DailyMetrics[], label: string): DailyMetrics {
+  // Merge route data across days keyed by route path
+  const routeAccum: Record<string, {
+    reads: number; primaryHits: number; drHits: number;
+    totalLatencyMs: number; latencyCount: number; lastReadAt: string | null;
+  }> = {};
+
+  for (const d of days) {
+    for (const [route, rm] of Object.entries(d.routes)) {
+      if (!routeAccum[route]) {
+        routeAccum[route] = { reads: 0, primaryHits: 0, drHits: 0, totalLatencyMs: 0, latencyCount: 0, lastReadAt: null };
+      }
+      const acc = routeAccum[route];
+      acc.reads          += rm.reads;
+      acc.primaryHits    += rm.primaryHits;
+      acc.drHits         += rm.drHits;
+      acc.totalLatencyMs += rm.totalLatencyMs;
+      acc.latencyCount   += rm.latencyCount;
+      acc.lastReadAt      = acc.lastReadAt ?? rm.lastReadAt;
+    }
+  }
+
+  const totalRouteReads = Object.values(routeAccum).reduce((s, r) => s + r.reads, 0);
+  const routes: Record<string, RouteMetrics> = {};
+  for (const [route, acc] of Object.entries(routeAccum)) {
+    routes[route] = {
+      route,
+      reads:          acc.reads,
+      primaryHits:    acc.primaryHits,
+      drHits:         acc.drHits,
+      totalLatencyMs: acc.totalLatencyMs,
+      latencyCount:   acc.latencyCount,
+      avgLatencyMs:   acc.latencyCount > 0 ? Math.round(acc.totalLatencyMs / acc.latencyCount) : null,
+      pageShare:      totalRouteReads > 0 ? Math.round((acc.reads / totalRouteReads) * 10_000) / 100 : 0,
+      primaryShare:   acc.reads > 0 ? Math.round((acc.primaryHits / acc.reads) * 10_000) / 100 : 0,
+      drShare:        acc.reads > 0 ? Math.round((acc.drHits      / acc.reads) * 10_000) / 100 : 0,
+      lastReadAt:     acc.lastReadAt,
+    };
+  }
+
   const totals = days.reduce(
     (acc, d) => ({
       primaryHits:   acc.primaryHits   + d.primaryHits,
@@ -300,6 +417,7 @@ function aggregate(days: DailyMetrics[], label: string): DailyMetrics {
     lastBenchmarkReadAt: totals.lastBenchmarkReadAt,
     lastPageReadSource:  totals.lastPageReadSource,
     lastDebugReadSource: totals.lastDebugReadSource,
+    routes,
   };
 }
 
