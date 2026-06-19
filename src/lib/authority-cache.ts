@@ -509,5 +509,26 @@ export async function readAuthorityCache(
   // ── 3. Cold rebuild ────────────────────────────────────────────────────
   const matches = await coldRebuild(builtAt);
   recordAuthorityRead('cold', Date.now() - _readStart, builtAt, attribution); // fire-and-forget
+
+  // Write-back: cache the cold-rebuild result to primary KV so subsequent
+  // reads within the TTL window are served from primary instead of triggering
+  // another cold rebuild (thundering-herd guard for orchestrator-down scenarios).
+  if (KV_ENABLED) {
+    const todayUTC = builtAt.split('T')[0];
+    const liveCount = matches.filter(m => m.state === 'live').length;
+    const ttlTier   = deriveTtlTier(matches, todayUTC);
+    const ttlSec    = ttlSecForTier(ttlTier);
+    const envelope: AuthorityCacheEnvelope = {
+      version: 1, builtAt, matchCount: matches.length, liveCount, ttlTier, matches,
+    };
+    // Fire-and-forget — do not block the return value.
+    kv.set(AUTHORITY_KEY, envelope, { ex: ttlSec }).catch((err) =>
+      console.error('[Authority] write-back error after cold rebuild:', err instanceof Error ? err.message : String(err)),
+    );
+    console.log(
+      `[Authority] WRITE-BACK | ${AUTHORITY_KEY} | ${matches.length} matches | ttl=${ttlSec}s | live=${liveCount}`,
+    );
+  }
+
   return matches;
 }
