@@ -2,9 +2,10 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 
 import {
-  getWCLiveMatchesCached   as getWCLiveMatches,
   getUpcomingMatchesCached as getUpcomingMatches,
 } from '@/lib/api';
+// WC-LIVE-SSOT: single source of truth for live WC match state
+import { getCurrentLiveMatches } from '@/lib/wc-live-ssot';
 import type { Match } from '@/lib/types';
 import { matchPath } from '@/lib/url';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -239,12 +240,12 @@ export default async function WatchLivePage() {
   // Fetch live + upcoming WC matches in parallel.
   // Both are prewarmed by /api/cron/prewarm-worldcup → KV hit, no API call.
   const [liveRes, upcomingRes] = await Promise.allSettled([
-    getWCLiveMatches(),
+    getCurrentLiveMatches(),
     getUpcomingMatches('WC'),
   ]);
 
   const liveMatches: Match[] =
-    liveRes.status === 'fulfilled' ? liveRes.value.matches : [];
+    liveRes.status === 'fulfilled' ? liveRes.value : [];
 
   // Derive today's upcoming WC matches from the prewarmed fixtures instead of
   // calling getTodayMatches() (fetchDirect, all-competitions, unprewarmed).

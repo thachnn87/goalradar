@@ -6,6 +6,8 @@ import {
   getWCKnockoutMatchesCached,
   getStandingsCached,
 } from '@/lib/api';
+// WC-LIVE-SSOT: single source of truth for live WC match state
+import { getCurrentLiveMatches } from '@/lib/wc-live-ssot';
 import { classifyMatchState } from '@/lib/match-classify';
 import type { Match, StandingTable } from '@/lib/types';
 import type { CanonicalMatch } from '@/lib/canonical-match';
@@ -278,11 +280,12 @@ export default async function WorldCup2026Page() {
   const today = todayUTC();
 
   const builtAt = new Date().toISOString();
-  const [authorityResult, standingsResult, knockoutResult] =
+  const [authorityResult, standingsResult, knockoutResult, liveResult] =
     await Promise.allSettled([
       getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026', sourceType: 'page' }),
       getStandingsCached('WC'),
       getWCKnockoutMatchesCached(),
+      getCurrentLiveMatches(),
     ]);
 
   const allAuthority: CanonicalMatch[] =
@@ -294,7 +297,8 @@ export default async function WorldCup2026Page() {
 
   const classify = (m: CanonicalMatch) => classifyMatchState(m, today);
 
-  const allLive: CanonicalMatch[] = allAuthority.filter((m) => classify(m) === 'live');
+  // WC-LIVE-SSOT: live count comes from the live-cache KV, not authority-cache filtering
+  const allLive: Match[] = liveResult.status === 'fulfilled' ? liveResult.value : [];
   const todayMatches               = allAuthority.filter((m) => classify(m) === 'today');
   const upcomingMatches            = allAuthority.filter((m) => classify(m) === 'upcoming').slice(0, 12);
   const recentResults: CanonicalMatch[] = allAuthority
@@ -319,7 +323,11 @@ export default async function WorldCup2026Page() {
       <div className="max-w-5xl mx-auto space-y-10 pb-12">
         {/* PERF-8 Phase 3: seed KV snapshots for the first visible matches */}
         <SnapshotPrewarmHints
-          ids={[...allLive, ...todayMatches, ...upcomingMatches].slice(0, 10).map((m) => m.id)}
+          ids={[
+            ...allLive.map(m => m.id),
+            ...todayMatches.map(m => m.id),
+            ...upcomingMatches.map(m => m.id),
+          ].slice(0, 10)}
         />
         <Breadcrumb
           items={[{ label: 'Home', href: '/' }, { label: 'World Cup 2026' }]}

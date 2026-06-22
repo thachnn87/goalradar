@@ -5,11 +5,12 @@ import Link from 'next/link';
 // DATA-4 unified: getWCAuthorityMatchesCached merges upcoming + recent WC feeds.
 import {
   getTodayMatchesCached,
-  getWCLiveMatchesCached,
   getWCKnockoutMatchesCached,
   getStandingsCached,
   getWCAuthorityMatchesCached,
 } from '@/lib/api';
+// WC-LIVE-SSOT: single source of truth for live WC match state
+import { getCurrentLiveMatches } from '@/lib/wc-live-ssot';
 import type { Match, StandingTable } from '@/lib/types';
 import MatchCard from '@/components/MatchCard';
 import WCGroupTable from '@/components/WCGroupTable';
@@ -564,7 +565,7 @@ export default async function HomePage() {
     wcKnockoutResult,
   ] = await Promise.allSettled([
     getTodayMatchesCached(),
-    wcActive ? getWCLiveMatchesCached()         : Promise.resolve({ matches: [] as Match[] }),
+    wcActive ? getCurrentLiveMatches().then(m => ({ matches: m })) : Promise.resolve({ matches: [] as Match[] }),
     wcActive ? getStandingsCached('WC')         : Promise.resolve({ standings: [] as StandingTable[], competition: { name: '', emblem: '' } }),
     wcActive ? getWCAuthorityMatchesCached()    : Promise.resolve({ matches: [] as Match[] }),
     wcActive ? getWCKnockoutMatchesCached()     : Promise.resolve({ matches: [] as Match[] }),
