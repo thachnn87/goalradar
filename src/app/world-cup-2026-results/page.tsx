@@ -230,7 +230,7 @@ export default async function WC2026ResultsPage() {
             </div>
             <Link href="/world-cup-2026/results"
               className="inline-block mt-4 text-xs text-yellow-500 hover:text-yellow-300 transition-colors">
-              View all results with stats →
+              View all results →
             </Link>
           </section>
         )}

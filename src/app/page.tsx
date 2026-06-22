@@ -673,7 +673,7 @@ export default async function HomePage() {
     <div className="space-y-5 md:space-y-8 lg:space-y-10">
 
       {/* ── Countdown banner — sits above everything, slim strip ─────────── */}
-      <WCCountdownBanner />
+      <WCCountdownBanner liveCount={wcLive.length} />
 
       {/* ── 1. Hero ─────────────────────────────────────────────────────── */}
       {wcActive

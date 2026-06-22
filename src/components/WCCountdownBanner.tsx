@@ -57,7 +57,7 @@ function Dot() {
 // Public component
 // ---------------------------------------------------------------------------
 
-export default function WCCountdownBanner() {
+export default function WCCountdownBanner({ liveCount = 0 }: { liveCount?: number }) {
   const now           = Date.now();
   const openingMs     = new Date(OPENING_MATCH_UTC).getTime();
   const tournamentEnd = new Date(TOURNAMENT_END_UTC).getTime();
@@ -65,31 +65,52 @@ export default function WCCountdownBanner() {
   // Don't render after the tournament is over
   if (now > tournamentEnd) return null;
 
-  // Tournament is live
+  // Tournament is in progress
   if (now >= openingMs) {
+    if (liveCount > 0) {
+      // Matches are actually in play — show pulsing LIVE NOW
+      return (
+        <div className="w-full bg-gradient-to-r from-yellow-950 via-gray-900 to-yellow-950 border-b border-yellow-700/30">
+          <div className="max-w-5xl mx-auto px-4 py-2 flex items-center justify-between gap-4">
+            {/* Left — live indicator */}
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+              </span>
+              <span className="text-red-400 text-xs font-bold uppercase tracking-wider whitespace-nowrap">
+                <span className="hidden md:inline">FIFA World Cup 2026 — LIVE NOW</span>
+                <span className="md:hidden">WC26 LIVE NOW</span>
+              </span>
+            </div>
+            {/* Right — CTA to live scores */}
+            <Link
+              href="/live"
+              className="text-xs font-semibold text-yellow-400 hover:text-yellow-200 transition-colors shrink-0 flex items-center gap-1"
+            >
+              Live scores <span aria-hidden>→</span>
+            </Link>
+          </div>
+        </div>
+      );
+    }
+
+    // Tournament underway but no matches in play right now
     return (
       <div className="w-full bg-gradient-to-r from-yellow-950 via-gray-900 to-yellow-950 border-b border-yellow-700/30">
         <div className="max-w-5xl mx-auto px-4 py-2 flex items-center justify-between gap-4">
-          {/* Left — live indicator */}
           <div className="flex items-center gap-2">
-            <span className="relative flex h-2 w-2 shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
-            </span>
-            <span className="text-red-400 text-xs font-bold uppercase tracking-wider whitespace-nowrap">
-              <span className="hidden md:inline">FIFA World Cup 2026 — LIVE NOW</span>
-              <span className="md:hidden">WC26 LIVE NOW</span>
+            <span className="text-yellow-500 text-xs" aria-hidden>⚽</span>
+            <span className="text-yellow-500/80 text-xs font-bold uppercase tracking-wider whitespace-nowrap">
+              <span className="hidden md:inline">FIFA World Cup 2026 — In Progress</span>
+              <span className="md:hidden">WC26 In Progress</span>
             </span>
           </div>
-
-          {/* Right — CTA.
-              DATA-1 Phase 2: must land on the live-scores experience (/live),
-              not the hub — the label says "Live scores". */}
           <Link
-            href="/live"
+            href="/world-cup-2026"
             className="text-xs font-semibold text-yellow-400 hover:text-yellow-200 transition-colors shrink-0 flex items-center gap-1"
           >
-            Live scores <span aria-hidden>→</span>
+            Fixtures &amp; Results <span aria-hidden>→</span>
           </Link>
         </div>
       </div>

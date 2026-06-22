@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 // PERF-4.5 / DATA-4 unified authority
-import { getUpcomingMatchesCached, getRecentMatchesCached, getWCAuthorityMatchesCached } from '@/lib/api';
+import { getUpcomingMatchesCached, getRecentMatchesCached, getWCAuthorityMatchesCached, getWCLiveMatchesCached } from '@/lib/api';
 import MatchCard from '@/components/MatchCard';
 import CompetitionSelector from '@/components/CompetitionSelector';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -214,6 +214,10 @@ export default async function SchedulePage({
   const competitionMeta = COMPETITIONS.find((c) => c.code === competition);
   const competitionName = competitionMeta?.name ?? competition;
 
+  const wcLiveResult = competition === 'WC'
+    ? await getWCLiveMatchesCached()
+    : { matches: [] as Match[] };
+
   return (
     <div className="space-y-6">
       <AnalyticsTracker event={{
@@ -239,9 +243,10 @@ export default async function SchedulePage({
         </p>
       </div>
 
-      {/* Show compact countdown only when WC tab is selected */}
-      {/* LIVE-2: no live data fetched on this page — CTA defaults to /live */}
-      {competition === 'WC' && <WCCountdown compact currentPath="/schedule" />}
+      {/* Show compact countdown when WC tab is selected, with real live match data */}
+      {competition === 'WC' && (
+        <WCCountdown compact currentPath="/schedule" liveMatches={wcLiveResult.matches} />
+      )}
 
       {/* Above-fold banner — height reserved to prevent CLS */}
       <AdSlot slotId="schedule-top" variant="banner" />

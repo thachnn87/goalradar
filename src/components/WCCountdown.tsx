@@ -79,8 +79,8 @@ export default function WCCountdown({
 }: {
   compact?: boolean;
   /** LIVE-2: in-play WC matches, passed by pages that already fetch them
-   *  (zero extra fetches). Omitted → CTA defaults to /live. */
-  liveMatches?: CanonicalMatch[];
+   *  (zero extra fetches). Omitted → treated as no live matches (tournament in progress). */
+  liveMatches?: Array<Pick<CanonicalMatch, 'id' | 'homeTeam' | 'awayTeam'>>;
   /** LIVE-2: pathname of the rendering page — used by the self-reference guard. */
   currentPath?: string;
 }) {
@@ -97,8 +97,10 @@ export default function WCCountdown({
   if (isLive) {
     // ── LIVE-2: dynamic CTA ──────────────────────────────────────────────
     // Exactly one live match  → "Match Center →"  → canonical match page
-    // Otherwise (0 or many)   → "View Live Scores →" → /live
+    // Multiple live matches   → "View Live Scores →" → /live
+    // No live matches         → "Fixtures & Results →" → /world-cup-2026
     const live = liveMatches ?? [];
+    const hasLive = live.length > 0;
     let ctaHref:  string;
     let ctaLabel: string;
     let ctaMatchId: number | null = null;
@@ -108,9 +110,12 @@ export default function WCCountdown({
       ctaHref   = matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name);
       ctaLabel  = 'Match Center →';
       ctaMatchId = m.id;
-    } else {
+    } else if (live.length > 1) {
       ctaHref  = '/live';
       ctaLabel = 'View Live Scores →';
+    } else {
+      ctaHref  = '/world-cup-2026';
+      ctaLabel = 'Fixtures & Results →';
     }
 
     // Safeguard: the CTA must never point at the page it is rendered on.
@@ -120,7 +125,8 @@ export default function WCCountdown({
       ctaMatchId = null;
     }
 
-    // Tournament is underway — show live banner instead
+    // Tournament is underway — show in-progress banner.
+    // Pulsing red dot and "is LIVE" only appear when matches are actually in play.
     return (
       <div className={`rounded-2xl border border-yellow-700/30 bg-gradient-to-br from-yellow-950/50 to-gray-900 overflow-hidden ${compact ? 'p-4' : 'p-5 sm:p-6'}`}>
         <div className="flex items-center justify-between gap-4">
@@ -128,18 +134,22 @@ export default function WCCountdown({
             <span className="text-2xl">🏆</span>
             <div>
               <div className="flex items-center gap-2">
-                <span className="relative flex h-2.5 w-2.5 shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
-                </span>
-                <p className="text-white font-bold text-sm sm:text-base">FIFA World Cup 2026 is LIVE</p>
+                {hasLive && (
+                  <span className="relative flex h-2.5 w-2.5 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+                  </span>
+                )}
+                <p className="text-white font-bold text-sm sm:text-base">
+                  {hasLive ? 'FIFA World Cup 2026 is LIVE' : 'FIFA World Cup 2026'}
+                </p>
               </div>
               <p className="text-gray-500 text-xs mt-0.5">
                 {live.length === 1
                   ? `${live[0].homeTeam?.shortName ?? live[0].homeTeam?.name ?? 'TBD'} vs ${live[0].awayTeam?.shortName ?? live[0].awayTeam?.name ?? 'TBD'} — in play`
                   : live.length > 1
                     ? `${live.length} matches in play`
-                    : 'USA · Canada · Mexico'}
+                    : 'No matches live right now'}
               </p>
             </div>
           </div>
