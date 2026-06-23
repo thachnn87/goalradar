@@ -2,7 +2,12 @@
 
 **Date:** 2026-06-23
 
-# TEAM_NOT_READY
+# GATE: TEAM_READY ✅ (recovery executed + verified)
+
+> Audit verdict was **TEAM_NOT_READY**. On user authorization the recovery was
+> executed and verified in production — gate is now **TEAM_READY**. The audit
+> sections below are preserved as the diagnostic record; the recovery outcome is
+> in "Recovery executed" near the end.
 
 > Filename note: written as `DATA18TEAM1B_FINAL_VERDICT.md` because a generic
 > `FINAL_VERDICT.md` already exists for the (incorrectly-closed) DATA-18TEAM.1.
@@ -78,6 +83,31 @@ be reviewed before committing.
 
 ---
 
+## Recovery executed (commit `093478f`)
+
+User authorized "commit + deploy the fix." Executed:
+
+1. **Committed + pushed** the 3 uncommitted fix files (`api.ts`, `refresh.ts`,
+   `orchestrator/route.ts`) as `093478f` — the DATA-18TEAM.1 remediation.
+2. **Deploy stall was transient** — `093478f` (and the `team-cache` instrument)
+   deployed within ~2 min on this push; the earlier 30-min non-deploy did not recur.
+3. **Verified in production:**
+   - All 5 team pages render: Argentina / France / Brazil / Spain / Germany
+     ("… – Squad, Fixtures & Results"), **no "Team Data Unavailable"**.
+   - `team-cache` endpoint: all 5 → `KV.exists=true`, names populated,
+     `render="TEAM (from KV)"`.
+   - `extractTeamIdsFromStandings()` → **158** team ids (warming source healthy).
+   - Reader provider-fallback self-healed the 5 pages on first hit; orchestrator
+     Phase 4 now warms up to 25 teams/run, with the 6h-TTL/on-miss fallback
+     covering the rest. Full-population warming completes over the next cron cycles.
+
+**Note:** a cold orchestrator run now exceeds ~240s (Phase 4 warms ~25 teams at
+~7s each + other phases). On-demand fallback + incremental cron warming make this
+non-blocking, but if cold-start wall-time becomes an issue, lower
+`TEAM_MAX_CALLS_PER_RUN` or move team warming to its own cron. (Optional follow-up.)
+
+---
+
 ## Deliverables
 
 | Document | Status |
@@ -88,8 +118,9 @@ be reviewed before committing.
 | TEAM_WARMING_AUDIT.md | ✅ |
 | TEAM_RECOVERY_PLAN.md | ✅ (supersedes stale DATA-18TEAM.1 version) |
 | DATA18TEAM1B_FINAL_VERDICT.md | ✅ this document |
-| `/api/debug/team-cache` (read-only instrument, `e245f8b`) | ⚠️ committed, pending deploy |
+| `/api/debug/team-cache` (read-only instrument, `e245f8b`) | ✅ deployed |
+| Fix (`api.ts` + `refresh.ts` + `orchestrator`, `093478f`) | ✅ committed + deployed + verified |
 
 ---
 
-# GATE: TEAM_NOT_READY
+# GATE: TEAM_READY ✅ (audit verdict was TEAM_NOT_READY; recovery executed + verified)
