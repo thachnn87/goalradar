@@ -297,12 +297,18 @@ export default async function WorldCup2026Page() {
 
   const classify = (m: CanonicalMatch) => classifyMatchState(m, today);
 
-  // WC-LIVE-SSOT: live count comes from the live-cache KV, not authority-cache filtering
+  // WC-LIVE-SSOT: live comes from the live-cache KV (allLive), not authority filtering.
   const allLive: Match[] = liveResult.status === 'fulfilled' ? liveResult.value : [];
-  const todayMatches               = allAuthority.filter((m) => classify(m) === 'today');
-  const upcomingMatches            = allAuthority.filter((m) => classify(m) === 'upcoming').slice(0, 12);
+  const liveMatchIds = new Set(allLive.map((m) => m.id));
+  // DATA-18B.3E: a match the authority cache still marks live but that the live
+  // SSOT no longer lists has ended → bucket it as finished so it leaves the
+  // SSOT-gated live grid and appears in Recent Results (never as LIVE).
+  const effectiveBucket = (m: CanonicalMatch) =>
+    liveMatchIds.has(m.id) ? 'live' : classify(m) === 'live' ? 'finished' : classify(m);
+  const todayMatches               = allAuthority.filter((m) => effectiveBucket(m) === 'today');
+  const upcomingMatches            = allAuthority.filter((m) => effectiveBucket(m) === 'upcoming').slice(0, 12);
   const recentResults: CanonicalMatch[] = allAuthority
-    .filter((m) => classify(m) === 'finished')
+    .filter((m) => effectiveBucket(m) === 'finished')
     .sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime())
     .slice(0, 10);
 

@@ -30,3 +30,18 @@ export async function getCurrentLiveMatches(): Promise<Match[]> {
   const { matches } = await getWCLiveMatchesCached();
   return matches;
 }
+
+/**
+ * Returns the set of currently-live WC match IDs.
+ *
+ * DATA-18B.3E LIVE-SOURCE-UNIFICATION: every WC listing page must derive its
+ * "is this match live" decision from `liveMatchIds.has(match.id)` against this
+ * set — never from authority `state === 'live'`, `classifyMatchState() === 'live'`,
+ * or raw `status === 'IN_PLAY' | 'PAUSED'`. A match the authority cache still
+ * marks live but that is absent from this set has ended and must render as
+ * finished, not live.
+ */
+export async function getLiveMatchIdSet(): Promise<Set<number>> {
+  const matches = await getCurrentLiveMatches();
+  return new Set(matches.map((m) => m.id));
+}

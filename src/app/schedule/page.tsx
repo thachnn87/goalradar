@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 // PERF-4.5 / DATA-4 unified authority
 import { getUpcomingMatchesCached, getRecentMatchesCached, getWCAuthorityMatchesCached } from '@/lib/api';
 // WC-LIVE-SSOT: single source of truth for live WC match state
-import { getCurrentLiveMatches } from '@/lib/wc-live-ssot';
+import { getCurrentLiveMatches, getLiveMatchIdSet } from '@/lib/wc-live-ssot';
 import MatchCard from '@/components/MatchCard';
 import CompetitionSelector from '@/components/CompetitionSelector';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -80,8 +80,19 @@ async function ScheduleContent({
       // DATA-4 unified: authority function merges SCHEDULED/TIMED + FINISHED so a
       // finished match is never shown as upcoming. Schedule shows SCHEDULED/TIMED
       // matches going forward; past matches have correct FT scores via MatchCard.
-      const authority = await getWCAuthorityMatchesCached();
-      matches = authority.matches;
+      const [authority, liveMatchIds] = await Promise.all([
+        getWCAuthorityMatchesCached(),
+        getLiveMatchIdSet().catch(() => new Set<number>()),
+      ]);
+      // DATA-18B.3E: live is decided ONLY by the live SSOT (liveMatchIds), never
+      // by authority status. Normalise status so MatchCard (which reads
+      // match.status) never shows a non-SSOT match as live: SSOT-live → IN_PLAY;
+      // authority-live but absent from SSOT (ended) → FINISHED.
+      matches = authority.matches.map((m) => {
+        const authLive = m.status === 'IN_PLAY' || m.status === 'PAUSED';
+        if (liveMatchIds.has(m.id)) return authLive ? m : { ...m, status: 'IN_PLAY' as Match['status'] };
+        return authLive ? { ...m, status: 'FINISHED' as Match['status'] } : m;
+      });
       mode = 'upcoming';
     } else {
       const upcoming = await getUpcomingMatchesCached(competition);

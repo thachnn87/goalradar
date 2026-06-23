@@ -5,6 +5,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getWCAuthorityMatchesV2 } from '@/lib/api';
+import { getLiveMatchIdSet } from '@/lib/wc-live-ssot';
 import type { CanonicalMatch } from '@/lib/canonical-match';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -92,9 +93,22 @@ function statusBadge(e: ResultsEntry): { label: string; cls: string } {
 export default async function WC2026ResultsPage() {
   const builtAt = new Date().toISOString();
 
-  let entries: ResultsEntry[] = [];
-  const { matches } = await getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026/results', sourceType: 'page' }).catch(() => ({ matches: [] as CanonicalMatch[] }));
-  entries = matches.map(fromCanonical);
+  const [{ matches }, liveMatchIds] = await Promise.all([
+    getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026/results', sourceType: 'page' }).catch(() => ({ matches: [] as CanonicalMatch[] })),
+    getLiveMatchIdSet().catch(() => new Set<number>()),
+  ]);
+
+  // DATA-18B.3E: live is decided ONLY by the live SSOT (liveMatchIds), never by
+  // authority `state`. A match the authority cache still marks 'live' but that
+  // the SSOT no longer lists has ended → render as finished.
+  const entries: ResultsEntry[] = matches.map(fromCanonical).map((e) => ({
+    ...e,
+    state: (liveMatchIds.has(e.id)
+      ? 'live'
+      : e.state === 'live'
+        ? 'finished'
+        : e.state) as ResultsEntry['state'],
+  }));
 
   const live     = entries.filter((e) => e.state === 'live');
   const finished = entries

@@ -9,6 +9,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { getWCAuthorityMatchesV2 } from '@/lib/api';
+import { getLiveMatchIdSet } from '@/lib/wc-live-ssot';
 import type { CanonicalMatch } from '@/lib/canonical-match';
 import { matchPath } from '@/lib/url';
 import AdSlot from '@/components/AdSlot';
@@ -305,17 +306,30 @@ export default async function MatchesTodayPage() {
   const tomorrow = tomorrowUTC();
   const builtAt  = new Date().toISOString();
 
-  const { matches: allMatches } = await getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026/matches-today', sourceType: 'page' }).catch(() => ({ matches: [] as CanonicalMatch[] }));
+  const [{ matches: allMatches }, liveMatchIds] = await Promise.all([
+    getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026/matches-today', sourceType: 'page' }).catch(() => ({ matches: [] as CanonicalMatch[] })),
+    getLiveMatchIdSet().catch(() => new Set<number>()),
+  ]);
+
+  // DATA-18B.3E: live is decided ONLY by the live SSOT (liveMatchIds). Normalise
+  // each match's state so the bucket filters AND MatchRow (which reads m.state)
+  // agree: SSOT-live → 'live'; authority 'live' but absent from SSOT (ended) →
+  // 'finished'.
+  const resolveLive = (m: CanonicalMatch): CanonicalMatch =>
+    liveMatchIds.has(m.id)
+      ? (m.state === 'live' ? m : { ...m, state: 'live' })
+      : (m.state === 'live' ? { ...m, state: 'finished' } : m);
 
   const allTodayMatches: CanonicalMatch[] = allMatches
     .filter((m) => m.utcDate.startsWith(today))
+    .map(resolveLive)
     .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
 
   const tomorrowMatches: CanonicalMatch[] = allMatches
     .filter((m) => m.utcDate.startsWith(tomorrow) && m.state !== 'finished')
     .slice(0, 4);
 
-  const liveMatches  = allTodayMatches.filter((m) => m.state === 'live');
+  const liveMatches  = allTodayMatches.filter((m) => liveMatchIds.has(m.id));
   const finished     = allTodayMatches.filter((m) => m.state === 'finished');
   const upcoming     = allTodayMatches.filter((m) => m.state === 'scheduled');
   const hasAny       = allTodayMatches.length > 0;

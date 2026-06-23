@@ -9,6 +9,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 // DATA-17: single authority source — all 104 WC matches in authoritative state.
 import { getWCAuthorityMatches } from '@/lib/api';
+import { getLiveMatchIdSet } from '@/lib/wc-live-ssot';
 import { classifyMatchState } from '@/lib/match-classify';
 import type { Match } from '@/lib/types';
 import AdSlot from '@/components/AdSlot';
@@ -88,11 +89,26 @@ export default async function WC2026ResultsPage() {
   // Snapshot (ESPN-enriched) → WC results feed → WC upcoming feed, so one call
   // replaces the previous getWCResultsCached + getWCLiveMatchesCached pair.
   const today = new Date().toISOString().split('T')[0];
-  const authorityData = await getWCAuthorityMatches().catch(() => ({ matches: [] as Match[] }));
+  const [authorityData, liveMatchIds] = await Promise.all([
+    getWCAuthorityMatches().catch(() => ({ matches: [] as Match[] })),
+    getLiveMatchIdSet().catch(() => new Set<number>()),
+  ]);
+
+  // DATA-18B.3E: live is decided ONLY by the live SSOT (liveMatchIds), never by
+  // authority status/classify. Normalise each match's status so buckets AND the
+  // status badge agree: SSOT-live → IN_PLAY; a match authority still marks live
+  // but that the SSOT no longer lists (ended) → FINISHED.
+  const resolved: Match[] = authorityData.matches.map((m) => {
+    const authLive = m.status === 'IN_PLAY' || m.status === 'PAUSED';
+    if (liveMatchIds.has(m.id)) return authLive ? m : { ...m, status: 'IN_PLAY' as Match['status'] };
+    return authLive ? { ...m, status: 'FINISHED' as Match['status'] } : m;
+  });
   const classify = (m: Match) => classifyMatchState(m, today);
 
-  const live: Match[]    = authorityData.matches.filter((m) => classify(m) === 'live');
-  const finishedResults  = authorityData.matches.filter((m) => classify(m) === 'finished')
+  // Live rendering uses liveMatchIds.has(id) ONLY (criterion); finished derives
+  // from the SSOT-normalised status, which excludes anything live.
+  const live: Match[]    = resolved.filter((m) => liveMatchIds.has(m.id));
+  const finishedResults  = resolved.filter((m) => classify(m) === 'finished')
     .sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime());
 
   // Statistics
