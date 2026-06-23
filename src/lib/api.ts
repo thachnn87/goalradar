@@ -425,13 +425,21 @@ export async function getStandingsCached(competition: string): Promise<{
           // Merge live data with static skeleton so all 12 groups are always present.
           // Groups already in KV (even with 0 played games) take priority; static rows
           // fill any group letter the API did not return.
+          //
+          // DATA-18WC.4: football-data.org returns "Group A" but static tables use
+          // "GROUP_A". Normalise the live key so the map lookup succeeds for both forms.
+          const toGroupKey = (g: string | null | undefined) =>
+            (g ?? '').startsWith('GROUP_') ? (g ?? '') :
+            'GROUP_' + (g ?? '').replace(/^Group\s*/i, '').trim().toUpperCase();
           const liveByGroup = new Map(
-            data.standings.filter(s => s.type === 'TOTAL').map(s => [s.group, s]),
+            data.standings.filter(s => s.type === 'TOTAL').map(s => [toGroupKey(s.group), s]),
           );
           const staticTables = getStaticWCGroupTables();
-          const merged: StandingTable[] = staticTables.map(
-            staticEntry => liveByGroup.get(staticEntry.group) ?? staticEntry,
-          );
+          const merged: StandingTable[] = staticTables.map(staticEntry => {
+            const live = liveByGroup.get(staticEntry.group ?? '');
+            // Return live stats but keep the canonical "GROUP_A" key for all callers.
+            return live ? { ...live, group: staticEntry.group } : staticEntry;
+          });
           // Also preserve any non-TOTAL rows (HOME/AWAY) from the live data unchanged.
           const nonTotal = data.standings.filter(s => s.type !== 'TOTAL');
           return { standings: [...merged, ...nonTotal], competition: data.competition.name ? data.competition : wcMeta };
