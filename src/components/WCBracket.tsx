@@ -24,21 +24,24 @@ const SLOTS_PER_MATCH: Record<string, number> = {
 
 const ROUND_KEYS = ['LAST_32', 'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL'] as const;
 type RoundKey = (typeof ROUND_KEYS)[number];
+type AllRoundKey = RoundKey | 'THIRD_PLACE';
 
-const ROUND_LABELS: Record<RoundKey, string> = {
+const ROUND_LABELS: Record<AllRoundKey, string> = {
   LAST_32: 'Round of 32',
   LAST_16: 'Round of 16',
   QUARTER_FINALS: 'Quarter-finals',
   SEMI_FINALS: 'Semi-finals',
   FINAL: 'Final',
+  THIRD_PLACE: 'Third Place',
 };
 
-const ROUND_MATCH_COUNT: Record<RoundKey, number> = {
+const ROUND_MATCH_COUNT: Record<AllRoundKey, number> = {
   LAST_32: 16,
   LAST_16: 8,
   QUARTER_FINALS: 4,
   SEMI_FINALS: 2,
   FINAL: 1,
+  THIRD_PLACE: 1,
 };
 
 // ---------------------------------------------------------------------------
