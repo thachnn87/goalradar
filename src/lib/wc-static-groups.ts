@@ -49,6 +49,7 @@ export function getStaticWCGroupTables(): StandingTable[] {
   const groups: Record<string, StandingTable> = {};
 
   for (const team of WC_ALL_TEAMS) {
+    if (team.group === 'TBD') continue;
     const groupKey = `GROUP_${team.group}`;
     if (!groups[groupKey]) {
       groups[groupKey] = {

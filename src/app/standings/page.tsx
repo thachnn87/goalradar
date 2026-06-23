@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
+import { redirect } from 'next/navigation';
 // PERF-4.5
 import { getStandingsCached } from '@/lib/api';
 import StandingsTable from '@/components/StandingsTable';
@@ -90,6 +91,8 @@ export default async function StandingsPage({
   searchParams: Promise<{ competition?: string }>;
 }) {
   const { competition = 'PL' } = await searchParams;
+
+  if (competition === 'WC') redirect('/world-cup-2026-standings');
 
   const competitionMeta = COMPETITIONS.find((c) => c.code === competition);
   const competitionName = competitionMeta?.name ?? competition;

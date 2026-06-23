@@ -26,6 +26,7 @@
  */
 
 import { kv } from '@vercel/kv';
+import { readKVOnly } from './kv-cache';
 import type { Match } from './types';
 import { recordAuthorityRead } from './authority-telemetry';
 import type { MatchSnapshot } from './match-snapshot';
@@ -303,25 +304,20 @@ async function coldRebuild(builtAt: string): Promise<CanonicalMatch[]> {
 
   _rebuildInflight = (async () => {
     try {
-      // Read FD feeds (same sources as getWCAuthorityMatchesCached but without overlay).
-      const [
-        { getUpcomingMatchesCached },
-        { getWCResultsCached },
-        { getWCLiveMatches },
-      ] = await Promise.all([
-        import('./api'),
-        import('./api'),
-        import('./api'),
-      ]);
+      // Read FD feeds directly from KV — bypasses the in-process withCache layer so
+      // that the cold rebuild always sees the latest KV data written by refreshEndpoint,
+      // even on warm Lambda instances where withCache may hold a stale (possibly empty)
+      // entry for the upcoming key.
+      const { getWCLiveMatches } = await import('./api');
 
       const [upcomingResult, resultsResult, liveResult] = await Promise.allSettled([
-        getUpcomingMatchesCached('WC'),
-        getWCResultsCached(),
+        readKVOnly<{ matches: Match[] }>('/competitions/WC/matches?status=SCHEDULED,TIMED'),
+        readKVOnly<{ matches: Match[] }>('/competitions/WC/matches?status=FINISHED'),
         getWCLiveMatches(),
       ]);
 
-      const upcoming = upcomingResult.status === 'fulfilled' ? upcomingResult.value.matches : [];
-      const results  = resultsResult.status  === 'fulfilled' ? resultsResult.value.matches  : [];
+      const upcoming = upcomingResult.status === 'fulfilled' ? (upcomingResult.value?.matches ?? []) : [];
+      const results  = resultsResult.status  === 'fulfilled' ? (resultsResult.value?.matches  ?? []) : [];
       const live     = liveResult.status     === 'fulfilled' ? liveResult.value.matches     : [];
 
       // Merge FD feeds by STATE_RANK (mirrors getWCAuthorityMatchesCached).

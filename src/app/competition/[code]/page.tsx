@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 
 import {
@@ -115,6 +115,8 @@ export default async function CompetitionPage({ params }: Params) {
 
   const meta = COMPETITIONS.find((c) => c.code === code);
   if (!meta) notFound();
+
+  if (code === 'WC') redirect('/world-cup-2026');
 
   // Fetch all three data sources in parallel
   const [standingsResult, recentResult, upcomingResult] = await Promise.allSettled([

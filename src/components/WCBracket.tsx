@@ -10,21 +10,23 @@ const CARD_W = 168;  // width of each match card
 const CARD_H = 68;   // height of each match card
 const CONN_W = 36;   // width of the SVG connector strip between columns
 
-const NUM_R16_SLOTS = 8;
-const TOTAL_H = NUM_R16_SLOTS * SLOT_H; // 704 px
+const NUM_L32_SLOTS = 16;
+const TOTAL_H = NUM_L32_SLOTS * SLOT_H; // 1408 px
 
-// How many R16 slots each round's match occupies
+// How many LAST_32 slots each round's match occupies
 const SLOTS_PER_MATCH: Record<string, number> = {
-  LAST_16: 1,
-  QUARTER_FINALS: 2,
-  SEMI_FINALS: 4,
-  FINAL: 8,
+  LAST_32: 1,
+  LAST_16: 2,
+  QUARTER_FINALS: 4,
+  SEMI_FINALS: 8,
+  FINAL: 16,
 };
 
-const ROUND_KEYS = ['LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL'] as const;
+const ROUND_KEYS = ['LAST_32', 'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL'] as const;
 type RoundKey = (typeof ROUND_KEYS)[number];
 
 const ROUND_LABELS: Record<RoundKey, string> = {
+  LAST_32: 'Round of 32',
   LAST_16: 'Round of 16',
   QUARTER_FINALS: 'Quarter-finals',
   SEMI_FINALS: 'Semi-finals',
@@ -32,6 +34,7 @@ const ROUND_LABELS: Record<RoundKey, string> = {
 };
 
 const ROUND_MATCH_COUNT: Record<RoundKey, number> = {
+  LAST_32: 16,
   LAST_16: 8,
   QUARTER_FINALS: 4,
   SEMI_FINALS: 2,
@@ -270,7 +273,7 @@ export default function WCBracket({ matches }: { matches: Match[] }) {
         .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
       return acc;
     },
-    { LAST_16: [], QUARTER_FINALS: [], SEMI_FINALS: [], FINAL: [] }
+    { LAST_32: [], LAST_16: [], QUARTER_FINALS: [], SEMI_FINALS: [], FINAL: [] }
   );
 
   return (
