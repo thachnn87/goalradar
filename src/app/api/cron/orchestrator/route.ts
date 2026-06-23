@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   refreshEndpoint,
   refreshLiveMatches,
+  extractTeamIdsFromStandings,
   isAuthorizedExternalRequest,
   savePrewarmRecord,
   type RefreshResult,
@@ -55,6 +56,17 @@ const STANDINGS_STALE =  7_200; // 2 h   — SWR.STANDINGS.stale
 const WC_MIN_INTERVAL_SEC        = 1_800; // 30 min
 const STANDINGS_MIN_INTERVAL_SEC = 1_800; // 30 min
 const TODAY_MIN_INTERVAL_SEC     =    55; // ~1 min
+
+// ── Phase 4: Team detail constants ──────────────────────────────────────────
+// Team detail data (name, crest, venue, coach) rarely changes — 6 h TTL is safe.
+// Rate math: football-data.org ≤10 req/min (7 s/req enforced by rate limiter).
+// TEAM_MAX_CALLS_PER_RUN × 7 s = 175 s — safely below the 300 s Vercel limit.
+// Cold start: up to ~168 teams queued; warms fully across ~7 cron runs (3.5 h).
+// Steady state (6 h minInterval, 30 min cron): ~14 due teams → ~98 s extra/run.
+const TEAM_FRESH             =  6 * 3_600; // 6 h
+const TEAM_STALE             = 24 * 3_600; // 24 h — KV TTL
+const TEAM_MIN_INTERVAL_SEC  =  6 * 3_600; // 6 h — skip if refreshed within 6 h
+const TEAM_MAX_CALLS_PER_RUN =         25; // max provider calls per run (cold-start guard)
 
 const CALLER = 'cron/orchestrator';
 
@@ -206,12 +218,47 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  // ── Phase 4: Team data ──────────────────────────────────────────────────────
+  // Extract team IDs from standings KV entries written in Phase 3, then refresh
+  // stale team detail records.  minIntervalSec=6h keeps provider calls sparse;
+  // TEAM_MAX_CALLS_PER_RUN bounds cold-start wall-time to ~175 s (25 × 7 s).
+  // Teams beyond the cap remain stale until the next run warms them.
+  const teamIds = await extractTeamIdsFromStandings();
+  console.log(`[Cron] orchestrator: Phase 4 teams | ids=${teamIds.length}`);
+  let teamProviderCalls = 0;
+  for (const id of teamIds) {
+    if (teamProviderCalls >= TEAM_MAX_CALLS_PER_RUN) {
+      console.log(`[Cron] orchestrator: Phase 4 cap reached (${TEAM_MAX_CALLS_PER_RUN} provider calls)`);
+      break;
+    }
+    const label = `team-${id}`;
+    console.log(`[QUEUE] orchestrator | running ${label}`);
+    const taskStart = Date.now();
+    const result    = await refreshEndpoint(
+      `/teams/${id}`,
+      TEAM_FRESH,
+      TEAM_STALE,
+      { minIntervalSec: TEAM_MIN_INTERVAL_SEC, caller: CALLER },
+    );
+    const elapsedMs = Date.now() - taskStart;
+    refreshResults.push(result);
+    taskResults.push({
+      label,
+      status:    result.status === 'ok'      ? 'ok'
+               : result.status === 'skipped' ? 'skip'
+               : 'fail',
+      elapsedMs,
+      ...(result.error !== undefined ? { error: result.error } : {}),
+    });
+    if (result.status !== 'skipped') teamProviderCalls++;
+  }
+
   const ok      = refreshResults.filter((r) => r.status === 'ok').length;
   const skipped = refreshResults.filter((r) => r.status === 'skipped').length;
   const failed  = refreshResults.filter((r) => r.status === 'error').length;
   const elapsed = Date.now() - started;
 
-  console.log(`[Cron] orchestrator tasks done | ok=${ok} skipped=${skipped} failed=${failed} total=${tasks.length} | ${elapsed}ms`);
+  console.log(`[Cron] orchestrator tasks done | ok=${ok} skipped=${skipped} failed=${failed} total=${taskResults.length} | ${elapsed}ms`);
 
   // ── PERF-3: Seed all 104 WC match KV entries from bulk data ──────────────
   // Runs after the standard tasks so it can reuse the KV-cached responses.
@@ -290,7 +337,7 @@ export async function GET(req: NextRequest) {
     elapsedMs:   totalElapsed,
     ok,
     failed,
-    total:       tasks.length,
+    total:       taskResults.length,
     results:     taskResults,
     triggeredBy,
     // PERF-3 seed stats
@@ -309,7 +356,7 @@ export async function GET(req: NextRequest) {
     ok,
     skipped,
     failed,
-    total:    tasks.length,
+    total:    taskResults.length,
     elapsed:  `${elapsed}ms`,
     rateSafeMode: isRateSafeModeActive()
       ? { active: true, ...getRateSafeState() }

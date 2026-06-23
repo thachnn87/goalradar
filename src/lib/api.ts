@@ -5,6 +5,7 @@ import { recordAuditCall } from './api-audit';
 import { getCachedLiveMatches, getCachedWCLiveMatches } from './live-cache';
 import { providerManager } from './providers/manager';
 import { recordDataSource } from './data-source-tracker';
+import { getStaticWCGroupTables } from './wc-static-groups';
 
 const BASE_URL = 'https://api.football-data.org/v4';
 
@@ -419,15 +420,32 @@ export async function getStandingsCached(competition: string): Promise<{
   try {
     return await withCache(key, TTL.STANDINGS, async () => {
       const data = await readKVOnly<{ standings: StandingTable[]; competition: { name: string; emblem: string } }>(key);
-      if (data) return data;
+      if (data) {
+        if (competition === 'WC') {
+          // Merge live data with static skeleton so all 12 groups are always present.
+          // Groups already in KV (even with 0 played games) take priority; static rows
+          // fill any group letter the API did not return.
+          const liveByGroup = new Map(
+            data.standings.filter(s => s.type === 'TOTAL').map(s => [s.group, s]),
+          );
+          const staticTables = getStaticWCGroupTables();
+          const merged: StandingTable[] = staticTables.map(
+            staticEntry => liveByGroup.get(staticEntry.group) ?? staticEntry,
+          );
+          // Also preserve any non-TOTAL rows (HOME/AWAY) from the live data unchanged.
+          const nonTotal = data.standings.filter(s => s.type !== 'TOTAL');
+          return { standings: [...merged, ...nonTotal], competition: data.competition.name ? data.competition : wcMeta };
+        }
+        return data;
+      }
       if (competition === 'WC') {
-        return { standings: [], competition: wcMeta };
+        return { standings: getStaticWCGroupTables(), competition: wcMeta };
       }
       return empty;
     });
   } catch {
     if (competition === 'WC') {
-      return { standings: [], competition: wcMeta };
+      return { standings: getStaticWCGroupTables(), competition: wcMeta };
     }
     return empty;
   }
@@ -667,14 +685,24 @@ export async function getTeamMatchesCached(id: string): Promise<{ matches: Match
 
 /**
  * Page-safe team detail.
- * Returns null on KV miss — callers must handle null gracefully.
+ * Read path: L1 in-memory → L2 KV read-only → provider (on KV miss, writes to KV).
+ * The provider fallback runs at most once per team per L1 TTL window; the
+ * rate-limiter in football-data.ts and L1 in-flight deduplication prevent bursts.
+ * Returns null only when both KV and the provider fail.
  */
 export async function getTeamCached(id: string): Promise<TeamDetail | null> {
   const key = `/teams/${id}`;
   try {
     return await withCache(key, TTL.STANDINGS, async () => {
-      const data = await readKVOnly<TeamDetail>(key);
-      return data ?? null;
+      const cached = await readKVOnly<TeamDetail>(key);
+      if (cached) return cached;
+      // KV miss — call provider once and write result to KV so subsequent
+      // requests are served from cache (fixes DATA-18TEAM.1).
+      try {
+        return await withKVCache(key, SWR.STANDINGS, () => providerManager.getTeam(id));
+      } catch {
+        return null;
+      }
     });
   } catch {
     return null;

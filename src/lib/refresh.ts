@@ -138,6 +138,10 @@ async function dispatchToProvider(endpoint: string): Promise<unknown> {
     return providerManager.getTodayMatches();
   }
 
+  // Team detail
+  const teamM = endpoint.match(/^\/teams\/(\d+)$/);
+  if (teamM) return providerManager.getTeam(teamM[1]);
+
   // Unknown — throw so the caller records an error
   throw new Error(`[Refresh] No providerManager mapping for endpoint: ${endpoint}`);
 }
@@ -297,6 +301,44 @@ export async function refreshLiveMatches(): Promise<RefreshResult> {
     fetchedAt:  new Date(now).toISOString(),
     freshUntil: new Date(now + 30_000).toISOString(),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Team ID discovery — used by orchestrator Phase 4
+// ---------------------------------------------------------------------------
+
+/**
+ * Reads standings KV entries for all competitions and returns the unique set
+ * of football-data.org numeric team IDs found in the table rows.
+ *
+ * Called by the orchestrator after Phase 3 (standings refresh) so the IDs
+ * come from freshly-written KV rather than a hard-coded list.  On KV miss
+ * or cold start, returns [] — Phase 4 is a no-op until standings are warm.
+ */
+export async function extractTeamIdsFromStandings(): Promise<number[]> {
+  if (!KV_ENABLED) return [];
+  const CODES = ['WC', 'PL', 'PD', 'BL1', 'SA', 'FL1', 'CL'];
+  const ids   = new Set<number>();
+  for (const code of CODES) {
+    try {
+      const entry = await kv.get<KVEntry<{
+        standings: Array<{ table: Array<{ team: { id: number } }> }>;
+      }>>(`${KV_PREFIX}/competitions/${code}/standings`);
+      for (const table of entry?.data?.standings ?? []) {
+        for (const row of table.table ?? []) {
+          if (typeof row.team?.id === 'number' && row.team.id > 0) {
+            ids.add(row.team.id);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(
+        `[Refresh] extractTeamIdsFromStandings: KV read failed for ${code}:`,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }
+  return [...ids];
 }
 
 // ---------------------------------------------------------------------------
