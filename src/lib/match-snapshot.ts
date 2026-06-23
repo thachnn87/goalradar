@@ -417,6 +417,11 @@ async function buildSnapshot(matchId: string): Promise<MatchSnapshot> {
     match.competition?.code === 'WC' &&
     (match.goals?.length ?? 0) === 0;
 
+  // DATA-18WC.7B: save FD canonical score before enrichment can overwrite it
+  const fdScore = match.score
+    ? { ...match.score, fullTime: { ...match.score.fullTime }, halfTime: match.score.halfTime ? { ...match.score.halfTime } : match.score.halfTime }
+    : match.score;
+
   if (needsEnrichment && AF_ENRICHMENT_ENABLED) {
     match = await enrichMatchWithAFEvents(match);
   }
@@ -424,6 +429,22 @@ async function buildSnapshot(matchId: string): Promise<MatchSnapshot> {
   // ESPN enrichment: runs when AF enrichment is disabled or produced no events.
   if (needsEnrichment && ESPN_ENRICHMENT_ENABLED && (match.goals?.length ?? 0) === 0) {
     match = await enrichMatchWithEspnEvents(match);
+  }
+
+  // DATA-18WC.7B: restore FD canonical score if enrichment overwrote it.
+  // Enrichment providers occasionally report wrong scores; FD is authoritative.
+  // Goals/events from enrichment are still retained for the scorers display.
+  if (
+    needsEnrichment && fdScore?.fullTime && match.score?.fullTime &&
+    (match.score.fullTime.home !== fdScore.fullTime.home ||
+     match.score.fullTime.away !== fdScore.fullTime.away)
+  ) {
+    console.warn(
+      `[Snapshot] ENRICH-SCORE-OVERRIDE match:${matchId}` +
+      ` | enriched=${match.score.fullTime.home}-${match.score.fullTime.away}` +
+      ` | restoring FD=${fdScore.fullTime.home}-${fdScore.fullTime.away}`,
+    );
+    match = { ...match, score: fdScore };
   }
 
   // LIVE-2 / LIVE-2B: overlay score + status from live cache.
@@ -650,6 +671,50 @@ export const getOrBuildMatchSnapshot: (matchId: string) => Promise<MatchSnapshot
           }
         }
         // lock not acquired → another request is already healing; serve cached
+      }
+
+      // DATA-18WC.7B: score-drift guard — FINISHED WC snapshot vs FD match detail.
+      // Enrichment providers sometimes assign wrong scores; FD canonical score is the
+      // source of truth. If snapshot.score.fullTime ≠ detail KV score, rebuild once
+      // under a 30-min repair lock. Guard: only check snapshots older than 2 hours.
+      if (hm.status === 'FINISHED' && hm.competition?.code === 'WC' && KV_ENABLED) {
+        const snapshotAgeSec = Math.ceil((Date.now() - kvHit.generatedAt) / 1_000);
+        if (snapshotAgeSec > 7_200) {
+          try {
+            const detailRaw = await kv.get<{ data: { score?: { fullTime?: { home?: number | null; away?: number | null } } } }>(
+              `goalradar:/matches/${matchId}`
+            );
+            const detailFt = detailRaw?.data?.score?.fullTime;
+            const snapFt   = hm.score?.fullTime;
+            if (
+              detailFt && snapFt &&
+              detailFt.home != null && detailFt.away != null &&
+              (detailFt.home !== snapFt.home || detailFt.away !== snapFt.away)
+            ) {
+              const driftLock = `goalradar:score-drift-lock:${matchId}`;
+              const acquired  = await kv.set(driftLock, '1', { nx: true, ex: 1_800 }).catch(() => null);
+              if (acquired) {
+                console.warn(
+                  `[Snapshot] SCORE-DRIFT match:${matchId}` +
+                  ` | snap=${snapFt.home}-${snapFt.away}` +
+                  ` | fd=${detailFt.home}-${detailFt.away} — rebuilding`,
+                );
+                try {
+                  const rebuilt = await buildSnapshot(matchId);
+                  await writeKVSnapshot(matchId, rebuilt).catch(() => undefined);
+                  writeDRSnapshot(matchId, rebuilt);
+                  recordSnapshotFetch(Date.now() - t0, 'build-provider');
+                  return rebuilt;
+                } catch (healErr) {
+                  console.error(
+                    `[Snapshot] SCORE-DRIFT heal failed match:${matchId}:` +
+                    ` ${healErr instanceof Error ? healErr.message : String(healErr)} — serving cached`,
+                  );
+                }
+              }
+            }
+          } catch { /* score-drift check failed — serve cached snapshot */ }
+        }
       }
 
       const kvMs = Date.now() - t0;

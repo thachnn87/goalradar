@@ -342,7 +342,7 @@ export const WC_ALL_TEAMS: WCTeamEntry[] = [
     shortName: 'Türkiye',
     apiName: 'Türkiye',
     flag: '🇹🇷',
-    group: 'K',
+    group: 'D',
     fifaRanking: 22,
     confederation: 'UEFA',
     qualified: true,

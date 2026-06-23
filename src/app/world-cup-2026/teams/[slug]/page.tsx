@@ -291,6 +291,12 @@ export default async function WCTeamPage({
   // Local fallback fixtures — used when API returns nothing (pre-tournament or API down)
   let localTeamFixtures: WCGroupFixture[] = [];
 
+  // DATA-18WC.7B: NFC-normalise team names before comparison so that Unicode
+  // variants (e.g. 'Türkiye' precomposed vs decomposed) match consistently.
+  const normName = (s: string | null | undefined) => (s ?? '').normalize('NFC').toLowerCase();
+  const apiNorm  = normName(team.apiName);
+  const dispNorm = normName(team.displayName);
+
   try {
     const [upcomingData, recentData, standingsData] = await Promise.allSettled([
       getUpcomingMatches('WC'),
@@ -301,20 +307,20 @@ export default async function WCTeamPage({
     if (upcomingData.status === 'fulfilled') {
       upcoming = upcomingData.value.matches.filter(
         (m) =>
-          m.homeTeam?.name?.toLowerCase().includes(team.apiName.toLowerCase()) ||
-          m.awayTeam?.name?.toLowerCase().includes(team.apiName.toLowerCase()) ||
-          m.homeTeam?.name?.toLowerCase() === team.displayName.toLowerCase() ||
-          m.awayTeam?.name?.toLowerCase() === team.displayName.toLowerCase()
+          normName(m.homeTeam?.name).includes(apiNorm) ||
+          normName(m.awayTeam?.name).includes(apiNorm) ||
+          normName(m.homeTeam?.name) === dispNorm ||
+          normName(m.awayTeam?.name) === dispNorm
       );
     }
 
     if (recentData.status === 'fulfilled') {
       recent = recentData.value.matches.filter(
         (m) =>
-          m.homeTeam?.name?.toLowerCase().includes(team.apiName.toLowerCase()) ||
-          m.awayTeam?.name?.toLowerCase().includes(team.apiName.toLowerCase()) ||
-          m.homeTeam?.name?.toLowerCase() === team.displayName.toLowerCase() ||
-          m.awayTeam?.name?.toLowerCase() === team.displayName.toLowerCase()
+          normName(m.homeTeam?.name).includes(apiNorm) ||
+          normName(m.awayTeam?.name).includes(apiNorm) ||
+          normName(m.homeTeam?.name) === dispNorm ||
+          normName(m.awayTeam?.name) === dispNorm
       );
     }
 
@@ -325,8 +331,8 @@ export default async function WCTeamPage({
       for (let i = 0; i < tables.length; i++) {
         const entry = tables[i].table.find(
           (e) =>
-            e.team?.name?.toLowerCase().includes(team.apiName.toLowerCase()) ||
-            e.team?.name?.toLowerCase() === team.displayName.toLowerCase()
+            normName(e.team?.name).includes(apiNorm) ||
+            normName(e.team?.name) === dispNorm
         );
         if (entry) {
           standingEntry = entry;
@@ -341,8 +347,8 @@ export default async function WCTeamPage({
 
   // Form helper
   const recentForm: string[] = (recent.slice(0, 5).map((m) => {
-    const isHome = m.homeTeam?.name?.toLowerCase().includes(team.apiName.toLowerCase()) ||
-                   m.homeTeam?.name?.toLowerCase() === team.displayName.toLowerCase();
+    const isHome = normName(m.homeTeam?.name).includes(apiNorm) ||
+                   normName(m.homeTeam?.name) === dispNorm;
     const hg = m.score?.fullTime?.home ?? 0;
     const ag = m.score?.fullTime?.away ?? 0;
     if (hg === ag) return 'D';
@@ -546,8 +552,8 @@ export default async function WCTeamPage({
             <h2 className="text-lg font-bold text-white mb-3">Recent Results</h2>
             <div className="space-y-2">
               {recent.slice(0, 5).map((m) => {
-                const isHome = m.homeTeam?.name?.toLowerCase().includes(team.apiName.toLowerCase()) ||
-                               m.homeTeam?.name?.toLowerCase() === team.displayName.toLowerCase();
+                const isHome = normName(m.homeTeam?.name).includes(apiNorm) ||
+                               normName(m.homeTeam?.name) === dispNorm;
                 const hg = m.score?.fullTime?.home ?? 0;
                 const ag = m.score?.fullTime?.away ?? 0;
                 const result = hg === ag ? 'D' : (isHome ? hg > ag : ag > hg) ? 'W' : 'L';

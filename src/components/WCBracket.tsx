@@ -276,6 +276,11 @@ export default function WCBracket({ matches }: { matches: Match[] }) {
     { LAST_32: [], LAST_16: [], QUARTER_FINALS: [], SEMI_FINALS: [], FINAL: [] }
   );
 
+  // Third place playoff — separate from the main elimination chain
+  const thirdPlaceMatches = matches
+    .filter((m) => m.stage === 'THIRD_PLACE')
+    .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
+
   return (
     <div className="w-full overflow-x-auto pb-2">
       <div className="min-w-max">
@@ -340,6 +345,28 @@ export default function WCBracket({ matches }: { matches: Match[] }) {
               </div>
             );
           })}
+        </div>
+
+        {/* Third Place playoff — standalone match below the bracket, no connector */}
+        <div className="mt-6 border-t border-gray-800 pt-4">
+          <div className="mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Third Place</span>
+            <p className="text-gray-600 text-[10px] mt-0.5">1 match</p>
+          </div>
+          <div>
+            {thirdPlaceMatches.length > 0
+              ? thirdPlaceMatches.map((match) => (
+                  <BracketMatchCard key={match.id} match={match} />
+                ))
+              : (
+                  <div
+                    className="rounded-lg border border-gray-800 border-dashed bg-gray-900/30 flex items-center justify-center"
+                    style={{ width: CARD_W, height: CARD_H }}
+                  >
+                    <span className="text-gray-700 text-xs">TBD</span>
+                  </div>
+                )}
+          </div>
         </div>
       </div>
     </div>

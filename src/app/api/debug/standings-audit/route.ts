@@ -96,11 +96,16 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     if (!raw || typeof raw !== 'object') return null;
     const s = raw as RawStandings;
     const standings = (s.standings ?? []).filter(st => st.type === 'TOTAL');
-    const liveByGroup = new Map(standings.map(st => [st.group, st]));
+    // Use the same normalization as getStandingsCached (DATA-18WC.4) so the
+    // diagnostic correctly reflects what the production path does.
+    const toGroupKey = (g: string | null | undefined) =>
+      (g ?? '').startsWith('GROUP_') ? (g ?? '') :
+      'GROUP_' + (g ?? '').replace(/^Group\s*/i, '').trim().toUpperCase();
+    const liveByGroup = new Map(standings.map(st => [toGroupKey(st.group), st]));
     const staticTables = getStaticWCGroupTables();
 
     return staticTables.map(staticEntry => {
-      const liveMatch = liveByGroup.get(staticEntry.group);
+      const liveMatch = liveByGroup.get(toGroupKey(staticEntry.group));
       return {
         staticGroup:   staticEntry.group,
         liveFound:     !!liveMatch,

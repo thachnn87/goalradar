@@ -29,8 +29,9 @@ export const maxDuration = 60;
 // KV feed keys
 // ---------------------------------------------------------------------------
 
-const FINISHED_FEED_KEY  = 'goalradar:/competitions/WC/matches?status=FINISHED';
-const UPCOMING_FEED_KEY  = 'goalradar:/competitions/WC/matches?status=SCHEDULED,TIMED';
+const FINISHED_FEED_KEY     = 'goalradar:/competitions/WC/matches?status=FINISHED';
+const UPCOMING_FEED_KEY     = 'goalradar:/competitions/WC/matches?status=SCHEDULED,TIMED';
+const DR_UPCOMING_FEED_KEY  = 'goalradar:dr:/competitions/WC/matches?status=SCHEDULED,TIMED';
 
 interface KVEntry<T> {
   data:       T;
@@ -86,22 +87,26 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const issues: FeedIssue[] = [];
 
   // ── 1. Read all three sources in parallel ─────────────────────────────────
-  const [finishedResult, upcomingResult, authorityResult] = await Promise.allSettled([
+  const [finishedResult, upcomingResult, upcomingDrResult, authorityResult] = await Promise.allSettled([
     kv.get<KVEntry<{ matches: Match[] }>>(FINISHED_FEED_KEY),
     kv.get<KVEntry<{ matches: Match[] }>>(UPCOMING_FEED_KEY),
+    kv.get<KVEntry<{ matches: Match[] }>>(DR_UPCOMING_FEED_KEY),
     readAuthorityCache(builtAt, { source: '/api/debug/feed-integrity', sourceType: 'debug' }),
   ]);
 
   // Feed availability
-  const finishedFeed = finishedResult.status === 'fulfilled' ? finishedResult.value : null;
-  const upcomingFeed = upcomingResult.status === 'fulfilled' ? upcomingResult.value : null;
+  const finishedFeed   = finishedResult.status   === 'fulfilled' ? finishedResult.value   : null;
+  const upcomingFeed   = upcomingResult.status   === 'fulfilled' ? upcomingResult.value   : null;
+  const upcomingDrFeed = upcomingDrResult.status === 'fulfilled' ? upcomingDrResult.value : null;
   const authority: CanonicalMatch[] = authorityResult.status === 'fulfilled' ? authorityResult.value : [];
 
   if (!finishedFeed) {
     issues.push({ check: 'feed-present', severity: 'RED', detail: 'FINISHED feed absent from KV — orchestrator cron may be down' });
   }
-  if (!upcomingFeed) {
-    issues.push({ check: 'feed-present', severity: 'YELLOW', detail: 'UPCOMING feed absent from KV' });
+  if (!upcomingFeed && !upcomingDrFeed) {
+    issues.push({ check: 'feed-present', severity: 'YELLOW', detail: 'UPCOMING feed absent from KV (primary + DR both missing)' });
+  } else if (!upcomingFeed && upcomingDrFeed) {
+    issues.push({ check: 'feed-present', severity: 'YELLOW', detail: 'UPCOMING primary KV absent — DR fallback present, pages serving correctly via readKVOnly()' });
   }
   if (authorityResult.status === 'rejected') {
     issues.push({ check: 'authority-read', severity: 'RED', detail: `Authority cache read failed: ${authorityResult.reason}` });
@@ -235,6 +240,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           present:    !!upcomingFeed,
           count:      upcomingMatches.length,
           ageHours:   upcomingAgeHours,
+          drPresent:  !!upcomingDrFeed,
+          drCount:    upcomingDrFeed?.data?.matches?.length ?? 0,
+          drAgeHours: upcomingDrFeed ? Math.round((now - upcomingDrFeed.fetchedAt) / 3_600_000 * 10) / 10 : null,
         },
         authority: {
           present:    authority.length > 0,
