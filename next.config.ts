@@ -125,11 +125,9 @@ const nextConfig: NextConfig = {
       },
 
       // ── Results aliases ──────────────────────────────────────────────────
-      {
-        source: '/world-cup-2026/results',
-        destination: '/world-cup-2026-results',
-        permanent: true,
-      },
+      // NOTE: /world-cup-2026/results has its own page.tsx (live match feed).
+      // Do NOT add a redirect here — it would shadow the page and create a loop
+      // from /world-cup-2026-results → /world-cup-2026/results → redirect → loop.
       {
         source: '/wc2026-results',
         destination: '/world-cup-2026-results',

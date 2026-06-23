@@ -1,21 +1,36 @@
 import Link from 'next/link';
 import type { StandingEntry } from '@/lib/types';
 import { teamPath } from '@/lib/url';
+import {
+  type QualificationStatus,
+  QUAL_BADGE_STYLES,
+  positionToStatus,
+} from '@/lib/wc-qualification';
 
 function groupLabel(raw: string | null) {
   if (!raw) return 'Group';
   return raw.replace(/_/g, ' ').replace(/^GROUP /, 'Group ');
 }
 
+/**
+ * WCGroupTable — renders a single group standings table.
+ *
+ * qualifications: optional Map<teamId, QualificationStatus> from the engine.
+ *   When provided, border-left and row tint reflect engine output.
+ *   When absent, falls back to position-based defaults (P1/P2 = green).
+ */
 export default function WCGroupTable({
   group,
   table,
   href,
+  qualifications,
 }: {
-  group: string;
-  table: StandingEntry[];
+  group:          string;
+  table:          StandingEntry[];
   /** Optional link destination for the group header (e.g. /world-cup-2026/group-a) */
-  href?: string;
+  href?:          string;
+  /** teamId → QualificationStatus from the engine */
+  qualifications?: Map<number, QualificationStatus>;
 }) {
   const label = groupLabel(group);
   return (
@@ -51,13 +66,14 @@ export default function WCGroupTable({
         </thead>
         <tbody>
           {table.map((entry, i) => {
-            const advances = i < 2;
+            const status: QualificationStatus =
+              qualifications?.get(entry.team.id) ??
+              positionToStatus(entry.position || (i + 1), entry.playedGames);
+            const style = QUAL_BADGE_STYLES[status];
             return (
               <tr
-                key={entry.team.id}
-                className={`border-t border-gray-800/40 border-l-2 ${
-                  advances ? 'border-l-green-500' : 'border-l-transparent'
-                } hover:bg-gray-800/40 transition-colors`}
+                key={entry.team.id || i}
+                className={`border-t border-gray-800/40 border-l-2 ${style.borderColor} ${style.bgColor} hover:bg-gray-800/40 transition-colors`}
               >
                 <td className="px-3 py-2 text-gray-500 text-center">{entry.position}</td>
                 <td className="px-3 py-2">

@@ -17,6 +17,7 @@ import Breadcrumb from '@/components/Breadcrumb';
 import SnapshotPrewarmHints from '@/components/SnapshotPrewarmHints';
 import WCBracket from '@/components/WCBracket';
 import WCGroupTable from '@/components/WCGroupTable';
+import { calculateQualificationStatus, type QualificationStatus } from '@/lib/wc-qualification';
 import WCCountdown from '@/components/WCCountdown';
 import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
@@ -322,6 +323,18 @@ export default async function WorldCup2026Page() {
       ? standingsResult.value.standings.filter((s) => s.type === 'TOTAL')
       : [];
 
+  // Qualification engine — runs pure computation, no I/O
+  const qualMap = calculateQualificationStatus(groupTables);
+  // Build per-group maps for WCGroupTable (Map<teamId, QualificationStatus>)
+  function groupQualMap(groupKey: string | null): Map<number, QualificationStatus> {
+    const letter = (groupKey ?? '').replace(/^GROUP_/, '').toUpperCase();
+    const out = new Map<number, QualificationStatus>();
+    for (const [id, q] of qualMap) {
+      if (q.group === letter) out.set(id, q.qualificationStatus);
+    }
+    return out;
+  }
+
   return (
     <>
       <JsonLd />
@@ -459,6 +472,7 @@ export default async function WorldCup2026Page() {
                       group={t.group ?? t.stage}
                       table={t.table}
                       href={groupSlug ? `/world-cup-2026/${groupSlug}` : undefined}
+                      qualifications={groupQualMap(t.group)}
                     />
                   );
                 })}

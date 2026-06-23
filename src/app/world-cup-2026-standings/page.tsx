@@ -10,6 +10,11 @@ import Link from 'next/link';
 // PERF-4.5
 import { getStandingsCached } from '@/lib/api';
 import type { StandingTable, StandingEntry } from '@/lib/types';
+import {
+  calculateQualificationStatus,
+  QUAL_BADGE_STYLES,
+  type TeamQualification,
+} from '@/lib/wc-qualification';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCPageNav from '@/components/WCPageNav';
@@ -63,7 +68,15 @@ const FAQ = [
   },
 ];
 
-function GroupTable({ table, groupLabel }: { table: StandingEntry[]; groupLabel: string }) {
+function GroupTable({
+  table,
+  groupLabel,
+  qualMap,
+}: {
+  table:      StandingEntry[];
+  groupLabel: string;
+  qualMap:    Map<number, TeamQualification>;
+}) {
   const slug = `group-${groupLabel.toLowerCase()}`;
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden mb-4">
@@ -84,16 +97,19 @@ function GroupTable({ table, groupLabel }: { table: StandingEntry[]; groupLabel:
               <th className="px-2 py-2 text-gray-500 font-semibold text-center">D</th>
               <th className="px-2 py-2 text-gray-500 font-semibold text-center">L</th>
               <th className="px-2 py-2 text-gray-500 font-semibold text-center">GD</th>
-              <th className="pr-4 pl-2 py-2 text-gray-500 font-semibold text-center font-bold">Pts</th>
+              <th className="pr-2 pl-2 py-2 text-gray-500 font-semibold text-center font-bold">Pts</th>
+              <th className="pr-4 pl-2 py-2 text-gray-500 font-semibold text-center hidden sm:table-cell">Status</th>
             </tr>
           </thead>
           <tbody>
             {table.map((row, i) => {
-              const qualified = i < 2;
-              const maybe = i === 2;
+              const qual   = qualMap.get(row.team?.id ?? -1);
+              const style  = qual
+                ? QUAL_BADGE_STYLES[qual.qualificationStatus]
+                : QUAL_BADGE_STYLES[i < 2 ? 'QUALIFIED' : i === 2 ? 'THIRD_PLACE_CONTENDER' : 'UNDECIDED'];
               return (
                 <tr key={row.team?.id ?? i}
-                  className={`border-b border-white/5 last:border-0 ${qualified ? 'bg-green-950/10' : maybe ? 'bg-yellow-950/10' : ''}`}>
+                  className={`border-b border-white/5 last:border-0 border-l-2 ${style.borderColor} ${style.bgColor}`}>
                   <td className="pl-4 pr-2 py-2.5 text-gray-500">{row.position}</td>
                   <td className="px-2 py-2.5 text-white font-medium">{row.team?.shortName ?? row.team?.name}</td>
                   <td className="px-2 py-2.5 text-gray-400 text-center">{row.playedGames}</td>
@@ -103,16 +119,24 @@ function GroupTable({ table, groupLabel }: { table: StandingEntry[]; groupLabel:
                   <td className="px-2 py-2.5 text-gray-400 text-center">
                     {row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}
                   </td>
-                  <td className="pr-4 pl-2 py-2.5 text-white font-black text-center">{row.points}</td>
+                  <td className="pr-2 pl-2 py-2.5 text-white font-black text-center">{row.points}</td>
+                  <td className="pr-4 pl-2 py-2.5 text-center hidden sm:table-cell">
+                    {qual && (
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${style.badgeClass}`}>
+                        {style.label}
+                      </span>
+                    )}
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
-      <div className="px-4 py-2 border-t border-white/5 flex gap-4 text-[10px] text-gray-600">
-        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-green-500/30 shrink-0" />Qualifies</span>
-        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-yellow-500/30 shrink-0" />3rd-place contender</span>
+      <div className="px-4 py-2 border-t border-white/5 flex flex-wrap gap-4 text-[10px] text-gray-600">
+        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-green-500/30 shrink-0" />Qualified</span>
+        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-yellow-500/30 shrink-0" />3rd-place race</span>
+        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-red-500/30 shrink-0" />Eliminated</span>
       </div>
     </div>
   );
@@ -125,6 +149,8 @@ export default async function WC2026StandingsPage() {
     const data = await getStandingsCached('WC');
     standingTables = (data.standings ?? []).filter((s) => s.type === 'TOTAL');
   } catch { /* standings unavailable */ }
+
+  const qualMap = calculateQualificationStatus(standingTables);
 
   const jsonLdFaq = {
     '@context': 'https://schema.org',
@@ -177,9 +203,9 @@ export default async function WC2026StandingsPage() {
           <section className="mb-8">
             <h2 className="text-xl font-bold text-white mb-4">Live Group Standings</h2>
             {standingTables.map((st, i) => {
-              const groupLetter = String.fromCharCode(65 + i); // A, B, C...
+              const groupLetter = (st.group ?? '').replace(/^GROUP_/, '') || String.fromCharCode(65 + i);
               return (
-                <GroupTable key={st.group ?? i} table={st.table} groupLabel={groupLetter} />
+                <GroupTable key={st.group ?? i} table={st.table} groupLabel={groupLetter} qualMap={qualMap} />
               );
             })}
           </section>

@@ -9,6 +9,12 @@ import { WC_ALL_TEAMS } from '@/lib/wc-all-teams';
 import { matchPath } from '@/lib/url';
 import type { StandingEntry } from '@/lib/types';
 import type { CanonicalMatch } from '@/lib/canonical-match';
+import {
+  calculateQualificationStatus,
+  QUAL_BADGE_STYLES,
+  type TeamQualification,
+  type QualificationStatus,
+} from '@/lib/wc-qualification';
 import MatchCard from '@/components/MatchCard';
 import WCGroupTable from '@/components/WCGroupTable';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -185,12 +191,23 @@ function wcTeamSlug(name: string): string | null {
   return t?.slug ?? null;
 }
 
-function TeamCard({ entry, rank }: { entry: StandingEntry; rank: number }) {
-  const advances    = rank <= 2;
-  const mayAdvance  = rank === 3; // best third-placed teams rule
-  const { team }    = entry;
-  const slug        = wcTeamSlug(team.name);
-  const href        = slug ? `/world-cup-2026/teams/${slug}` : `/teams/${team.id}`;
+function TeamCard({
+  entry,
+  rank,
+  qual,
+}: {
+  entry: StandingEntry;
+  rank:  number;
+  qual?: TeamQualification;
+}) {
+  const { team } = entry;
+  const slug     = wcTeamSlug(team.name);
+  const href     = slug ? `/world-cup-2026/teams/${slug}` : `/teams/${team.id}`;
+
+  const status: QualificationStatus =
+    qual?.qualificationStatus ??
+    (rank <= 2 ? 'UNDECIDED' : rank === 3 ? 'THIRD_PLACE_CONTENDER' : 'UNDECIDED');
+  const style = QUAL_BADGE_STYLES[status];
 
   return (
     <Link
@@ -212,12 +229,9 @@ function TeamCard({ entry, rank }: { entry: StandingEntry; rank: number }) {
       </div>
       <div className="shrink-0 text-right">
         <span className="text-white font-bold text-sm">{entry.points}pts</span>
-        {advances && (
-          <p className="text-green-400 text-[10px] font-semibold">Advancing</p>
-        )}
-        {mayAdvance && (
-          <p className="text-yellow-500 text-[10px]">May qualify</p>
-        )}
+        <p className={`text-[10px] font-semibold mt-0.5 ${style.textColor}`}>
+          {style.label}
+        </p>
       </div>
     </Link>
   );
@@ -228,18 +242,20 @@ function TeamCard({ entry, rank }: { entry: StandingEntry; rank: number }) {
 // ---------------------------------------------------------------------------
 
 function QualificationSummary({
-  table, label, totalMatches, playedMatches,
+  table,
+  label,
+  totalMatches,
+  playedMatches,
+  groupQuals,
 }: {
-  table: StandingEntry[];
-  label: string;
-  totalMatches: number;
+  table:         StandingEntry[];
+  label:         string;
+  totalMatches:  number;
   playedMatches: number;
+  groupQuals:    Map<number, TeamQualification>;
 }) {
-  const complete    = playedMatches >= totalMatches && totalMatches > 0;
-  const started     = playedMatches > 0;
-  const qualifier1  = table[0];
-  const qualifier2  = table[1];
-  const mayQualify  = table[2]; // best third-place possibility
+  const complete   = playedMatches >= totalMatches && totalMatches > 0;
+  const started    = playedMatches > 0;
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
@@ -263,38 +279,37 @@ function QualificationSummary({
         <strong className="text-white">Round of 32</strong>. The best 8 third-placed teams across all 12 groups may also qualify.
       </p>
 
-      {started && (
+      {started && table.length > 0 && (
         <div className="space-y-1.5 pt-1">
-          {qualifier1 && (
-            <div className="flex items-center gap-2 text-sm">
-              <span className="w-5 h-5 rounded-full bg-green-500/20 text-green-400 text-xs flex items-center justify-center font-bold shrink-0">1</span>
-              <span className={`font-medium ${complete ? 'text-green-400' : 'text-white'}`}>
-                {qualifier1.team.shortName || qualifier1.team.name}
-              </span>
-              <span className="text-gray-600 text-xs ml-auto">{qualifier1.points} pts</span>
-              {complete && <span className="text-green-400 text-xs font-semibold">✓ Qualified</span>}
-            </div>
-          )}
-          {qualifier2 && (
-            <div className="flex items-center gap-2 text-sm">
-              <span className="w-5 h-5 rounded-full bg-green-500/20 text-green-400 text-xs flex items-center justify-center font-bold shrink-0">2</span>
-              <span className={`font-medium ${complete ? 'text-green-400' : 'text-white'}`}>
-                {qualifier2.team.shortName || qualifier2.team.name}
-              </span>
-              <span className="text-gray-600 text-xs ml-auto">{qualifier2.points} pts</span>
-              {complete && <span className="text-green-400 text-xs font-semibold">✓ Qualified</span>}
-            </div>
-          )}
-          {mayQualify && (
-            <div className="flex items-center gap-2 text-sm">
-              <span className="w-5 h-5 rounded-full bg-yellow-500/20 text-yellow-500 text-xs flex items-center justify-center font-bold shrink-0">3</span>
-              <span className="text-gray-400 font-medium">
-                {mayQualify.team.shortName || mayQualify.team.name}
-              </span>
-              <span className="text-gray-600 text-xs ml-auto">{mayQualify.points} pts</span>
-              <span className="text-yellow-500 text-xs">May qualify</span>
-            </div>
-          )}
+          {table.map((entry, i) => {
+            const qual   = groupQuals.get(entry.team.id);
+            const status = qual?.qualificationStatus;
+            const style  = status ? QUAL_BADGE_STYLES[status] : null;
+            const posNum = i + 1;
+            const posColors = [
+              'bg-green-500/20 text-green-400',
+              'bg-green-500/20 text-green-400',
+              'bg-yellow-500/20 text-yellow-500',
+              'bg-gray-700 text-gray-500',
+            ][i] ?? 'bg-gray-700 text-gray-500';
+
+            return (
+              <div key={entry.team.id || i} className="flex items-center gap-2 text-sm">
+                <span className={`w-5 h-5 rounded-full text-xs flex items-center justify-center font-bold shrink-0 ${posColors}`}>
+                  {posNum}
+                </span>
+                <span className="font-medium text-white truncate flex-1 min-w-0">
+                  {entry.team.shortName || entry.team.name}
+                </span>
+                <span className="text-gray-600 text-xs shrink-0">{entry.points} pts</span>
+                {style && (
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${style.badgeClass}`}>
+                    {style.label}
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -667,6 +682,24 @@ export default async function WCGroupPage({ params }: Params) {
     getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026/[group]', sourceType: 'page' }),
   ]);
 
+  // All group standings — used for the best-8 third-place engine across groups
+  const allStandingsTables =
+    standingsResult.status === 'fulfilled'
+      ? standingsResult.value.standings.filter((s) => s.type === 'TOTAL')
+      : [];
+
+  // Run qualification engine across ALL groups (best-8 third-place needs cross-group data)
+  const qualMap = calculateQualificationStatus(allStandingsTables);
+  // Per-team map for this group (by team ID)
+  const groupQuals = new Map<number, TeamQualification>();
+  for (const [id, q] of qualMap) {
+    if (q.group === letter) groupQuals.set(id, q);
+  }
+  // QualificationStatus-only map for WCGroupTable
+  const groupQualStatus = new Map<number, QualificationStatus>(
+    [...groupQuals.entries()].map(([id, q]) => [id, q.qualificationStatus])
+  );
+
   // Group standings table — fall back to empty table if API fails
   const liveGroupTable =
     standingsResult.status === 'fulfilled'
@@ -747,7 +780,7 @@ export default async function WCGroupPage({ params }: Params) {
           </h2>
           {tableEntries.length > 0 ? (
             <>
-              <WCGroupTable group={apiGroup} table={tableEntries} />
+              <WCGroupTable group={apiGroup} table={tableEntries} qualifications={groupQualStatus} />
               <p className="text-xs text-gray-600 mt-2 flex items-center gap-1.5">
                 <span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500 shrink-0" />
                 Advances to knockout stage
@@ -775,6 +808,7 @@ export default async function WCGroupPage({ params }: Params) {
             label={label}
             totalMatches={totalGroupMatches}
             playedMatches={playedMatches}
+            groupQuals={groupQuals}
           />
         </section>
 
@@ -786,7 +820,12 @@ export default async function WCGroupPage({ params }: Params) {
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {tableEntries.map((entry, i) => (
-                <TeamCard key={entry.team.id} entry={entry} rank={i + 1} />
+                <TeamCard
+                  key={entry.team.id || i}
+                  entry={entry}
+                  rank={i + 1}
+                  qual={groupQuals.get(entry.team.id)}
+                />
               ))}
             </div>
           </section>

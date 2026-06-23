@@ -17,6 +17,12 @@ import {
   getStandingsCached       as getStandings,
 } from '@/lib/api';
 import type { Match, StandingTable, StandingEntry } from '@/lib/types';
+import {
+  calculateQualificationStatus,
+  findQualByName,
+  QUAL_BADGE_STYLES,
+  type TeamQualification,
+} from '@/lib/wc-qualification';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCPageNav from '@/components/WCPageNav';
@@ -287,6 +293,7 @@ export default async function WCTeamPage({
   let recent: Match[]   = [];
   let standingEntry: StandingEntry | null = null;
   let standingGroupLabel = '';
+  let qualification: TeamQualification | undefined;
 
   // Local fallback fixtures — used when API returns nothing (pre-tournament or API down)
   let localTeamFixtures: WCGroupFixture[] = [];
@@ -341,6 +348,11 @@ export default async function WCTeamPage({
           break;
         }
       }
+      // Run qualification engine — needs ALL groups for the best-8 third-place calculation
+      const qualMap = calculateQualificationStatus(tables);
+      qualification = findQualByName(qualMap, team.apiName)
+        ?? findQualByName(qualMap, team.displayName)
+        ?? (standingEntry ? qualMap.get(standingEntry.team.id) : undefined);
     }
   } catch { /* render with static content */ }
 
@@ -496,6 +508,42 @@ export default async function WCTeamPage({
             )}
           </section>
         )}
+
+        {/* Qualification status */}
+        {qualification && (() => {
+          const style = QUAL_BADGE_STYLES[qualification.qualificationStatus];
+          return (
+            <section className="mb-8">
+              <h2 className="text-lg font-bold text-white mb-3">Qualification Status</h2>
+              <div className={`border rounded-xl p-4 flex items-start gap-4 ${
+                qualification.qualificationStatus === 'QUALIFIED'  ? 'bg-green-950/20 border-green-800/50' :
+                qualification.qualificationStatus === 'ELIMINATED' ? 'bg-red-950/20 border-red-800/50' :
+                qualification.qualificationStatus === 'THIRD_PLACE_CONTENDER' ? 'bg-yellow-950/20 border-yellow-800/50' :
+                'bg-gray-900 border-gray-800'
+              }`}>
+                <span className={`text-2xl shrink-0 mt-0.5 ${style.textColor}`}>
+                  {qualification.qualificationStatus === 'QUALIFIED'             ? '✅' :
+                   qualification.qualificationStatus === 'ELIMINATED'            ? '❌' :
+                   qualification.qualificationStatus === 'THIRD_PLACE_CONTENDER' ? '🟡' :
+                   '⏳'}
+                </span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`text-sm font-bold px-2 py-0.5 rounded-full border ${style.badgeClass}`}>
+                      {style.label}
+                    </span>
+                    {qualification.qualificationProbability < 1 && qualification.qualificationProbability > 0 && (
+                      <span className="text-xs text-gray-500">
+                        {Math.round(qualification.qualificationProbability * 100)}% chance
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-400 leading-relaxed">{qualification.qualificationReason}</p>
+                </div>
+              </div>
+            </section>
+          );
+        })()}
 
         {/* Route to Final */}
         <RouteToFinal

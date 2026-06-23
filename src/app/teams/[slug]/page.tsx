@@ -31,6 +31,11 @@ import {
   getUpcomingMatchesCached as getUpcomingMatches,
   NotFoundError,
 } from '@/lib/api';
+import {
+  calculateQualificationStatus,
+  QUAL_BADGE_STYLES,
+  type TeamQualification,
+} from '@/lib/wc-qualification';
 import { COMPETITIONS } from '@/lib/types';
 import type { TeamDetail, Match, StandingEntry } from '@/lib/types';
 import { slugify, teamPath, matchPath, extractTeamId } from '@/lib/url';
@@ -566,10 +571,12 @@ export default async function TeamSlugPage({ params }: Params) {
   const leagueFlag  = leagueMeta?.flag ?? '';
 
   // ── 5. Parallel data fetching ──────────────────────────────────────────
-  const [matchesResult, standingsResult, upcomingResult] = await Promise.allSettled([
+  const isWCTeam = team.runningCompetitions.some((c) => c.code === 'WC');
+  const [matchesResult, standingsResult, upcomingResult, wcStandingsResult] = await Promise.allSettled([
     getTeamMatches(id),
     leagueCode ? getStandings(leagueCode) : Promise.reject('no league'),
     leagueCode ? getUpcomingMatches(leagueCode) : Promise.reject('no league'),
+    isWCTeam   ? getStandings('WC')            : Promise.reject('not wc'),
   ]);
 
   // Recent results (FINISHED, newest first, capped at 10)
@@ -603,6 +610,14 @@ export default async function TeamSlugPage({ params }: Params) {
           .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
           .slice(0, 5)
       : [];
+
+  // WC qualification (only for teams in the WC competition)
+  let wcQualification: TeamQualification | undefined;
+  if (wcStandingsResult.status === 'fulfilled') {
+    const wcTables = wcStandingsResult.value.standings.filter((s) => s.type === 'TOTAL');
+    const qualMap  = calculateQualificationStatus(wcTables);
+    wcQualification = qualMap.get(team.id);
+  }
 
   const coach = coachName(team);
 
@@ -711,6 +726,46 @@ export default async function TeamSlugPage({ params }: Params) {
 
         {/* ── Above-fold ad ────────────────────────────────────────────── */}
         <AdSlot slotId={`team-${id}-top`} variant="banner" />
+
+        {/* ── World Cup 2026 qualification ─────────────────────────────── */}
+        {wcQualification && (() => {
+          const style = QUAL_BADGE_STYLES[wcQualification.qualificationStatus];
+          return (
+            <div className={`border rounded-2xl p-5 ${
+              wcQualification.qualificationStatus === 'QUALIFIED'             ? 'bg-green-950/20 border-green-800/50' :
+              wcQualification.qualificationStatus === 'ELIMINATED'            ? 'bg-red-950/20 border-red-800/50' :
+              wcQualification.qualificationStatus === 'THIRD_PLACE_CONTENDER' ? 'bg-yellow-950/20 border-yellow-800/50' :
+              'bg-gray-900 border-gray-800'
+            }`}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
+                  🏆 FIFA World Cup 2026
+                </span>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className={`shrink-0 font-semibold text-sm px-2.5 py-1 rounded-full border ${style.badgeClass}`}>
+                  {style.label}
+                </span>
+                {wcQualification.qualificationProbability < 1 && wcQualification.qualificationProbability > 0 && (
+                  <span className="text-xs text-gray-500 pt-1">
+                    {Math.round(wcQualification.qualificationProbability * 100)}% chance
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-gray-400 mt-2 leading-relaxed">
+                {wcQualification.qualificationReason}
+              </p>
+              {wcQualification.group && (
+                <Link
+                  href={`/world-cup-2026/group-${wcQualification.group.toLowerCase()}`}
+                  className="inline-block mt-3 text-xs text-yellow-500 hover:text-yellow-300 transition-colors"
+                >
+                  View Group {wcQualification.group} standings →
+                </Link>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ── League standing ──────────────────────────────────────────── */}
         {standingEntry && (
