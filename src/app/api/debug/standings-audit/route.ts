@@ -14,6 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
+import { getStandingsCached } from '@/lib/api';
 import { getStaticWCGroupTables } from '@/lib/wc-static-groups';
 import type { StandingTable } from '@/lib/types';
 
@@ -117,25 +118,50 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
                      : drExists   ? mergeDiagnostic(drEntry!.data)
                      : null;
 
-  // ── 4. Summary verdict ──────────────────────────────────────────────────────
+  // ── 4. RAW-key summary verdict (always shows the underlying format mismatch) ───
   const liveOverrides = mergeResult?.filter(r => r.source === 'LIVE').length ?? 0;
   const staticFallbacks = mergeResult?.filter(r => r.source === 'STATIC').length ?? 0;
   const dataSource = mainExists ? 'KV_MAIN' : drExists ? 'KV_DR' : 'STATIC_SEED';
 
-  let verdict: string;
+  let rawVerdictMsg: string;
   if (!mainExists && !drExists) {
-    verdict = 'KV_MISS — serving static seed data (P=0, PTS=0 everywhere)';
+    rawVerdictMsg = 'KV_MISS — serving static seed data (P=0, PTS=0 everywhere)';
   } else if (liveOverrides === 0) {
-    verdict = 'KV_HIT_BUT_NO_MATCH — group key mismatch, all 12 groups use static seed';
+    rawVerdictMsg = 'KV_HIT_BUT_NO_MATCH — group key format mismatch (API: "Group A", static: "GROUP_A")';
   } else if (staticFallbacks > 0) {
-    verdict = `KV_PARTIAL — ${liveOverrides}/12 groups from live, ${staticFallbacks} from static`;
+    rawVerdictMsg = `KV_PARTIAL — ${liveOverrides}/12 groups from live, ${staticFallbacks} from static`;
   } else {
-    verdict = `KV_FULL — all 12 groups from live data`;
+    rawVerdictMsg = `KV_FULL — all 12 groups from live data`;
+  }
+
+  // ── 5. Post-fix effective verdict — calls the fixed getStandingsCached ────────
+  let effectiveVerdict: string;
+  let effectiveFirstGroup: { group: string | null; firstTeam: string | null; P: number | null; PTS: number | null } | null = null;
+  try {
+    const effective = await getStandingsCached('WC');
+    const totalGroups = effective.standings.filter(s => s.type === 'TOTAL');
+    const liveGroups  = totalGroups.filter(s => s.table.some(e => e.playedGames > 0));
+    effectiveVerdict = liveGroups.length === 0
+      ? 'SERVING_STATIC — getStandingsCached returns all P=0 (fix not active)'
+      : `FIX_ACTIVE — ${liveGroups.length}/12 groups have playedGames>0`;
+    const first = totalGroups[0];
+    if (first) {
+      effectiveFirstGroup = {
+        group:     first.group ?? null,
+        firstTeam: first.table[0]?.team?.name ?? null,
+        P:         first.table[0]?.playedGames ?? null,
+        PTS:       first.table[0]?.points      ?? null,
+      };
+    }
+  } catch (err) {
+    effectiveVerdict = `ERROR — ${err instanceof Error ? err.message : String(err)}`;
   }
 
   return NextResponse.json({
-    checkedAt:     new Date(now).toISOString(),
-    verdict,
+    checkedAt:        new Date(now).toISOString(),
+    rawVerdictMsg,
+    effectiveVerdict,
+    effectiveFirstGroup,
     dataSource,
 
     main: {
