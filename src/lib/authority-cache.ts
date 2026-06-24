@@ -316,7 +316,26 @@ async function coldRebuild(builtAt: string): Promise<CanonicalMatch[]> {
         getWCLiveMatches(),
       ]);
 
-      const upcoming = upcomingResult.status === 'fulfilled' ? (upcomingResult.value?.matches ?? []) : [];
+      let upcoming = upcomingResult.status === 'fulfilled' ? (upcomingResult.value?.matches ?? []) : [];
+      // DATA-18WC.8B: When the status-filtered upcoming feed is absent or empty
+      // (post-group-stage transition — 30m TTL expired, FD API returns 0 for
+      // status=SCHEDULED,TIMED), fall back to the all-matches key (12h TTL)
+      // and filter client-side.  This keeps knockout fixtures flowing into the
+      // authority cache while the orchestrator's status-filtered feed stabilises.
+      if (upcoming.length === 0) {
+        const allMatchesData = await readKVOnly<{ matches: Match[] }>('/competitions/WC/matches');
+        const allMatches = allMatchesData?.matches ?? [];
+        upcoming = allMatches.filter(
+          m => m.status === 'SCHEDULED' || m.status === 'TIMED' ||
+               m.status === 'IN_PLAY'   || m.status === 'PAUSED',
+        );
+        if (upcoming.length > 0) {
+          console.log(
+            `[Authority] UPCOMING-FALLBACK | status-filtered KV empty, using all-matches filter` +
+            ` | upcomingCount=${upcoming.length} | allCount=${allMatches.length}`,
+          );
+        }
+      }
       const results  = resultsResult.status  === 'fulfilled' ? (resultsResult.value?.matches  ?? []) : [];
       const live     = liveResult.status     === 'fulfilled' ? liveResult.value.matches     : [];
 
