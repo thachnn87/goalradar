@@ -5,10 +5,11 @@ import Link from 'next/link';
 // DATA-4 unified: getWCAuthorityMatchesCached merges upcoming + recent WC feeds.
 import {
   getTodayMatchesCached,
-  getWCKnockoutMatchesCached,
   getStandingsCached,
   getWCAuthorityMatchesCached,
 } from '@/lib/api';
+// DATA-18WC.CONSOLIDATE: knockout data comes from the single knockout ViewModel.
+import { buildKnockoutViewModel } from '@/lib/knockout-vm';
 // WC-LIVE-SSOT: single source of truth for live WC match state
 import { getCurrentLiveMatches } from '@/lib/wc-live-ssot';
 import type { Match, StandingTable } from '@/lib/types';
@@ -568,7 +569,7 @@ export default async function HomePage() {
     wcActive ? getCurrentLiveMatches().then(m => ({ matches: m })) : Promise.resolve({ matches: [] as Match[] }),
     wcActive ? getStandingsCached('WC')         : Promise.resolve({ standings: [] as StandingTable[], competition: { name: '', emblem: '' } }),
     wcActive ? getWCAuthorityMatchesCached()    : Promise.resolve({ matches: [] as Match[] }),
-    wcActive ? getWCKnockoutMatchesCached()     : Promise.resolve({ matches: [] as Match[] }),
+    wcActive ? buildKnockoutViewModel()         : Promise.resolve({ matches: [] as Match[] }),
   ]);
 
   // ── Today's matches (other leagues only) ──────────────────────────────────

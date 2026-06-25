@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
-import {
-  getUpcomingMatchesCached as getUpcomingMatches,
-} from '@/lib/api';
+// DATA-18WC.CONSOLIDATE: scheduled fixtures come from the single authority:v1 source.
+import { getWCAuthorityMatchesCached } from '@/lib/api';
+import { classifyMatchState } from '@/lib/match-classify';
 // WC-LIVE-SSOT: single source of truth for live WC match state
 import { getCurrentLiveMatches } from '@/lib/wc-live-ssot';
 import type { Match } from '@/lib/types';
@@ -239,29 +239,31 @@ function FixtureRow({ match }: { match: Match }) {
 export default async function WatchLivePage() {
   // Fetch live + upcoming WC matches in parallel.
   // Both are prewarmed by /api/cron/prewarm-worldcup → KV hit, no API call.
-  const [liveRes, upcomingRes] = await Promise.allSettled([
+  const [liveRes, authorityRes] = await Promise.allSettled([
     getCurrentLiveMatches(),
-    getUpcomingMatches('WC'),
+    getWCAuthorityMatchesCached(),
   ]);
 
   const liveMatches: Match[] =
     liveRes.status === 'fulfilled' ? liveRes.value : [];
 
-  // Derive today's upcoming WC matches from the prewarmed fixtures instead of
-  // calling getTodayMatches() (fetchDirect, all-competitions, unprewarmed).
-  // getUpcomingMatches('WC') returns SCHEDULED+TIMED — exactly what's needed here.
+  // Derive today's + upcoming WC matches from the single authority:v1 source.
+  // Keep only SCHEDULED/TIMED (today | upcoming) — finished and live are handled
+  // by the results page and the live SSOT respectively.
   const todayISO = new Date().toISOString().split('T')[0];
-  const todayWC: Match[] =
-    upcomingRes.status === 'fulfilled'
-      ? upcomingRes.value.matches.filter((m) => m.utcDate.startsWith(todayISO))
+  const scheduledWC: Match[] =
+    authorityRes.status === 'fulfilled'
+      ? authorityRes.value.matches.filter((m) => {
+          const bucket = classifyMatchState(m, todayISO);
+          return bucket === 'today' || bucket === 'upcoming';
+        })
       : [];
 
-  const upcoming: Match[] =
-    upcomingRes.status === 'fulfilled'
-      ? [...upcomingRes.value.matches]
-          .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
-          .slice(0, 8)
-      : [];
+  const todayWC: Match[] = scheduledWC.filter((m) => m.utcDate.startsWith(todayISO));
+
+  const upcoming: Match[] = [...scheduledWC]
+    .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
+    .slice(0, 8);
 
   const hasLive   = liveMatches.length > 0;
   const hasToday  = todayWC.length > 0;

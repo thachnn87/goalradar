@@ -11,12 +11,14 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { WC_ALL_TEAM_SLUGS, getWCTeam } from '@/lib/wc-all-teams';
 import type { WCGroupFixture } from '@/lib/wc-fixtures';
+// DATA-18WC.CONSOLIDATE: WC match collections come from the single authority:v1
+// source; standings keep their own canonical owner.
 import {
-  getUpcomingMatchesCached  as getUpcomingMatches,
-  getRecentMatchesCached    as getRecentMatches,
   getStandingsCached        as getStandings,
   getWCAuthorityMatchesV2,
 } from '@/lib/api';
+import { canonicalToMatch } from '@/lib/canonical-match';
+import { classifyMatchState } from '@/lib/match-classify';
 import type { Match, StandingTable, StandingEntry } from '@/lib/types';
 import {
   calculateQualificationStatus,
@@ -306,30 +308,35 @@ export default async function WCTeamPage({
   const dispNorm = normName(team.displayName);
 
   try {
-    const [upcomingData, recentData, standingsData] = await Promise.allSettled([
-      getUpcomingMatches('WC'),
-      getRecentMatches('WC'),
+    const builtAt = new Date().toISOString();
+    const [authorityData, standingsData] = await Promise.allSettled([
+      getWCAuthorityMatchesV2(builtAt, {
+        source: `/world-cup-2026/teams/${slug}`,
+        sourceType: 'page',
+      }),
       getStandings('WC'),
     ]);
 
-    if (upcomingData.status === 'fulfilled') {
-      upcoming = upcomingData.value.matches.filter(
-        (m) =>
-          normName(m.homeTeam?.name).includes(apiNorm) ||
-          normName(m.awayTeam?.name).includes(apiNorm) ||
-          normName(m.homeTeam?.name) === dispNorm ||
-          normName(m.awayTeam?.name) === dispNorm
-      );
-    }
-
-    if (recentData.status === 'fulfilled') {
-      recent = recentData.value.matches.filter(
-        (m) =>
-          normName(m.homeTeam?.name).includes(apiNorm) ||
-          normName(m.awayTeam?.name).includes(apiNorm) ||
-          normName(m.homeTeam?.name) === dispNorm ||
-          normName(m.awayTeam?.name) === dispNorm
-      );
+    if (authorityData.status === 'fulfilled') {
+      const todayISO = new Date().toISOString().split('T')[0];
+      const teamMatches = authorityData.value.matches
+        .map(canonicalToMatch)
+        .filter(
+          (m) =>
+            normName(m.homeTeam?.name).includes(apiNorm) ||
+            normName(m.awayTeam?.name).includes(apiNorm) ||
+            normName(m.homeTeam?.name) === dispNorm ||
+            normName(m.awayTeam?.name) === dispNorm
+        );
+      upcoming = teamMatches
+        .filter((m) => {
+          const bucket = classifyMatchState(m, todayISO);
+          return bucket === 'today' || bucket === 'upcoming' || bucket === 'live';
+        })
+        .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
+      recent = teamMatches
+        .filter((m) => m.status === 'FINISHED')
+        .sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime());
     }
 
     if (standingsData.status === 'fulfilled') {
@@ -356,30 +363,6 @@ export default async function WCTeamPage({
         ?? (standingEntry ? qualMap.get(standingEntry.team.id) : undefined);
     }
   } catch { /* render with static content */ }
-
-  // Authority cache fallback — when both feeds are empty and tournament has started
-  const TOURNAMENT_START = new Date('2026-06-11T00:00:00Z');
-  if (upcoming.length === 0 && recent.length === 0 && new Date() >= TOURNAMENT_START) {
-    try {
-      const builtAt = new Date().toISOString();
-      const { matches: authMatches } = await getWCAuthorityMatchesV2(builtAt, {
-        source: `/world-cup-2026/teams/${slug}`,
-        sourceType: 'page',
-      });
-      const teamMatches = authMatches.filter(
-        (m) =>
-          normName(m.homeTeam?.name).includes(apiNorm) ||
-          normName(m.awayTeam?.name).includes(apiNorm) ||
-          normName(m.homeTeam?.name) === dispNorm      ||
-          normName(m.awayTeam?.name) === dispNorm
-      );
-      // CanonicalMatch is structurally compatible with Match for the fields rendered
-      recent   = (teamMatches.filter(m => m.state === 'finished' || m.state === 'cancelled') as unknown as Match[])
-                   .sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime());
-      upcoming = (teamMatches.filter(m => m.state === 'scheduled' || m.state === 'live') as unknown as Match[])
-                   .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
-    } catch { /* keep empty arrays */ }
-  }
 
   // Form helper
   const recentForm: string[] = (recent.slice(0, 5).map((m) => {

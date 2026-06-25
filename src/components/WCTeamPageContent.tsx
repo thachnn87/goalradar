@@ -14,12 +14,14 @@
 import Link from 'next/link';
 import type { WCTeam } from '@/lib/wc-teams';
 import { findTeamGroupFromMatches } from '@/lib/wc-teams';
+// DATA-18WC.CONSOLIDATE: WC match collections come from the single authority:v1
+// source; standings keep their own canonical owner; live keeps its SSOT.
 import {
-  getUpcomingMatchesCached,
-  getRecentMatchesCached,
+  getWCAuthorityMatchesCached,
   getWCLiveMatchesCached,
   getStandingsCached,
 } from '@/lib/api';
+import { classifyMatchState } from '@/lib/match-classify';
 import type { Match, StandingEntry, StandingTable } from '@/lib/types';
 import { matchPath } from '@/lib/url';
 import MatchCard from '@/components/MatchCard';
@@ -660,18 +662,23 @@ function JsonLd({ team, group }: { team: WCTeam; group: string | null }) {
 // ---------------------------------------------------------------------------
 
 export default async function WCTeamPageContent({ team }: { team: WCTeam }) {
-  // Parallel fetches — gracefully degrade on error
-  const [upcomingRes, recentRes, standingsRes, liveRes] = await Promise.allSettled([
-    getUpcomingMatchesCached('WC'),
-    getRecentMatchesCached('WC'),
+  // Parallel fetches — gracefully degrade on error.
+  // DATA-18WC.CONSOLIDATE: one WC match source (authority:v1). Split into upcoming
+  // and finished here instead of reading two separate window-limited feeds.
+  const today = new Date().toISOString().split('T')[0];
+  const [authorityRes, standingsRes, liveRes] = await Promise.allSettled([
+    getWCAuthorityMatchesCached(),
     getStandingsCached('WC'),
     getWCLiveMatchesCached(),
   ]);
 
-  const allUpcoming: Match[] =
-    upcomingRes.status === 'fulfilled' ? upcomingRes.value.matches : [];
-  const allRecent: Match[] =
-    recentRes.status === 'fulfilled' ? recentRes.value.matches : [];
+  const allAuthority: Match[] =
+    authorityRes.status === 'fulfilled' ? authorityRes.value.matches : [];
+  const allUpcoming: Match[] = allAuthority.filter((m) => {
+    const bucket = classifyMatchState(m, today);
+    return bucket === 'today' || bucket === 'upcoming';
+  });
+  const allRecent: Match[] = allAuthority.filter((m) => m.status === 'FINISHED');
   const allLive: Match[] =
     liveRes.status === 'fulfilled' ? liveRes.value.matches : [];
   const allStandings: StandingTable[] =

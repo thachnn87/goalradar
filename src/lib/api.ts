@@ -564,24 +564,13 @@ export async function getStandingsCached(competition: string): Promise<{
 }
 
 /**
- * Page-safe all WC matches (bracket / knockout).
- * Falls back to bundled static fixtures.
+ * DATA-18WC.CONSOLIDATE: getWCKnockoutMatchesCached() removed.
+ *
+ * It was the legacy second knockout pipeline (KV `/competitions/WC/matches`,
+ * 6 h TTL). All knockout consumers now read authority:v1 through the single
+ * buildKnockoutViewModel() pipeline. There is no replacement — knockout data has
+ * exactly one source.
  */
-export async function getWCKnockoutMatchesCached(): Promise<{ matches: Match[] }> {
-  const key = '/competitions/WC/matches';
-  try {
-    const data = await withCache(key, TTL.WC, async () => {
-      const inner = await readKVOnly<{ matches: Match[] }>(key);
-      if (inner) return inner;
-      return { matches: [] };
-    });
-    // DATA-2: snapshot-authoritative state — critical here, the bulk WC list
-    // has a 6 h L1 TTL and would otherwise lag every transition.
-    return { matches: await overlayMatchStates(data.matches) };
-  } catch {
-    return { matches: [] };
-  }
-}
 
 /**
  * Page-safe live WC matches.
@@ -644,62 +633,30 @@ export async function getTodayMatchesCached(): Promise<{ matches: Match[] }> {
 export type CanonicalMatch = Match;
 
 /**
- * Single authoritative WC match list — DATA-4 unified authority.
+ * Single authoritative WC match list — DATA-18WC.CONSOLIDATE.
  *
- * Problem: `getUpcomingMatchesCached` reads only the SCHEDULED/TIMED KV feed.
- * When a match finishes, it stays in that feed until the cron refreshes it.
- * `overlayMatchStates` bridges the gap via per-match snapshots, but snapshots
- * can expire (60 s TIMED TTL) or be absent — leaving the stale SCHEDULED entry
- * visible on fixtures/hub/schedule pages even when the results feed is correct.
+ * Collapsed onto the ONE World Cup source: goalradar:wc:authority:v1.
  *
- * Fix: merge the upcoming (SCHEDULED/TIMED) feed with the recent (FINISHED)
- * feed using the forward-only STATE_RANK rule — FINISHED always beats
- * SCHEDULED/TIMED for the same match ID. Per-match snapshot overlay is then
- * applied on top for live-score freshness.
+ * Previously this merged three KV buckets (upcoming SCHEDULED/TIMED + results
+ * FINISHED + live), which was forward-window-limited (FD's SCHEDULED feed only
+ * returns matches within a short horizon) and therefore diverged from the
+ * authority cache — the exact root cause documented in DATA-18WC.VERIFY (the
+ * schedule page showing only 4 upcoming matches).
  *
- * This means FINISHED detection no longer depends on a per-match snapshot
- * existing in KV; it relies on the bulk results feed which the cron maintains
- * independently and which is correct within one 15-min cron cycle.
- *
- * Constraints: no new KV writes, no provider calls, no new caches, no ISR change.
+ * It now reads authority:v1 directly via readAuthorityCache() — the same source
+ * getWCAuthorityMatchesV2() and buildKnockoutViewModel() use — and converts to
+ * the shared Match shape with the one canonical adapter (canonicalToMatch).
+ * This function is therefore a Match-shaped *view* of authority:v1, not a second
+ * pipeline. Live state is overlaid by callers via the live SSOT
+ * (getCurrentLiveMatches() / getLiveMatchIdSet()), exactly as before.
  */
 export async function getWCAuthorityMatchesCached(): Promise<{ matches: Match[] }> {
-  // DATA-16D: use getWCResultsCached() (stable key: /competitions/WC/matches?status=FINISHED)
-  // instead of getRecentMatchesCached('WC') (date-scoped key that rotates daily at midnight UTC
-  // and has no DR fallback, causing "No results" windows between cron runs).
-  const [upcomingResult, recentResult, liveResult] = await Promise.allSettled([
-    getUpcomingMatchesCached('WC'),
-    getWCResultsCached(),
-    getWCLiveMatches(),
-  ]);
-
-  const upcoming = upcomingResult.status === 'fulfilled' ? upcomingResult.value.matches : [];
-  const recent   = recentResult.status  === 'fulfilled' ? recentResult.value.matches   : [];
-  const live     = liveResult.status    === 'fulfilled' ? liveResult.value.matches     : [];
-
-  // Merge by ID — forward-only: higher STATE_RANK wins.
-  // upcoming feed carries all 104 WC fixtures (SCHEDULED/TIMED).
-  // recent feed carries the last 30 days; FINISHED entries supersede stale SCHEDULED ones.
-  // live feed carries IN_PLAY/PAUSED (rank 2 > SCHEDULED rank 0) — fills the gap where the
-  // recent feed hasn't been refreshed since kickoff (up to the 30-min skip-guard window).
-  const byId = new Map<number, Match>();
-  for (const m of upcoming) byId.set(m.id, m);
-  for (const m of recent) {
-    const existing = byId.get(m.id);
-    if (!existing || (STATE_RANK[m.status] ?? 0) >= (STATE_RANK[existing.status] ?? 0)) {
-      byId.set(m.id, m);
-    }
-  }
-  for (const m of live) {
-    const existing = byId.get(m.id);
-    if (!existing || (STATE_RANK[m.status] ?? 0) >= (STATE_RANK[existing.status] ?? 0)) {
-      byId.set(m.id, m);
-    }
-  }
-
-  // Snapshot overlay runs last — advances IN_PLAY scores and catches any
-  // FINISHED transitions the bulk feeds haven't propagated yet.
-  return { matches: await overlayMatchStates([...byId.values()]) };
+  const { readAuthorityCache } = await import('./authority-cache');
+  const { canonicalToMatch }   = await import('./canonical-match');
+  const matches = await readAuthorityCache(new Date().toISOString(), {
+    source: 'getWCAuthorityMatchesCached', sourceType: 'page',
+  });
+  return { matches: matches.map(canonicalToMatch) };
 }
 
 /**

@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "check:wc-arch": "node scripts/check-wc-architecture.mjs",
+    "prebuild": "node scripts/check-wc-architecture.mjs",
     "test": "jest",
     "test:watch": "jest --watch",
     "crawl:links": "node scripts/crawl-links.mjs",

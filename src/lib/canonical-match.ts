@@ -230,6 +230,47 @@ function deriveState(status: MatchStatus): CanonicalMatch['state'] {
 }
 
 // ---------------------------------------------------------------------------
+// canonicalToMatch — the ONE adapter from authority CanonicalMatch → shared Match
+// ---------------------------------------------------------------------------
+
+/**
+ * DATA-18WC.CONSOLIDATE: single canonical adapter.
+ *
+ * Converts an authority-cache CanonicalMatch into the shared Match shape used by
+ * listing components (MatchCard, BracketPreview, WCRoundPage, hub/schedule views).
+ *
+ * This is the ONLY place CanonicalMatch → Match conversion happens. Every page or
+ * pipeline that needs Match-shaped WC data from authority:v1 must reuse this
+ * function — never re-implement the mapping. Lives here (not in knockout-vm) so
+ * api.ts can reuse it without a circular import.
+ */
+export function canonicalToMatch(m: CanonicalMatch): Match {
+  const statusMap: Record<CanonicalMatch['state'], MatchStatus> = {
+    live:      'IN_PLAY',
+    finished:  'FINISHED',
+    scheduled: 'SCHEDULED',
+    cancelled: 'POSTPONED',
+  };
+  return {
+    id:          m.id,
+    utcDate:     m.utcDate,
+    status:      statusMap[m.state],
+    matchday:    m.matchday,
+    stage:       m.stage,
+    group:       m.group,
+    lastUpdated: m.lastUpdated,
+    competition: {
+      id: 2000, name: 'FIFA World Cup', code: 'WC', type: 'CUP', emblem: '',
+      area: { id: 2267, name: 'World', code: 'WLD', flag: null },
+    },
+    homeTeam: m.homeTeam,
+    awayTeam: m.awayTeam,
+    score:    m.score,
+    minute:   m.minute ?? null,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Integrity validation
 // ---------------------------------------------------------------------------
 

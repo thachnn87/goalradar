@@ -22,8 +22,9 @@
 
 import type { Metadata } from 'next';
 import Link from 'next/link';
-// PERF-4.5
-import { getUpcomingMatchesCached, getRecentMatchesCached } from '@/lib/api';
+// DATA-18WC.CONSOLIDATE: single WC source — authority:v1 via getWCAuthorityMatchesCached.
+import { getWCAuthorityMatchesCached } from '@/lib/api';
+import { classifyMatchState } from '@/lib/match-classify';
 import type { WCGroupFixture } from '@/lib/wc-fixtures';
 import { matchPath, predictPath } from '@/lib/url';
 import type { Match } from '@/lib/types';
@@ -297,27 +298,24 @@ export default async function WC2026PredictionsPage() {
   let recent: Match[]   = [];
 
   try {
-    const [upRes, recRes] = await Promise.allSettled([
-      getUpcomingMatchesCached('WC'),
-      getRecentMatchesCached('WC'),
-    ]);
+    // DATA-18WC.CONSOLIDATE: one source. authority:v1 carries all 104 matches with
+    // correct state; split into upcoming and finished here rather than reading two
+    // separate window-limited feeds.
+    const today = new Date().toISOString().split('T')[0];
+    const { matches } = await getWCAuthorityMatchesCached();
 
-    if (upRes.status === 'fulfilled') {
-      upcoming = upRes.value.matches
-        .filter((m) => m.competition?.code === 'WC' || !m.competition)
-        .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
-        .slice(0, MAX_UPCOMING);
-    }
+    upcoming = matches
+      .filter((m) => {
+        const bucket = classifyMatchState(m, today);
+        return bucket === 'today' || bucket === 'upcoming';
+      })
+      .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
+      .slice(0, MAX_UPCOMING);
 
-    if (recRes.status === 'fulfilled') {
-      recent = recRes.value.matches
-        .filter((m) =>
-          (m.competition?.code === 'WC' || !m.competition) &&
-          m.status === 'FINISHED',
-        )
-        .sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime())
-        .slice(0, MAX_RECENT);
-    }
+    recent = matches
+      .filter((m) => m.status === 'FINISHED')
+      .sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime())
+      .slice(0, MAX_RECENT);
   } catch { /* render with static fallback */ }
 
   const staticFixtures: WCGroupFixture[] = [];
