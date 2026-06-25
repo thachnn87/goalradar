@@ -27,6 +27,8 @@ import { WC_ALL_TEAMS } from '@/lib/wc-all-teams';
 import { WC_ROUNDS } from '@/lib/wc-rounds';
 // getStaticUpcomingMatches is no longer needed here — fallback is handled inside getUpcomingMatchesCached
 import PushNotificationButton from '@/components/PushNotificationButton';
+// DATA-18WC.13: knockout slot fallback for when authority cache has no upcoming matches
+import { WC_KNOCKOUT_SLOTS, type WCKnockoutSlot } from '@/lib/wc-fixtures';
 
 export const revalidate = 30;
 
@@ -261,6 +263,40 @@ function ResultRow({ match }: { match: CanonicalMatch }) {
 // GroupTable is the shared WCGroupTable component (imported above)
 
 // ---------------------------------------------------------------------------
+// Knockout slot schedule — shown when authority cache has no upcoming matches
+// Same data source as bracket/page.tsx LocalKnockoutRound (DATA-18WC.13)
+// ---------------------------------------------------------------------------
+
+function LocalKnockoutRound({ slots }: { slots: WCKnockoutSlot[] }) {
+  if (slots.length === 0) return null;
+  return (
+    <div className="divide-y divide-gray-800/50 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      {slots.map((s) => (
+        <div key={s.localId} className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <span className="text-sm text-gray-300 font-medium truncate">{s.homeLabel}</span>
+          </div>
+          <div className="mx-4 text-center shrink-0">
+            <p className="text-gray-500 text-xs font-semibold">{s.roundLabel}</p>
+            <p className="text-gray-600 text-[11px]">
+              {new Date(s.utcDate).toLocaleDateString('en-GB', {
+                day: 'numeric', month: 'short', timeZone: 'UTC',
+              })}
+            </p>
+          </div>
+          <div className="flex items-center gap-3 flex-1 min-w-0 justify-end">
+            <span className="text-sm text-gray-300 font-medium truncate text-right">{s.awayLabel}</span>
+          </div>
+        </div>
+      ))}
+      <div className="px-4 py-2 text-[10px] text-gray-700">
+        Scheduled — teams confirmed once group stage qualifies
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Empty state
 // ---------------------------------------------------------------------------
 
@@ -316,6 +352,14 @@ export default async function WorldCup2026Page() {
   // Knockout bracket matches (still uses legacy feed — not on authority V2 path)
   const knockoutMatches: Match[] =
     knockoutResult.status === 'fulfilled' ? knockoutResult.value.matches : [];
+
+  // DATA-18WC.13: static knockout slot fallback for upcoming section.
+  // Used when authority cache has no upcoming matches (group stage finished,
+  // R32 fixtures not yet posted by FD API). Mirrors bracket/page.tsx behaviour.
+  const knockoutSlots =
+    upcomingMatches.length === 0
+      ? WC_KNOCKOUT_SLOTS.filter((s) => new Date(s.utcDate) > new Date()).slice(0, 16)
+      : [];
 
   // 5. Group standings
   const groupTables: StandingTable[] =
@@ -445,9 +489,11 @@ export default async function WorldCup2026Page() {
 
         {/* ── 3. Upcoming Matches ───────────────────────────────────────── */}
         <section id="fixtures" aria-labelledby="upcoming-heading">
-          <SectionHeader title="Upcoming Matches" count={upcomingMatches.length} />
+          <SectionHeader title="Upcoming Matches" count={upcomingMatches.length || knockoutSlots.length} />
           {upcomingMatches.length > 0 ? (
             <MatchGrid matches={upcomingMatches} />
+          ) : knockoutSlots.length > 0 ? (
+            <LocalKnockoutRound slots={knockoutSlots} />
           ) : (
             <EmptyState
               message="No upcoming fixtures available"
@@ -455,6 +501,7 @@ export default async function WorldCup2026Page() {
             />
           )}
         </section>
+
 
         {/* ── 4. Group Standings ────────────────────────────────────────── */}
         <section id="groups" aria-labelledby="standings-heading">

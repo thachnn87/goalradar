@@ -406,9 +406,100 @@ export async function getWCResultsCached(): Promise<{ matches: Match[] }> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// DATA-18WC.13: Authority-derived WC standings
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute WC group standings from the authority cache match data.
+ *
+ * Used as a fallback when the FD API /competitions/WC/standings KV key is
+ * empty (403 tier restriction triggers RATE-SAFE mode, blocking the refresh).
+ * The authority cache already holds all 104 WC matches with real team IDs and
+ * FINISHED scores, so standings can be derived without any provider call.
+ *
+ * Returns [] when authority cache is unavailable or has no finished group matches.
+ */
+async function computeWCStandingsFromAuthority(builtAt: string): Promise<StandingTable[]> {
+  const { readAuthorityCache } = await import('./authority-cache');
+  const matches = await readAuthorityCache(builtAt);
+
+  const groupMatches = matches.filter(
+    (m) => m.stage === 'GROUP_STAGE' && m.state === 'finished',
+  );
+  if (groupMatches.length === 0) return [];
+
+  type TeamStats = {
+    team: import('./types').Team;
+    p: number; w: number; d: number; l: number; gf: number; ga: number; pts: number;
+  };
+
+  const groups = new Map<string, Map<number, TeamStats>>();
+
+  for (const match of groupMatches) {
+    const gk = match.group ?? 'UNKNOWN';
+    if (!groups.has(gk)) groups.set(gk, new Map());
+    const gMap = groups.get(gk)!;
+
+    const ht  = match.homeTeam;
+    const at  = match.awayTeam;
+    const hg  = match.score.fullTime.home;
+    const ag  = match.score.fullTime.away;
+    if (hg === null || ag === null) continue;
+
+    const mkEntry = (t: typeof ht): TeamStats => ({
+      team: { id: t.id, name: t.name, shortName: t.shortName, tla: t.tla, crest: t.crest },
+      p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0,
+    });
+
+    const he = gMap.get(ht.id) ?? mkEntry(ht);
+    const ae = gMap.get(at.id) ?? mkEntry(at);
+
+    he.p++; ae.p++;
+    he.gf += hg; he.ga += ag;
+    ae.gf += ag; ae.ga += hg;
+
+    if (hg > ag)      { he.w++; he.pts += 3; ae.l++; }
+    else if (ag > hg) { ae.w++; ae.pts += 3; he.l++; }
+    else              { he.d++; ae.d++; he.pts += 1; ae.pts += 1; }
+
+    gMap.set(ht.id, he);
+    gMap.set(at.id, ae);
+  }
+
+  const tables: StandingTable[] = [];
+  for (const [groupKey, gMap] of groups) {
+    const sorted = [...gMap.values()].sort((a, b) =>
+      b.pts - a.pts ||
+      (b.gf - b.ga) - (a.gf - a.ga) ||
+      b.gf - a.gf,
+    );
+    tables.push({
+      stage: 'GROUP_STAGE',
+      type:  'TOTAL',
+      group: groupKey,
+      table: sorted.map((e, i) => ({
+        position:       i + 1,
+        team:           e.team,
+        playedGames:    e.p,
+        form:           null,
+        won:            e.w,
+        draw:           e.d,
+        lost:           e.l,
+        points:         e.pts,
+        goalsFor:       e.gf,
+        goalsAgainst:   e.ga,
+        goalDifference: e.gf - e.ga,
+      })),
+    });
+  }
+
+  return tables.sort((a, b) => (a.group ?? '').localeCompare(b.group ?? ''));
+}
+
 /**
  * Page-safe standings.
- * Falls back to bundled static WC group tables for WC; empty for leagues.
+ * Falls back to authority-derived standings, then static WC group tables for WC; empty for leagues.
  */
 export async function getStandingsCached(competition: string): Promise<{
   standings:   StandingTable[];
@@ -446,7 +537,20 @@ export async function getStandingsCached(competition: string): Promise<{
         }
         return data;
       }
+      // DATA-18WC.13: KV miss — try authority-derived standings before all-zero skeleton.
+      // FD API /competitions/WC/standings returns 403 (tier restriction), activating
+      // RATE-SAFE mode and blocking all refresh tasks. Authority cache has all 104
+      // matches with real team IDs → derive group standings directly from match results.
       if (competition === 'WC') {
+        try {
+          const derived = await computeWCStandingsFromAuthority(new Date().toISOString());
+          if (derived.length > 0) {
+            console.log(`[Standings] WC KV miss → authority-derived standings | groups=${derived.length}`);
+            return { standings: derived, competition: wcMeta };
+          }
+        } catch (err) {
+          console.warn('[Standings] authority derivation failed:', err instanceof Error ? err.message : String(err));
+        }
         return { standings: getStaticWCGroupTables(), competition: wcMeta };
       }
       return empty;
