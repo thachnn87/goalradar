@@ -10,10 +10,10 @@
 
 import type { Metadata } from 'next';
 import Link from 'next/link';
-// DATA-6: authority source only — no static fallbacks.
-import { getWCAuthorityMatchesCached } from '@/lib/api';
+// DATA-18WC.VERIFY: authority:v1 direct read — same source as fixtures page.
+import { getWCAuthorityMatchesV2 } from '@/lib/api';
 import { classifyMatchState } from '@/lib/match-classify';
-import type { Match } from '@/lib/types';
+import type { CanonicalMatch } from '@/lib/canonical-match';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCPageNav from '@/components/WCPageNav';
@@ -73,8 +73,8 @@ function formatDay(utcDate: string): string {
   });
 }
 
-function groupByDay(matches: Match[]): Map<string, Match[]> {
-  const map = new Map<string, Match[]>();
+function groupByDay(matches: CanonicalMatch[]): Map<string, CanonicalMatch[]> {
+  const map = new Map<string, CanonicalMatch[]>();
   for (const m of matches) {
     const day = (m.utcDate ?? '').slice(0, 10);
     if (!map.has(day)) map.set(day, []);
@@ -131,10 +131,11 @@ const FAQ = [
 export default async function WC2026SchedulePage() {
   // DATA-6: authority source only. Filter to SCHEDULED/TIMED — never show
   // live, paused, or finished matches inside a schedule view.
-  let upcoming: Match[] = [];
+  const builtAt = new Date().toISOString();
+  let upcoming: CanonicalMatch[] = [];
   try {
     const today = new Date().toISOString().split('T')[0];
-    const data = await getWCAuthorityMatchesCached();
+    const data = await getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026-schedule', sourceType: 'page' });
     upcoming = data.matches
       .filter((m) => { const b = classifyMatchState(m, today); return b === 'today' || b === 'upcoming'; })
       .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
