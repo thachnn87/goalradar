@@ -141,7 +141,7 @@ export default async function WCGroupsPage() {
           )}
           {!apiError && !matchesPlayed && (
             <span className="text-yellow-600 ml-auto">
-              Tournament begins 11 June 2026 — standings update once matches are played
+              Live standings updating — check back in a few minutes
             </span>
           )}
         </div>
