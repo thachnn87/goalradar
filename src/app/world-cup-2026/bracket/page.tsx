@@ -371,10 +371,16 @@ export default async function WCBracketPage() {
     // graceful degradation — fall back to local slot schedule below
   }
 
-  const knockoutMatches = allWCMatches
+  // injectKnockoutSlotLabels must receive all matches for a stage at once (ordinal matching).
+  const knockoutRaw = allWCMatches
     .filter((m) => KNOCKOUT_STAGES.has(m.stage))
-    .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
-    .map((m) => injectKnockoutSlotLabels([m], m.stage)[0]);
+    .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
+
+  const knockoutMatches: Match[] = (['LAST_32', 'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'THIRD_PLACE', 'FINAL'] as const)
+    .flatMap((stage) =>
+      injectKnockoutSlotLabels(knockoutRaw.filter((m) => m.stage === stage), stage),
+    )
+    .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
 
   // When API is unavailable, use local pre-tournament knockout slots
   const useLocalSlots = knockoutMatches.length === 0;

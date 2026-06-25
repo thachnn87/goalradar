@@ -141,9 +141,15 @@ export function getKnockoutSlots(round: WCKnockoutSlot['round']): WCKnockoutSlot
  * (group stage still ongoing), substitute positional labels from WC_KNOCKOUT_SLOTS
  * (e.g. "1st Group A", "Runner-up Group C") so the UI never shows bare "TBD".
  *
+ * MUST be called with ALL matches for a single stage at once — ordinal position
+ * within the sorted array maps to WC_KNOCKOUT_SLOTS matchNumber order.
+ *
+ * WC_KNOCKOUT_SLOTS uses pre-draw editorial dates that differ from the FD API's
+ * confirmed schedule, so date matching is not used. Instead, matches sorted by
+ * utcDate (ascending) are mapped 1-to-1 to slots sorted by matchNumber.
+ *
  * Only enriches matches whose homeTeam.name or awayTeam.name is falsy.
- * Teams that are already known are left untouched.
- * Matching is by UTC kick-off minute prefix (YYYY-MM-DDTHH:MM).
+ * Teams that are already confirmed are left untouched.
  */
 export function injectKnockoutSlotLabels<T extends {
   utcDate: string;
@@ -151,18 +157,25 @@ export function injectKnockoutSlotLabels<T extends {
   awayTeam: { id: number; name: string; shortName: string; tla: string; crest: string } | null | undefined;
 }>(matches: T[], stage: string): T[] {
   const round = stage as WCKnockoutSlot['round'];
-  const slots = WC_KNOCKOUT_SLOTS.filter((s) => s.round === round);
+  const slots = WC_KNOCKOUT_SLOTS
+    .filter((s) => s.round === round)
+    .sort((a, b) => a.matchNumber - b.matchNumber);
   if (slots.length === 0) return matches;
 
-  return matches.map((m) => {
+  // Sort matches by utcDate ascending so position i corresponds to slot[i]
+  const sortedOrder = matches
+    .map((_, i) => i)
+    .sort((a, b) => new Date(matches[a].utcDate).getTime() - new Date(matches[b].utcDate).getTime());
+
+  const result = [...matches];
+  sortedOrder.forEach((originalIdx, pos) => {
+    const slot = slots[pos];
+    if (!slot) return;
+    const m = result[originalIdx];
     const needsHome = !m.homeTeam?.name;
     const needsAway = !m.awayTeam?.name;
-    if (!needsHome && !needsAway) return m;
-
-    const slot = slots.find((s) => s.utcDate.slice(0, 16) === m.utcDate.slice(0, 16));
-    if (!slot) return m;
-
-    return {
+    if (!needsHome && !needsAway) return;
+    result[originalIdx] = {
       ...m,
       homeTeam: needsHome
         ? { id: 0, name: slot.homeLabel, shortName: slot.homeLabel, tla: '', crest: '' }
@@ -172,4 +185,5 @@ export function injectKnockoutSlotLabels<T extends {
         : m.awayTeam,
     };
   });
+  return result;
 }

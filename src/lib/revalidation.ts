@@ -35,6 +35,14 @@ export const WC_DATA_PATHS: string[] = [
   '/world-cup-2026/teams',
   '/world-cup-2026/matches',
   '/world-cup-2026/fixtures',
+  // Knockout pages
+  '/world-cup-2026/bracket',
+  '/world-cup-2026/round-of-32',
+  '/world-cup-2026/round-of-16',
+  '/world-cup-2026/quarter-finals',
+  '/world-cup-2026/semi-finals',
+  '/world-cup-2026/third-place',
+  '/world-cup-2026/final',
   // Programmatic SEO pages
   '/world-cup-2026-standings',
   '/world-cup-2026-groups',
