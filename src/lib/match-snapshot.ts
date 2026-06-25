@@ -394,17 +394,67 @@ function getStaticWCFallback(): Match[] {
  * route through KV (seeded by orchestrator).  If they miss, static WC fixtures
  * are used as a fallback (Phase 6).
  */
+/**
+ * DATA-18WC.END-TO-END: authority:v1 fallback for match detail.
+ *
+ * authority:v1 is the single World Cup source — it carries all 104 matches,
+ * including knockout fixtures with placeholder ("TBD") teams that the provider
+ * has no detail for. When both the KV detail and the provider miss, build a
+ * minimal MatchDetail from the canonical match so EVERY match linked from the
+ * bracket/round pages opens instead of 404-ing.
+ *
+ * Returns null when the id is not in authority:v1 (genuinely unknown) so the
+ * caller can surface the real NotFoundError.
+ */
+async function buildDetailFromAuthority(matchId: string): Promise<MatchDetail | null> {
+  const numId = parseInt(matchId, 10);
+  if (!Number.isFinite(numId) || numId <= 0) return null;
+
+  const { getWCAuthorityMatchesV2 } = await import('./api');
+  const { canonicalToMatch }        = await import('./canonical-match');
+
+  const { matches } = await getWCAuthorityMatchesV2(new Date().toISOString(), {
+    source: 'match-snapshot:authority-fallback', sourceType: 'page',
+  }).catch(() => ({ matches: [] as Awaited<ReturnType<typeof getWCAuthorityMatchesV2>>['matches'] }));
+
+  const canon = matches.find((m) => m.id === numId);
+  if (!canon) return null;
+
+  const base = canonicalToMatch(canon);
+  return {
+    ...base,
+    goals:         canon.goals ?? [],
+    bookings:      canon.cards ?? [],
+    substitutions: (canon.substitutions ?? []) as MatchDetail['substitutions'],
+    lineups:       null,
+    venue:         canon.venue ?? null,
+    referees:      canon.referee
+      ? [{ id: canon.referee.id, name: canon.referee.name, type: 'REFEREE', nationality: canon.referee.nationality ?? null }]
+      : [],
+  };
+}
+
 async function buildSnapshot(matchId: string): Promise<MatchSnapshot> {
   const t0 = Date.now();
 
-  // ── 1. Match detail: KV first, provider fallback ───────────────────────────
+  // ── 1. Match detail: KV first, provider fallback, authority:v1 last ─────────
   let match: MatchDetail | null = await readMatchDetailFromKV(matchId);
-  let detailSource: 'kv' | 'provider' = 'kv';
+  let detailSource: 'kv' | 'provider' | 'authority' = 'kv';
 
   if (!match) {
     console.log(`[Snapshot] kv-detail-miss match:${matchId} — calling provider`);
     detailSource = 'provider';
-    match = await getMatchDetail(matchId); // withCache → withKVCache → provider
+    try {
+      match = await getMatchDetail(matchId); // withCache → withKVCache → provider
+    } catch (err) {
+      // ONE SOURCE: provider has no detail (e.g. future knockout fixture) →
+      // fall back to authority:v1 before surfacing NotFound.
+      const fromAuthority = await buildDetailFromAuthority(matchId);
+      if (!fromAuthority) throw err;
+      console.log(`[Snapshot] provider-miss match:${matchId} — served from authority:v1`);
+      detailSource = 'authority';
+      match = fromAuthority;
+    }
   }
 
   // DATA-11B / DATA-13: Enrich FINISHED WC matches with event data
@@ -486,7 +536,7 @@ async function buildSnapshot(matchId: string): Promise<MatchSnapshot> {
 async function assembleSnapshot(
   matchId:      string,
   match:        MatchDetail,
-  detailSource: 'kv' | 'provider',
+  detailSource: 'kv' | 'provider' | 'authority',
   t0:           number,
 ): Promise<MatchSnapshot> {
   const isWC    = match.competition?.code === 'WC';

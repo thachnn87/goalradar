@@ -192,10 +192,12 @@ export default async function WC2026BracketPage() {
                       {matches} match{matches !== 1 ? 'es' : ''}
                     </span>
                   </div>
-                  {/* Live matches from API */}
+                  {/* Live matches from API — show ALL matches in the round so the
+                      SEO bracket renders the same match set/count as the nested
+                      /world-cup-2026/bracket page (DATA-18WC.END-TO-END). */}
                   {stageMatches.length > 0 && (
                     <div className="mt-3 space-y-1.5">
-                      {stageMatches.slice(0, 4).map((m) => {
+                      {stageMatches.map((m) => {
                         const h = m.score?.fullTime?.home;
                         const a = m.score?.fullTime?.away;
                         const score = h !== null && h !== undefined && a !== null && a !== undefined ? `${h}–${a}` : 'vs';
@@ -214,7 +216,7 @@ export default async function WC2026BracketPage() {
                   {/* Local scheduled fixtures — shown when API is unavailable */}
                   {useLocalSlots && (localByStage.get(stage) ?? []).length > 0 && (
                     <div className="mt-3 space-y-1.5">
-                      {(localByStage.get(stage) ?? []).slice(0, 4).map((s) => (
+                      {(localByStage.get(stage) ?? []).map((s) => (
                         <div key={s.localId} className="flex items-center justify-between bg-gray-800/60 rounded-lg px-3 py-2 text-xs">
                           <span className="text-gray-400">
                             {s.homeLabel} vs {s.awayLabel}
