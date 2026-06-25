@@ -705,6 +705,20 @@ export const WC_ALL_TEAMS: WCTeamEntry[] = [
     metaDesc: 'Ukraine World Cup 2026 fixtures, results and group standing. Zbirna World Cup schedule and match updates.',
     intro: 'Ukraine qualified for the FIFA World Cup 2026 under extraordinary circumstances. Zbirna carry the hopes of their nation to North America, with Premier League and European-based players forming a competitive squad.',
   },
+  {
+    slug: 'norway',
+    displayName: 'Norway',
+    shortName: 'Norway',
+    apiName: 'Norway',
+    flag: '🇳🇴',
+    group: 'I',
+    fifaRanking: 43,
+    confederation: 'UEFA',
+    qualified: true,
+    metaTitle: 'Norway at FIFA World Cup 2026 — Fixtures & Results | GoalRadar',
+    metaDesc: 'Norway World Cup 2026 fixtures, results and group standing. World Cup schedule and match updates.',
+    intro: 'Norway qualified for the FIFA World Cup 2026 in a landmark moment for Scandinavian football. Powered by Erling Haaland, one of the world\'s most prolific strikers, Norway bring genuine attacking threat and are capable of causing upsets at the tournament.',
+  },
 ];
 
 // ---------------------------------------------------------------------------
