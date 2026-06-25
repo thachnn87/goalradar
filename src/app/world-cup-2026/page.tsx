@@ -3,9 +3,9 @@ import type { Metadata } from 'next';
 
 import {
   getWCAuthorityMatchesV2,
-  getWCKnockoutMatchesCached,
   getStandingsCached,
 } from '@/lib/api';
+import { buildKnockoutViewModel } from '@/lib/knockout-vm';
 // WC-LIVE-SSOT: single source of truth for live WC match state
 import { getCurrentLiveMatches } from '@/lib/wc-live-ssot';
 import { classifyMatchState } from '@/lib/match-classify';
@@ -25,7 +25,6 @@ import AdSlot from '@/components/AdSlot';
 import NewsletterSignup from '@/components/NewsletterSignup';
 import { WC_ALL_TEAMS } from '@/lib/wc-all-teams';
 import { WC_ROUNDS } from '@/lib/wc-rounds';
-// getStaticUpcomingMatches is no longer needed here — fallback is handled inside getUpcomingMatchesCached
 import PushNotificationButton from '@/components/PushNotificationButton';
 // DATA-18WC.13: knockout slot fallback for when authority cache has no upcoming matches
 import { WC_KNOCKOUT_SLOTS, type WCKnockoutSlot } from '@/lib/wc-fixtures';
@@ -317,11 +316,11 @@ export default async function WorldCup2026Page() {
   const today = todayUTC();
 
   const builtAt = new Date().toISOString();
-  const [authorityResult, standingsResult, knockoutResult, liveResult] =
+  const [authorityResult, standingsResult, vmResult, liveResult] =
     await Promise.allSettled([
       getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026', sourceType: 'page' }),
       getStandingsCached('WC'),
-      getWCKnockoutMatchesCached(),
+      buildKnockoutViewModel(),
       getCurrentLiveMatches(),
     ]);
 
@@ -349,9 +348,9 @@ export default async function WorldCup2026Page() {
     .sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime())
     .slice(0, 10);
 
-  // Knockout bracket matches (still uses legacy feed — not on authority V2 path)
-  const knockoutMatches: Match[] =
-    knockoutResult.status === 'fulfilled' ? knockoutResult.value.matches : [];
+  // Bracket preview: R16→Final tree from single KnockoutViewModel
+  const bracketMatches: Match[] =
+    vmResult.status === 'fulfilled' ? vmResult.value.bracketMatches : [];
 
   // DATA-18WC.13: static knockout slot fallback for upcoming section.
   // Used when authority cache has no upcoming matches (group stage finished,
@@ -544,7 +543,7 @@ export default async function WorldCup2026Page() {
         <section aria-labelledby="bracket-heading">
           <SectionHeader title="Knockout Bracket" />
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 sm:p-6">
-            <WCBracket matches={knockoutMatches} />
+            <WCBracket matches={bracketMatches} />
             <div className="mt-4 flex items-center justify-between">
               <p className="text-xs text-gray-700">
                 Bracket auto-updates as teams advance · Scroll horizontally on small screens

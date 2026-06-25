@@ -7,10 +7,8 @@
 
 import type { Metadata } from 'next';
 import Link from 'next/link';
-// PERF-4.5
-import { getWCKnockoutMatchesCached } from '@/lib/api';
+import { buildKnockoutViewModel } from '@/lib/knockout-vm';
 import { WC_KNOCKOUT_SLOTS } from '@/lib/wc-fixtures';
-import { isStaticMode, getStaticKnockoutSlots } from '@/data/worldcup/loader';
 import type { Match } from '@/lib/types';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -19,7 +17,7 @@ import WCRelatedLinks from '@/components/WCRelatedLinks';
 import NewsletterSignup from '@/components/NewsletterSignup';
 import { matchPath } from '@/lib/url';
 
-export const revalidate = 21600; // align with WC TTL (6 hours)
+export const revalidate = 900; // 15 min — matches other knockout pages
 
 const BASE_URL = 'https://goalradar.org';
 const CANONICAL = `${BASE_URL}/world-cup-2026-bracket`;
@@ -118,28 +116,12 @@ const FAQ = [
 ];
 
 export default async function WC2026BracketPage() {
-  let knockoutMatches: Match[] = [];
+  const vm = await buildKnockoutViewModel();
 
-  if (!isStaticMode()) {
-    try {
-      const data = await getWCKnockoutMatchesCached();
-      knockoutMatches = data.matches;
-    } catch { /* static content only */ }
-  }
-
-  const byStage = new Map<string, Match[]>();
-  for (const m of knockoutMatches) {
-    const s = m.stage ?? 'UNKNOWN';
-    if (!byStage.has(s)) byStage.set(s, []);
-    byStage.get(s)!.push(m);
-  }
-
-  // Use static dataset when env=static OR when API returned nothing
-  const staticSlots = isStaticMode() ? getStaticKnockoutSlots() : WC_KNOCKOUT_SLOTS;
-  const useLocalSlots = knockoutMatches.length === 0;
+  const useLocalSlots = !vm.hasApiData;
   const localByStage = new Map(
     ['LAST_32', 'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'THIRD_PLACE', 'FINAL'].map(
-      (round) => [round, staticSlots.filter((s) => s.round === round)]
+      (round) => [round, WC_KNOCKOUT_SLOTS.filter((s) => s.round === round)]
     )
   );
 
@@ -194,7 +176,7 @@ export default async function WC2026BracketPage() {
           <h2 className="text-xl font-bold text-white mb-4">Knockout Stage Rounds</h2>
           <div className="space-y-3">
             {KNOCKOUT_ROUNDS.map(({ label, dates, desc, matches, icon, stage }) => {
-              const stageMatches = byStage.get(stage) ?? [];
+              const stageMatches = vm.byStage(stage);
               return (
                 <div key={stage} className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
                   <div className="flex items-start justify-between gap-3">

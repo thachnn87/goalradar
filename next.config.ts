@@ -107,6 +107,15 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
 
+      // ── Third-place duplicate route ──────────────────────────────────────
+      // /world-cup-2026/third-place-playoff is a duplicate of the canonical
+      // /world-cup-2026/third-place — consolidate PageRank here.
+      {
+        source: '/world-cup-2026/third-place-playoff',
+        destination: '/world-cup-2026/third-place',
+        permanent: true,
+      },
+
       // ── Schedule aliases ─────────────────────────────────────────────────
       {
         source: '/wc2026-schedule',
