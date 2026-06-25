@@ -12,9 +12,10 @@ import { notFound } from 'next/navigation';
 import { WC_ALL_TEAM_SLUGS, getWCTeam } from '@/lib/wc-all-teams';
 import type { WCGroupFixture } from '@/lib/wc-fixtures';
 import {
-  getUpcomingMatchesCached as getUpcomingMatches,
-  getRecentMatchesCached   as getRecentMatches,
-  getStandingsCached       as getStandings,
+  getUpcomingMatchesCached  as getUpcomingMatches,
+  getRecentMatchesCached    as getRecentMatches,
+  getStandingsCached        as getStandings,
+  getWCAuthorityMatchesV2,
 } from '@/lib/api';
 import type { Match, StandingTable, StandingEntry } from '@/lib/types';
 import {
@@ -356,6 +357,29 @@ export default async function WCTeamPage({
     }
   } catch { /* render with static content */ }
 
+  // Authority cache fallback — when both feeds are empty and tournament has started
+  const TOURNAMENT_START = new Date('2026-06-11T00:00:00Z');
+  if (upcoming.length === 0 && recent.length === 0 && new Date() >= TOURNAMENT_START) {
+    try {
+      const builtAt = new Date().toISOString();
+      const { matches: authMatches } = await getWCAuthorityMatchesV2(builtAt, {
+        source: `/world-cup-2026/teams/${slug}`,
+        sourceType: 'page',
+      });
+      const teamMatches = authMatches.filter(
+        (m) =>
+          normName(m.homeTeam?.name).includes(apiNorm) ||
+          normName(m.awayTeam?.name).includes(apiNorm) ||
+          normName(m.homeTeam?.name) === dispNorm      ||
+          normName(m.awayTeam?.name) === dispNorm
+      );
+      // CanonicalMatch is structurally compatible with Match for the fields rendered
+      recent   = (teamMatches.filter(m => m.state === 'finished' || m.state === 'cancelled') as unknown as Match[])
+                   .sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime());
+      upcoming = (teamMatches.filter(m => m.state === 'scheduled' || m.state === 'live') as unknown as Match[])
+                   .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
+    } catch { /* keep empty arrays */ }
+  }
 
   // Form helper
   const recentForm: string[] = (recent.slice(0, 5).map((m) => {
@@ -662,16 +686,22 @@ export default async function WCTeamPage({
           </section>
         )}
 
-        {/* No data state — only if API empty AND no local fixtures found */}
+        {/* No data state — only shown if authority cache also returns nothing */}
         {upcoming.length === 0 && recent.length === 0 && localTeamFixtures.length === 0 && (
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center mb-8">
             <p className="text-3xl mb-3">{team.flag}</p>
-            <p className="text-gray-300 font-semibold">Fixtures load once the tournament begins</p>
-            <p className="text-gray-500 text-sm mt-1">Check back from 11 June 2026</p>
-            <Link href="/world-cup-2026/fixtures"
-              className="inline-block mt-4 text-xs text-yellow-500 hover:text-yellow-300 transition-colors">
-              View full schedule →
-            </Link>
+            <p className="text-gray-300 font-semibold">No match data available yet</p>
+            <p className="text-gray-500 text-sm mt-1">Match data will appear here once available.</p>
+            <div className="flex items-center justify-center gap-4 mt-4">
+              <Link href="/world-cup-2026/fixtures"
+                className="text-xs text-yellow-500 hover:text-yellow-300 transition-colors">
+                View fixtures →
+              </Link>
+              <Link href="/world-cup-2026/bracket"
+                className="text-xs text-yellow-500 hover:text-yellow-300 transition-colors">
+                View bracket →
+              </Link>
+            </div>
           </div>
         )}
 

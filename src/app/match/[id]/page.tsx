@@ -66,15 +66,20 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     const isWC  = match.competition?.code === 'WC';
     const compSuffix = isWC ? 'FIFA World Cup 2026' : comp;
 
-    const isFinished = match.status === 'FINISHED';
-    const isLive     = match.status === 'IN_PLAY' || match.status === 'PAUSED';
+    const isFinished  = match.status === 'FINISHED';
+    const isCancelled = match.status === 'CANCELLED' || match.status === 'SUSPENDED';
+    const isLive      = match.status === 'IN_PLAY' || match.status === 'PAUSED';
     const ftH = match.score?.fullTime?.home;
     const ftA = match.score?.fullTime?.away;
-    const hasScore = isFinished && ftH != null && ftA != null;
+    const hasScore = isFinished && !isCancelled && ftH != null && ftA != null;
 
     // Build a rich, status-aware title
     let title: string;
-    if (hasScore) {
+    if (isCancelled) {
+      title = isWC
+        ? `${home} vs ${away} – Cancelled | FIFA World Cup 2026 | GoalRadar`
+        : `${home} vs ${away} – Cancelled | ${comp} | GoalRadar`;
+    } else if (hasScore) {
       // e.g. "Arsenal 2-1 Chelsea – Match Result | Premier League | GoalRadar"
       title = `${home} ${ftH}–${ftA} ${away} – Match Result | ${compSuffix} | GoalRadar`;
     } else if (isLive) {
@@ -91,7 +96,9 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
     // Build a rich description
     let description: string;
-    if (hasScore) {
+    if (isCancelled) {
+      description = `${home} vs ${away} was cancelled. See full ${compSuffix} fixtures, results and standings on GoalRadar.`;
+    } else if (hasScore) {
       const winner =
         match.score.winner === 'HOME_TEAM' ? `${home} won` :
         match.score.winner === 'AWAY_TEAM' ? `${away} won` :
@@ -251,6 +258,12 @@ function StatusPill({ status }: { status: MatchDetail['status'] }) {
     return (
       <span className="bg-gray-700 text-gray-300 px-3 py-1 rounded-full text-sm font-bold">
         FULL TIME
+      </span>
+    );
+  if (status === 'CANCELLED' || status === 'SUSPENDED')
+    return (
+      <span className="bg-red-900/30 text-red-400 border border-red-800/50 px-3 py-1 rounded-full text-sm font-bold">
+        CANCELLED
       </span>
     );
   if (status === 'SCHEDULED' || status === 'TIMED')
@@ -501,7 +514,11 @@ function buildReportSections(match: MatchDetail): ReportSection[] {
   // ── Introduction ──────────────────────────────────────────────────────────
 
   let intro: string;
-  if (status === 'FINISHED') {
+  if (status === 'CANCELLED' || status === 'SUSPENDED') {
+    intro =
+      `The ${compFull} fixture between ${home} and ${away}, scheduled for ${matchDate}, was cancelled. ` +
+      `No result was recorded. Follow GoalRadar for rescheduled fixture information and all ${compFull} coverage.`;
+  } else if (status === 'FINISHED') {
     if (score.winner === 'HOME_TEAM') {
       intro =
         `${home} secured a ${ftH}–${ftA} victory over ${away}${mdInfix} the ${compFull} on ${matchDate}. ` +
@@ -2287,9 +2304,13 @@ async function BelowTheFoldDeferred({ matchId }: { matchId: string }) {
   return (
     <>
       <LazySection>
-        {showStats && <MatchSummary match={match} />}
+        {showStats && match.status !== 'CANCELLED' && match.status !== 'SUSPENDED' && (
+          <MatchSummary match={match} />
+        )}
 
-        <MatchReport match={match} />
+        {match.status !== 'CANCELLED' && match.status !== 'SUSPENDED' && (
+          <MatchReport match={match} />
+        )}
 
         {/* ── Mid-content revenue funnel (WC only) ────────────────────────── */}
         {isWC && <WCMidFunnel />}
