@@ -135,3 +135,41 @@ export const WC_KNOCKOUT_SLOTS: WCKnockoutSlot[] = KNOCKOUT_COMPACT.map(
 export function getKnockoutSlots(round: WCKnockoutSlot['round']): WCKnockoutSlot[] {
   return WC_KNOCKOUT_SLOTS.filter((s) => s.round === round);
 }
+
+/**
+ * When the FD API has posted knockout fixture skeletons with null team names
+ * (group stage still ongoing), substitute positional labels from WC_KNOCKOUT_SLOTS
+ * (e.g. "1st Group A", "Runner-up Group C") so the UI never shows bare "TBD".
+ *
+ * Only enriches matches whose homeTeam.name or awayTeam.name is falsy.
+ * Teams that are already known are left untouched.
+ * Matching is by UTC kick-off minute prefix (YYYY-MM-DDTHH:MM).
+ */
+export function injectKnockoutSlotLabels<T extends {
+  utcDate: string;
+  homeTeam: { id: number; name: string; shortName: string; tla: string; crest: string } | null | undefined;
+  awayTeam: { id: number; name: string; shortName: string; tla: string; crest: string } | null | undefined;
+}>(matches: T[], stage: string): T[] {
+  const round = stage as WCKnockoutSlot['round'];
+  const slots = WC_KNOCKOUT_SLOTS.filter((s) => s.round === round);
+  if (slots.length === 0) return matches;
+
+  return matches.map((m) => {
+    const needsHome = !m.homeTeam?.name;
+    const needsAway = !m.awayTeam?.name;
+    if (!needsHome && !needsAway) return m;
+
+    const slot = slots.find((s) => s.utcDate.slice(0, 16) === m.utcDate.slice(0, 16));
+    if (!slot) return m;
+
+    return {
+      ...m,
+      homeTeam: needsHome
+        ? { id: 0, name: slot.homeLabel, shortName: slot.homeLabel, tla: '', crest: '' }
+        : m.homeTeam,
+      awayTeam: needsAway
+        ? { id: 0, name: slot.awayLabel, shortName: slot.awayLabel, tla: '', crest: '' }
+        : m.awayTeam,
+    };
+  });
+}

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-const links = [
+const BASE_LINKS = [
   { href: '/world-cup-2026', label: 'World Cup 2026' }, // pinned first
   { href: '/', label: 'Home' },
   { href: '/schedule', label: 'Schedule' },
@@ -14,6 +14,13 @@ const links = [
 
 export default function Navbar() {
   const pathname = usePathname();
+
+  // When browsing WC pages, Standings links to WC standings — never PL.
+  const links = BASE_LINKS.map((l) =>
+    l.label === 'Standings' && pathname.startsWith('/world-cup-2026')
+      ? { ...l, href: '/world-cup-2026/standings' }
+      : l,
+  );
 
   return (
     <nav className="bg-gray-900 border-b border-gray-800 sticky top-0 z-50">

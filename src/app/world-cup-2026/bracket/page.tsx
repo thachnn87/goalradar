@@ -12,7 +12,7 @@ import type { CanonicalMatch } from '@/lib/canonical-match';
 import MatchCard from '@/components/MatchCard';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCBracket from '@/components/WCBracket';
-import { WC_KNOCKOUT_SLOTS, type WCKnockoutSlot } from '@/lib/wc-fixtures';
+import { WC_KNOCKOUT_SLOTS, injectKnockoutSlotLabels, type WCKnockoutSlot } from '@/lib/wc-fixtures';
 
 // DATA-18B.1: Authority cache pilot feature flag.
 // Set AUTHORITY_CACHE_PILOT=true in Vercel env vars to activate.
@@ -373,7 +373,8 @@ export default async function WCBracketPage() {
 
   const knockoutMatches = allWCMatches
     .filter((m) => KNOCKOUT_STAGES.has(m.stage))
-    .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
+    .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
+    .map((m) => injectKnockoutSlotLabels([m], m.stage)[0]);
 
   // When API is unavailable, use local pre-tournament knockout slots
   const useLocalSlots = knockoutMatches.length === 0;

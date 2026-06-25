@@ -25,7 +25,7 @@ import {
   getRoundIsoRange,
   type WCRoundConfig,
 } from '@/lib/wc-rounds';
-import type { WCKnockoutSlot } from '@/lib/wc-fixtures';
+import { injectKnockoutSlotLabels, type WCKnockoutSlot } from '@/lib/wc-fixtures';
 import Breadcrumb from '@/components/Breadcrumb';
 import MatchCard from '@/components/MatchCard';
 import AdSlot from '@/components/AdSlot';
@@ -160,9 +160,12 @@ export default async function WCRoundPage({ slug }: { slug: string }) {
     // graceful degradation — schedule slots render below
   }
 
-  const matches = allWCMatches
-    .filter((m) => m.stage === round.stage)
-    .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
+  const matches = injectKnockoutSlotLabels(
+    allWCMatches
+      .filter((m) => m.stage === round.stage)
+      .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()),
+    round.stage,
+  );
 
   const slots     = matches.length === 0 ? getRoundSlots(round.stage) : [];
   const played    = matches.filter((m) => m.status === 'FINISHED').length;
