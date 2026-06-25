@@ -7,6 +7,7 @@
 
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { Suspense } from 'react';
 // PERF-4.5
 import { getStandingsCached } from '@/lib/api';
 import type { StandingTable, StandingEntry } from '@/lib/types';
@@ -20,6 +21,7 @@ import Breadcrumb from '@/components/Breadcrumb';
 import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
 import NewsletterSignup from '@/components/NewsletterSignup';
+import CompetitionSelector from '@/components/CompetitionSelector';
 
 export const revalidate = 3600; // align with STANDINGS TTL (1 hour)
 
@@ -180,7 +182,12 @@ export default async function WC2026StandingsPage() {
           { label: 'Home', href: '/' },
           { label: 'World Cup 2026 Standings' },
         ]} />
-        <div className="mt-3 mb-6"><WCPageNav /></div>
+        <div className="mt-3 mb-4"><WCPageNav /></div>
+
+        {/* Competition tabs — keeps the switcher visible when coming from /standings */}
+        <Suspense fallback={null}>
+          <CompetitionSelector selected="WC" onWCPath="/world-cup-2026-standings" />
+        </Suspense>
 
         {/* Hero */}
         <div className="mt-6 mb-8">

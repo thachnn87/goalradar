@@ -10,14 +10,31 @@ const sorted = [
   ...COMPETITIONS.filter((c) => c.code !== WC_CODE),
 ].filter(Boolean);
 
-export default function CompetitionSelector({ selected }: { selected: string }) {
+export default function CompetitionSelector({
+  selected,
+  onWCPath,
+}: {
+  selected: string;
+  /** When set (e.g. '/world-cup-2026-standings'), the selector is being rendered
+   *  on a WC-specific page. WC tab stays on this path; other tabs navigate to
+   *  /standings?competition=<code> so the general standings page handles them. */
+  onWCPath?: string;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   function select(code: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('competition', code);
-    router.push(`?${params.toString()}`);
+    if (onWCPath !== undefined) {
+      if (code === 'WC') {
+        router.push(onWCPath);
+      } else {
+        router.push(`/standings?competition=${code}`);
+      }
+    } else {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('competition', code);
+      router.push(`?${params.toString()}`);
+    }
   }
 
   return (

@@ -18,7 +18,7 @@ export default function Navbar() {
   // When browsing WC pages, Standings links to WC standings — never PL.
   const links = BASE_LINKS.map((l) =>
     l.label === 'Standings' && pathname.startsWith('/world-cup-2026')
-      ? { ...l, href: '/world-cup-2026/standings' }
+      ? { ...l, href: '/world-cup-2026-standings' }
       : l,
   );
 

@@ -1,57 +1,22 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
-// PERF-4.5
-import { getWCKnockoutMatchesCached, getWCAuthorityMatchesV2 } from '@/lib/api';
 import { matchPath } from '@/lib/url';
 import AdSlot from '@/components/AdSlot';
 import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
-import type { Match, MatchStatus } from '@/lib/types';
-import type { CanonicalMatch } from '@/lib/canonical-match';
+import type { Match } from '@/lib/types';
 import MatchCard from '@/components/MatchCard';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCBracket from '@/components/WCBracket';
-import { WC_KNOCKOUT_SLOTS, injectKnockoutSlotLabels, type WCKnockoutSlot } from '@/lib/wc-fixtures';
-
-// DATA-18B.1: Authority cache pilot feature flag.
-// Set AUTHORITY_CACHE_PILOT=true in Vercel env vars to activate.
-// Remove or set to any other value to revert to getWCKnockoutMatchesCached().
-const PILOT_ENABLED = process.env.AUTHORITY_CACHE_PILOT === 'true';
-
-/** Maps CanonicalMatch (authority cache type) to Match (bracket render type). */
-function canonicalToMatch(m: CanonicalMatch): Match {
-  const statusMap: Record<CanonicalMatch['state'], MatchStatus> = {
-    live:      'IN_PLAY',
-    finished:  'FINISHED',
-    scheduled: 'SCHEDULED',
-    cancelled: 'POSTPONED',
-  };
-  return {
-    id: m.id,
-    utcDate: m.utcDate,
-    status: statusMap[m.state],
-    matchday: m.matchday,
-    stage: m.stage,
-    group: m.group,
-    lastUpdated: m.lastUpdated,
-    competition: { id: 2000, name: 'FIFA World Cup', code: 'WC', type: 'CUP', emblem: '', area: { id: 2267, name: 'World', code: 'WLD', flag: null } },
-    homeTeam: m.homeTeam,
-    awayTeam: m.awayTeam,
-    score: m.score,
-    minute: m.minute ?? null,
-  };
-}
+import { WC_KNOCKOUT_SLOTS, type WCKnockoutSlot } from '@/lib/wc-fixtures';
+import { buildKnockoutViewModel } from '@/lib/knockout-vm';
 
 export const revalidate = 900; // 15 min — bracket scores update during active knockout rounds
 
 const BASE_URL = 'https://goalradar.org';
 const PAGE_URL = `${BASE_URL}/world-cup-2026/bracket`;
 
-// Stages that belong to the knockout phase
-const KNOCKOUT_STAGES = new Set([
-  'LAST_32', 'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'THIRD_PLACE', 'FINAL',
-]);
 
 // Rounds in display order for the list view and JSON-LD.
 // slug → per-round landing page (GROWTH-2A): /world-cup-2026/{slug}
@@ -356,61 +321,26 @@ function FinalCard({ match }: { match: Match }) {
 // ---------------------------------------------------------------------------
 
 export default async function WCBracketPage() {
-  // DATA-18B.1: pilot gate — authority cache path when AUTHORITY_CACHE_PILOT=true
-  let allWCMatches: Match[] = [];
-  try {
-    if (PILOT_ENABLED) {
-      const builtAt = new Date().toISOString();
-      const data = await getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026/bracket', sourceType: 'page' });
-      allWCMatches = data.matches.map(canonicalToMatch);
-    } else {
-      const data = await getWCKnockoutMatchesCached();
-      allWCMatches = data.matches;
-    }
-  } catch {
-    // graceful degradation — fall back to local slot schedule below
-  }
+  // DATA-18WC.15: all knockout data via single KnockoutViewModel — List ≡ Tree ≡ every round page.
+  const vm = await buildKnockoutViewModel();
 
-  // injectKnockoutSlotLabels must receive all matches for a stage at once (ordinal matching).
-  const knockoutRaw = allWCMatches
-    .filter((m) => KNOCKOUT_STAGES.has(m.stage))
-    .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
-
-  const knockoutMatches: Match[] = (['LAST_32', 'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'THIRD_PLACE', 'FINAL'] as const)
-    .flatMap((stage) =>
-      injectKnockoutSlotLabels(knockoutRaw.filter((m) => m.stage === stage), stage),
-    )
-    .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
+  const { r32: r32Matches, thirdPlace: thirdMatches, final: finalMatches, bracketMatches } = vm;
 
   // When API is unavailable, use local pre-tournament knockout slots
-  const useLocalSlots = knockoutMatches.length === 0;
+  const useLocalSlots = !vm.hasApiData;
   const localSlots = (round: WCKnockoutSlot['round']) =>
     useLocalSlots ? WC_KNOCKOUT_SLOTS.filter((s) => s.round === round) : [];
 
-  // Group by stage
-  const byStage = (stage: string) =>
-    knockoutMatches.filter((m) => m.stage === stage);
-
-  const r32Matches    = byStage('LAST_32');
-  const r16Matches    = byStage('LAST_16');
-  const thirdMatches  = byStage('THIRD_PLACE');
-  const finalMatches  = byStage('FINAL');
-
-  // Matches that feed into WCBracket (R16 → Final)
-  const bracketMatches = knockoutMatches.filter((m) =>
-    ['LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL'].includes(m.stage)
-  );
-
   // Round progress summary
   const roundSummary = ROUND_ORDER.map((r) => {
-    const ms = byStage(r.stage);
+    const ms = vm.byStage(r.stage);
     const played = ms.filter((m) => m.status === 'FINISHED').length;
     return { ...r, total: ms.length, played };
   });
 
   return (
     <>
-      <JsonLd knockoutMatches={knockoutMatches} />
+      <JsonLd knockoutMatches={vm.matches} />
 
       <div className="max-w-5xl mx-auto space-y-10 pb-12">
         <Breadcrumb
@@ -592,7 +522,7 @@ export default async function WCBracketPage() {
           </h2>
           <div className="space-y-6">
             {ROUND_ORDER.map((round) => {
-              const matches = byStage(round.stage);
+              const matches = vm.byStage(round.stage);
               if (matches.length === 0) return null;
               return (
                 <div key={round.stage}>

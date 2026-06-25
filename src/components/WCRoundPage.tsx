@@ -14,7 +14,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
-import { getWCKnockoutMatchesCached } from '@/lib/api';
 import type { Match } from '@/lib/types';
 import { matchPath } from '@/lib/url';
 import {
@@ -25,7 +24,8 @@ import {
   getRoundIsoRange,
   type WCRoundConfig,
 } from '@/lib/wc-rounds';
-import { injectKnockoutSlotLabels, type WCKnockoutSlot } from '@/lib/wc-fixtures';
+import { type WCKnockoutSlot } from '@/lib/wc-fixtures';
+import { buildKnockoutViewModel } from '@/lib/knockout-vm';
 import Breadcrumb from '@/components/Breadcrumb';
 import MatchCard from '@/components/MatchCard';
 import AdSlot from '@/components/AdSlot';
@@ -152,22 +152,10 @@ function ScheduleSlots({ slots }: { slots: WCKnockoutSlot[] }) {
 export default async function WCRoundPage({ slug }: { slug: string }) {
   const round = getRoundBySlug(slug)!;
 
-  let allWCMatches: Match[] = [];
-  try {
-    const data = await getWCKnockoutMatchesCached();
-    allWCMatches = data.matches;
-  } catch {
-    // graceful degradation — schedule slots render below
-  }
-
-  const matches = injectKnockoutSlotLabels(
-    allWCMatches
-      .filter((m) => m.stage === round.stage)
-      .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()),
-    round.stage,
-  );
-
-  const slots     = matches.length === 0 ? getRoundSlots(round.stage) : [];
+  // DATA-18WC.15: single KnockoutViewModel — same data as bracket page and tree.
+  const vm = await buildKnockoutViewModel();
+  const matches = vm.byStage(round.stage);
+  const slots   = matches.length === 0 ? getRoundSlots(round.stage) : [];
   const played    = matches.filter((m) => m.status === 'FINISHED').length;
   const dateRange = getRoundDateRange(round.stage);
 
