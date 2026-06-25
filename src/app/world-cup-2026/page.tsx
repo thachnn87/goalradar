@@ -484,8 +484,8 @@ export default async function WorldCup2026Page() {
             </>
           ) : (
             <EmptyState
-              message="Group stage hasn't started yet"
-              sub="Standings will appear once the tournament begins on 11 June 2026"
+              message="Group standings temporarily unavailable"
+              sub="Standings will reappear shortly — check back in a few minutes"
             />
           )}
         </section>

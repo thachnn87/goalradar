@@ -8,6 +8,7 @@ import Breadcrumb from '@/components/Breadcrumb';
 import WCGroupTable from '@/components/WCGroupTable';
 import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
+import { calculateQualificationStatus, type QualificationStatus } from '@/lib/wc-qualification';
 
 export const revalidate = 3600; // align with STANDINGS TTL (1 hour)
 
@@ -84,6 +85,17 @@ export default async function WCGroupsPage() {
 
   const matchesPlayed = groupTables.some(t => t.table.some(e => e.playedGames > 0));
 
+  // Qualification engine — same computation as the hub
+  const qualMap = calculateQualificationStatus(groupTables);
+  function groupQualMap(groupKey: string | null): Map<number, QualificationStatus> {
+    const letter = (groupKey ?? '').replace(/^GROUP_/, '').toUpperCase();
+    const out = new Map<number, QualificationStatus>();
+    for (const [id, q] of qualMap) {
+      if (q.group === letter) out.set(id, q.qualificationStatus);
+    }
+    return out;
+  }
+
   return (
     <>
       <JsonLd groupTables={groupTables} />
@@ -146,6 +158,7 @@ export default async function WCGroupsPage() {
                     group={t.group ?? ''}
                     table={t.table}
                     href={slug ? `/world-cup-2026/${slug}` : undefined}
+                    qualifications={groupQualMap(t.group ?? null)}
                   />
                   <Link
                     href={`/world-cup-2026/${slug}`}
@@ -160,9 +173,9 @@ export default async function WCGroupsPage() {
         ) : (
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-10 text-center">
             <div className="text-4xl mb-3">📊</div>
-            <p className="text-gray-300 font-semibold">Group stage hasn't started yet</p>
+            <p className="text-gray-300 font-semibold">Standings temporarily unavailable</p>
             <p className="text-gray-500 text-sm mt-1">
-              Standings will update automatically once matches begin on <strong className="text-white">11 June 2026</strong>.
+              Live standings will reappear shortly. Check back in a few minutes.
             </p>
           </div>
         )}

@@ -43,7 +43,7 @@ function canonicalToMatch(m: CanonicalMatch): Match {
   };
 }
 
-export const revalidate = 21600; // align with WC TTL (6 hours) — bracket changes only when knockout results land
+export const revalidate = 900; // 15 min — bracket scores update during active knockout rounds
 
 const BASE_URL = 'https://goalradar.org';
 const PAGE_URL = `${BASE_URL}/world-cup-2026/bracket`;
