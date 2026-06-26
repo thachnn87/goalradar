@@ -57,9 +57,25 @@ async function StandingsContent({ competition }: { competition: string }) {
   const totalTable = standings.find((s) => s.type === 'TOTAL');
 
   if (!totalTable) {
+    const comp = COMPETITIONS.find((c) => c.code === competition);
+    const isLeague = comp && competition !== 'WC';
     return (
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center text-gray-400">
-        Standings not available for this competition yet.
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center space-y-2">
+        <p className="text-gray-300 font-semibold text-sm">
+          {isLeague ? `${comp.name} — Off Season` : 'Standings not available yet'}
+        </p>
+        <p className="text-gray-600 text-xs leading-relaxed">
+          {isLeague
+            ? 'The current season has concluded. Standings will update automatically when the new season begins.'
+            : 'Standings for this competition are not yet available.'}
+        </p>
+        {isLeague && (
+          <div className="pt-2">
+            <a href="/world-cup-2026-standings" className="text-yellow-500 hover:text-yellow-300 text-xs font-medium transition-colors">
+              🏆 View FIFA World Cup 2026 Standings →
+            </a>
+          </div>
+        )}
       </div>
     );
   }
@@ -90,7 +106,7 @@ export default async function StandingsPage({
 }: {
   searchParams: Promise<{ competition?: string }>;
 }) {
-  const { competition = 'PL' } = await searchParams;
+  const { competition = 'WC' } = await searchParams;
 
   if (competition === 'WC') redirect('/world-cup-2026-standings');
 
