@@ -215,7 +215,7 @@ export function buildAllCanonicalMatches(
  * mget all per-match snapshot keys for a list of matches.
  * Returns a Map from match ID to MatchSnapshot for all non-null results.
  */
-async function readSnapshotMap(matches: Match[]): Promise<Map<number, MatchSnapshot>> {
+async function readSnapshotMap(matches: { id: number }[]): Promise<Map<number, MatchSnapshot>> {
   if (!KV_ENABLED || matches.length === 0) return new Map();
   try {
     const keys = matches.map(m => `goalradar:match:${m.id}`);
@@ -461,6 +461,69 @@ export async function writeAuthorityCache(
  * @param builtAt      ISO-8601 timestamp passed through to cold rebuild if needed.
  * @param attribution  DATA-18C.6: optional caller identity for source attribution.
  */
+/**
+ * DATA-18WC: read-time freshness overlay.
+ *
+ * The cron-built authority cache can lag the per-match snapshots, which are built
+ * on demand from FD per-match detail and therefore see a FINISHED transition before
+ * the bulk feed / next cron run does. Without this overlay every surface
+ * (schedule, standings, bracket) shows a match as still scheduled while its match
+ * page already shows FULL TIME — the exact Group-F desync reported.
+ *
+ * This promotes — forward-only — any match whose kickoff has passed but the cache
+ * still calls 'scheduled'/'live', using the per-match snapshot (→ finished + score
+ * + events) and the live cache (→ live). Bounded: only past-kickoff non-final
+ * matches are probed (one mget + one live read), so the hot read path stays cheap.
+ */
+async function overlayFreshState(matches: CanonicalMatch[], builtAt: string): Promise<CanonicalMatch[]> {
+  if (!KV_ENABLED) return matches;
+  const nowMs = new Date(builtAt).getTime();
+  const candidates = matches.filter(
+    (m) => (m.state === 'scheduled' || m.state === 'live') && new Date(m.utcDate).getTime() <= nowMs,
+  );
+  if (candidates.length === 0) return matches;
+
+  const { getWCLiveMatches } = await import('./api');
+  const [snapshotMap, liveResult] = await Promise.all([
+    readSnapshotMap(candidates),
+    getWCLiveMatches().catch(() => ({ matches: [] as Match[] })),
+  ]);
+  const liveMinute = new Map<number, number | undefined>();
+  for (const m of liveResult.matches) {
+    if (m.status === 'IN_PLAY' || m.status === 'PAUSED') liveMinute.set(m.id, m.minute ?? undefined);
+  }
+
+  const candidateIds = new Set(candidates.map((m) => m.id));
+  let promoted = 0;
+  const out = matches.map((m) => {
+    if (!candidateIds.has(m.id)) return m;
+    const snap = snapshotMap.get(m.id);
+    if (snap && snap.match.status === 'FINISHED' && m.state !== 'finished') {
+      promoted++;
+      const s = snap.match.score;
+      return {
+        ...m,
+        state:         'finished' as const,
+        minute:        undefined,
+        score:         (s?.fullTime?.home != null && s?.fullTime?.away != null) ? s : m.score,
+        goals:         snap.match.goals         ?? m.goals,
+        cards:         snap.match.bookings      ?? m.cards,
+        substitutions: snap.match.substitutions ?? m.substitutions,
+        lastUpdated:   new Date(Math.max(new Date(m.lastUpdated).getTime(), snap.generatedAt)).toISOString(),
+      };
+    }
+    if (liveMinute.has(m.id) && m.state === 'scheduled') {
+      promoted++;
+      return { ...m, state: 'live' as const, minute: liveMinute.get(m.id) };
+    }
+    return m;
+  });
+  if (promoted > 0) {
+    console.log(`[Authority] FRESH-OVERLAY | promoted ${promoted}/${candidates.length} stale match(es) via snapshot/live`);
+  }
+  return out;
+}
+
 export async function readAuthorityCache(
   builtAt:      string,
   attribution?: import('./authority-telemetry').AuthorityReadAttribution,
@@ -475,7 +538,7 @@ export async function readAuthorityCache(
         telemetry.hits++;
         logHit('primary', envelope);
         recordAuthorityRead('primary', Date.now() - _readStart, builtAt, attribution); // fire-and-forget
-        return envelope.matches;
+        return overlayFreshState(envelope.matches, builtAt);
       }
     } catch (err) {
       console.error(
@@ -504,13 +567,13 @@ export async function readAuthorityCache(
             telemetry.drHits++;
             logHit('dr', drEnvelope);
             recordAuthorityRead('dr', Date.now() - _readStart, builtAt, attribution); // fire-and-forget
-            return drEnvelope.matches;
+            return overlayFreshState(drEnvelope.matches, builtAt);
           }
         } else {
           telemetry.drHits++;
           logHit('dr', drEnvelope);
           recordAuthorityRead('dr', Date.now() - _readStart, builtAt, attribution); // fire-and-forget
-          return drEnvelope.matches;
+          return overlayFreshState(drEnvelope.matches, builtAt);
         }
       }
     } catch (err) {
