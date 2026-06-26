@@ -420,16 +420,25 @@ async function buildDetailFromAuthority(matchId: string): Promise<MatchDetail | 
   const canon = matches.find((m) => m.id === numId);
   if (!canon) return null;
 
-  const base = canonicalToMatch(canon);
+  // ONE PIPELINE: apply knockout slot labels ("1st Group E") so authority-
+  // fallback matches show the same names as the bracket and schedule pages.
+  let enrichedCanon = canon;
+  if (canon.stage !== 'GROUP_STAGE') {
+    const { enrichKnockoutSlots } = await import('./knockout-vm');
+    const enriched = await enrichKnockoutSlots([canon]);
+    enrichedCanon = enriched[0] ?? canon;
+  }
+
+  const base = canonicalToMatch(enrichedCanon);
   return {
     ...base,
-    goals:         canon.goals ?? [],
-    bookings:      canon.cards ?? [],
-    substitutions: (canon.substitutions ?? []) as MatchDetail['substitutions'],
+    goals:         enrichedCanon.goals ?? [],
+    bookings:      enrichedCanon.cards ?? [],
+    substitutions: (enrichedCanon.substitutions ?? []) as MatchDetail['substitutions'],
     lineups:       null,
-    venue:         canon.venue ?? null,
-    referees:      canon.referee
-      ? [{ id: canon.referee.id, name: canon.referee.name, type: 'REFEREE', nationality: canon.referee.nationality ?? null }]
+    venue:         enrichedCanon.venue ?? null,
+    referees:      enrichedCanon.referee
+      ? [{ id: enrichedCanon.referee.id, name: enrichedCanon.referee.name, type: 'REFEREE', nationality: enrichedCanon.referee.nationality ?? null }]
       : [],
   };
 }
@@ -446,6 +455,22 @@ async function buildSnapshot(matchId: string): Promise<MatchSnapshot> {
     detailSource = 'provider';
     try {
       match = await getMatchDetail(matchId); // withCache → withKVCache → provider
+      // Guard: FD API returns null homeTeam/awayTeam for upcoming knockout TBD
+      // fixtures. Normalise to empty-string team objects so rendering never
+      // crashes on null.name — the authority path below will overlay real labels.
+      const EMPTY_TEAM = { id: 0, name: '', shortName: '', tla: '', crest: '' };
+      if (!match.homeTeam) match = { ...match, homeTeam: EMPTY_TEAM };
+      if (!match.awayTeam) match = { ...match, awayTeam: EMPTY_TEAM };
+      // If both teams are TBD (empty names), prefer the authority:v1 version
+      // which carries slot labels ("1st Group E") applied by enrichKnockoutSlots.
+      if (!match.homeTeam.name && !match.awayTeam.name) {
+        const fromAuthority = await buildDetailFromAuthority(matchId);
+        if (fromAuthority) {
+          console.log(`[Snapshot] tbd-teams match:${matchId} — overlaid with authority:v1 slot labels`);
+          detailSource = 'authority';
+          match = fromAuthority;
+        }
+      }
     } catch (err) {
       // ONE SOURCE: provider has no detail (e.g. future knockout fixture) →
       // fall back to authority:v1 before surfacing NotFound.
