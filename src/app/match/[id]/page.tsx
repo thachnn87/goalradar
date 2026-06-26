@@ -200,7 +200,7 @@ function GoalScorers({ match }: { match: MatchDetail }) {
     const suffix = goalSuffix(g.type);
     return (
       <div className={`flex items-baseline gap-1.5 text-xs text-gray-300 ${reverse ? 'flex-row-reverse' : ''}`}>
-        <span className="text-sm leading-none shrink-0">⚽</span>
+        <span className="text-sm leading-none shrink-0" aria-hidden="true">⚽</span>
         <span className={`font-medium truncate ${reverse ? 'text-right' : ''}`}>{g.scorer?.name}</span>
         {suffix && <span className="text-gray-500 shrink-0">{suffix}</span>}
         <span className={`text-gray-500 shrink-0 tabular-nums ${reverse ? 'mr-auto' : 'ml-auto'}`}>
@@ -751,7 +751,7 @@ function GoalsSection({ match }: { match: MatchDetail }) {
               <span className="text-xs text-gray-500 w-10 shrink-0 mt-0.5 text-center">
                 {minuteLabel(goal.minute, goal.injuryTime)}
               </span>
-              <span className="text-lg leading-none">⚽</span>
+              <span className="text-lg leading-none" aria-hidden="true">⚽</span>
               <div className={`flex flex-col ${isHome ? '' : 'items-end'}`}>
                 <span className="text-white text-sm font-medium">{goal.scorer?.name}</span>
                 {goal.assist && (
@@ -836,7 +836,7 @@ function SubstitutionsSection({ match }: { match: MatchDetail }) {
               <span className="text-xs text-gray-500 w-10 shrink-0 mt-0.5 text-center">
                 {minuteLabel(s.minute)}
               </span>
-              <span className="text-base leading-none">🔄</span>
+              <span className="text-base leading-none" aria-hidden="true">🔄</span>
               <div className={`flex flex-col text-sm ${isHome ? '' : 'items-end'}`}>
                 <span className="text-green-400">{s.playerIn?.name}</span>
                 <span className="text-gray-500">{s.playerOut?.name}</span>
@@ -899,11 +899,11 @@ function MatchStatistics({ match }: { match: MatchDetail }) {
               </div>
               <div className="flex h-1.5 rounded-full overflow-hidden bg-gray-800">
                 <div
-                  className="bg-blue-500 transition-all"
+                  className="bg-blue-500 transition-[width]"
                   style={{ width: `${homePct}%` }}
                 />
                 <div
-                  className="bg-orange-500 transition-all"
+                  className="bg-orange-500 transition-[width]"
                   style={{ width: `${awayPct}%` }}
                 />
               </div>
@@ -911,7 +911,7 @@ function MatchStatistics({ match }: { match: MatchDetail }) {
           );
         })}
       </div>
-      <p className="text-xs text-gray-600 mt-4 text-center">
+      <p className="text-xs text-gray-500 mt-4 text-center">
         Statistics computed from match events. Possession and shot data not available on this plan.
       </p>
     </div>
@@ -1276,13 +1276,13 @@ function CompetitionLinks({ match }: { match: MatchDetail }) {
           <Link
             key={href + label}
             href={href}
-            className="flex flex-col gap-0.5 bg-gray-800/50 hover:bg-gray-800 border border-gray-700/50 hover:border-gray-600 rounded-xl p-3 transition-all group"
+            className="flex flex-col gap-0.5 bg-gray-800/50 hover:bg-gray-800 border border-gray-700/50 hover:border-gray-600 rounded-xl p-3 transition-[border-color,background-color,box-shadow] group"
           >
             <span className="text-lg leading-none mb-1">{icon}</span>
             <span className="text-white text-xs font-semibold group-hover:text-green-400 transition-colors leading-tight">
               {label}
             </span>
-            <span className="text-gray-600 text-[10px] leading-tight">{desc}</span>
+            <span className="text-gray-500 text-xs leading-tight">{desc}</span>
           </Link>
         ))}
       </div>
@@ -1364,7 +1364,7 @@ function WCNavBox({
   return (
     <div className="bg-gradient-to-br from-yellow-950/30 to-gray-900 border border-yellow-800/30 rounded-2xl p-5">
       <div className="flex items-center gap-2 mb-4">
-        <span className="text-lg">🏆</span>
+        <span className="text-lg" aria-hidden="true">🏆</span>
         <h2 className="text-xs font-semibold text-yellow-400/80 uppercase tracking-widest">
           FIFA World Cup 2026
         </h2>
@@ -1374,13 +1374,13 @@ function WCNavBox({
           <Link
             key={href + label}
             href={href}
-            className="flex flex-col gap-0.5 bg-gray-800/60 hover:bg-gray-800 border border-gray-700/40 hover:border-yellow-700/40 rounded-xl p-3 transition-all group"
+            className="flex flex-col gap-0.5 bg-gray-800/60 hover:bg-gray-800 border border-gray-700/40 hover:border-yellow-700/40 rounded-xl p-3 transition-[border-color,background-color,box-shadow] group"
           >
             <span className="text-base leading-none mb-1">{icon}</span>
             <span className="text-white text-xs font-semibold group-hover:text-yellow-400 transition-colors leading-tight">
               {label}
             </span>
-            <span className="text-gray-600 text-[10px] leading-tight">{desc}</span>
+            <span className="text-gray-500 text-xs leading-tight">{desc}</span>
           </Link>
         ))}
       </div>
@@ -1419,13 +1419,13 @@ function NextPrevNav({
     return (
       <Link
         href={matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name)}
-        className="flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-gray-600 rounded-xl p-3 transition-all flex-1 min-w-0"
+        className="flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-gray-600 rounded-xl p-3 transition-[border-color,background-color,box-shadow] flex-1 min-w-0"
       >
-        <span className="text-gray-600 text-[10px] uppercase tracking-wider">
+        <span className="text-gray-500 text-xs uppercase tracking-wider">
           {direction === 'prev' ? '← Previous' : 'Next →'}
         </span>
         <span className="text-gray-300 text-xs truncate font-medium">{hn} vs {an}</span>
-        <span className="text-gray-500 text-[10px]">
+        <span className="text-gray-500 text-xs">
           {showScore
             ? `${m.score.fullTime.home ?? '–'} – ${m.score.fullTime.away ?? '–'} · FT`
             : date}
@@ -1454,7 +1454,7 @@ function WCAboveFoldCTA({ matchId }: { matchId: number | string }) {
       {/* Header row */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 px-4 py-3">
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span className="text-xl shrink-0">📺</span>
+          <span className="text-xl shrink-0" aria-hidden="true">📺</span>
           <div>
             <p className="text-sm font-bold text-white leading-tight">How to Watch This Match</p>
             <p className="text-xs text-yellow-400/80 leading-tight">FIFA World Cup 2026</p>
@@ -1548,9 +1548,9 @@ function WCBottomFunnel({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
           <Link
             href="/world-cup-2026/watch-live"
-            className="group flex flex-col gap-1 bg-gradient-to-br from-yellow-950/40 to-gray-900 border border-yellow-800/30 hover:border-yellow-600/50 rounded-xl p-4 transition-all"
+            className="group flex flex-col gap-1 bg-gradient-to-br from-yellow-950/40 to-gray-900 border border-yellow-800/30 hover:border-yellow-600/50 rounded-xl p-4 transition-[border-color,background-color,box-shadow]"
           >
-            <span className="text-2xl mb-1">📺</span>
+            <span className="text-2xl mb-1" aria-hidden="true">📺</span>
             <span className="text-sm font-bold text-white group-hover:text-yellow-400 transition-colors">
               Watch Live
             </span>
@@ -1561,7 +1561,7 @@ function WCBottomFunnel({
 
           <Link
             href="/world-cup-2026/tv-schedule"
-            className="group flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-yellow-700/40 rounded-xl p-4 transition-all"
+            className="group flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-yellow-700/40 rounded-xl p-4 transition-[border-color,background-color,box-shadow]"
           >
             <span className="text-2xl mb-1">🗓️</span>
             <span className="text-sm font-bold text-white group-hover:text-yellow-400 transition-colors">
@@ -1574,7 +1574,7 @@ function WCBottomFunnel({
 
           <Link
             href="/world-cup-2026/streaming-guide"
-            className="group flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-yellow-700/40 rounded-xl p-4 transition-all"
+            className="group flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-yellow-700/40 rounded-xl p-4 transition-[border-color,background-color,box-shadow]"
           >
             <span className="text-2xl mb-1">📡</span>
             <span className="text-sm font-bold text-white group-hover:text-yellow-400 transition-colors">
@@ -1592,13 +1592,13 @@ function WCBottomFunnel({
             {homeWCTeam && (
               <Link
                 href={`/world-cup-2026/${homeWCTeam.slug}`}
-                className="group flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-blue-700/40 rounded-xl p-4 transition-all"
+                className="group flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-blue-700/40 rounded-xl p-4 transition-[border-color,background-color,box-shadow]"
               >
                 <span className="text-2xl mb-1">{homeWCTeam.flag}</span>
                 <span className="text-xs font-bold text-white group-hover:text-blue-400 transition-colors leading-tight">
                   {homeShort} Team Page
                 </span>
-                <span className="text-[10px] text-gray-600 leading-tight">
+                <span className="text-xs text-gray-500 leading-tight">
                   Squad, fixtures &amp; group
                 </span>
               </Link>
@@ -1607,13 +1607,13 @@ function WCBottomFunnel({
             {awayWCTeam && (
               <Link
                 href={`/world-cup-2026/${awayWCTeam.slug}`}
-                className="group flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-blue-700/40 rounded-xl p-4 transition-all"
+                className="group flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-blue-700/40 rounded-xl p-4 transition-[border-color,background-color,box-shadow]"
               >
                 <span className="text-2xl mb-1">{awayWCTeam.flag}</span>
                 <span className="text-xs font-bold text-white group-hover:text-blue-400 transition-colors leading-tight">
                   {awayShort} Team Page
                 </span>
-                <span className="text-[10px] text-gray-600 leading-tight">
+                <span className="text-xs text-gray-500 leading-tight">
                   Squad, fixtures &amp; group
                 </span>
               </Link>
@@ -1622,13 +1622,13 @@ function WCBottomFunnel({
             {matchGroupSlug && matchGroupLabel && (
               <Link
                 href={`/world-cup-2026/${matchGroupSlug}`}
-                className="group flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-green-700/40 rounded-xl p-4 transition-all"
+                className="group flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-green-700/40 rounded-xl p-4 transition-[border-color,background-color,box-shadow]"
               >
                 <span className="text-2xl mb-1">📊</span>
                 <span className="text-xs font-bold text-white group-hover:text-green-400 transition-colors leading-tight">
                   {matchGroupLabel} Standings
                 </span>
-                <span className="text-[10px] text-gray-600 leading-tight">
+                <span className="text-xs text-gray-500 leading-tight">
                   Table, results &amp; fixtures
                 </span>
               </Link>
@@ -1637,13 +1637,13 @@ function WCBottomFunnel({
             {/* Fallback filler — always show WC Hub */}
             <Link
               href="/world-cup-2026"
-              className="group flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-yellow-700/40 rounded-xl p-4 transition-all"
+              className="group flex flex-col gap-1 bg-gray-900 border border-gray-800 hover:border-yellow-700/40 rounded-xl p-4 transition-[border-color,background-color,box-shadow]"
             >
-              <span className="text-2xl mb-1">🏆</span>
+              <span className="text-2xl mb-1" aria-hidden="true">🏆</span>
               <span className="text-xs font-bold text-white group-hover:text-yellow-400 transition-colors leading-tight">
                 WC 2026 Hub
               </span>
-              <span className="text-[10px] text-gray-600 leading-tight">
+              <span className="text-xs text-gray-500 leading-tight">
                 Scores, fixtures &amp; standings
               </span>
             </Link>
@@ -1725,7 +1725,7 @@ function ProjectedHero({ match }: { match: MatchDetail }) {
           href={isWC ? '/world-cup-2026/bracket' : `/competition/${match.competition?.code}`}
           className="inline-flex items-center gap-1.5 text-xs text-yellow-400/80 uppercase tracking-wider font-semibold hover:text-yellow-400 transition-colors"
         >
-          <span>🏆</span>
+          <span aria-hidden="true">🏆</span>
           {isWC ? 'FIFA World Cup 2026' : (match.competition?.name ?? 'Football')} · {stageLabel}
         </Link>
         <p className="text-xs text-gray-500 mt-1">{formatMatchDate(match.utcDate)} UTC</p>
@@ -1747,7 +1747,7 @@ function ProjectedHero({ match }: { match: MatchDetail }) {
             <span className="text-xl sm:text-2xl text-gray-500">?</span>
           </div>
           <p className="font-bold text-white text-sm sm:text-base leading-tight">{homeLabel}</p>
-          <p className="text-gray-600 text-[10px] mt-1">Home team</p>
+          <p className="text-gray-500 text-xs mt-1">Home team</p>
         </div>
 
         <div className="text-center space-y-2">
@@ -1756,7 +1756,7 @@ function ProjectedHero({ match }: { match: MatchDetail }) {
           </span>
           <div className="text-2xl font-bold text-gray-600">vs</div>
           {nextRound && (
-            <p className="text-[10px] text-gray-600 leading-tight">Winner → {nextRound}</p>
+            <p className="text-xs text-gray-500 leading-tight">Winner → {nextRound}</p>
           )}
         </div>
 
@@ -1765,14 +1765,14 @@ function ProjectedHero({ match }: { match: MatchDetail }) {
             <span className="text-xl sm:text-2xl text-gray-500">?</span>
           </div>
           <p className="font-bold text-white text-sm sm:text-base leading-tight">{awayLabel}</p>
-          <p className="text-gray-600 text-[10px] mt-1">Away team</p>
+          <p className="text-gray-500 text-xs mt-1">Away team</p>
         </div>
       </div>
 
       {/* Qualification status + venue */}
       <div className="flex flex-wrap justify-center gap-2 pt-4 border-t border-gray-800 text-xs">
         <span className="inline-flex items-center gap-1.5 text-amber-400/80 bg-amber-400/8 border border-amber-400/20 rounded-lg px-3 py-1.5">
-          <span>⏳</span> Teams to be confirmed after group stage
+          <span aria-hidden="true">⏳</span> Teams to be confirmed after group stage
         </span>
         {match.venue && (
           <span className="inline-flex items-center gap-1.5 text-gray-400">
@@ -1898,13 +1898,13 @@ function ProjectedContent({
                 <p className="text-white text-sm font-semibold">{label}</p>
                 <p className="text-gray-500 text-xs">{side} · Qualification in progress</p>
               </div>
-              <span className="text-[10px] font-semibold text-amber-400 bg-amber-400/10 border border-amber-400/20 rounded px-2 py-0.5 shrink-0">
+              <span className="text-xs font-semibold text-amber-400 bg-amber-400/10 border border-amber-400/20 rounded px-2 py-0.5 shrink-0">
                 Awaiting
               </span>
             </div>
           ))}
         </div>
-        <p className="text-xs text-gray-600 mt-4 text-center leading-relaxed">
+        <p className="text-xs text-gray-500 mt-4 text-center leading-relaxed">
           Teams will be confirmed once the group stage is complete.
           Page updates automatically when slots are resolved.
         </p>
@@ -1921,7 +1921,7 @@ function ProjectedContent({
           )}
           <Link
             href="/world-cup-2026/bracket"
-            className="flex items-center justify-between bg-gray-800/60 hover:bg-gray-800 border border-gray-700 hover:border-yellow-700/40 rounded-xl p-4 transition-all group"
+            className="flex items-center justify-between bg-gray-800/60 hover:bg-gray-800 border border-gray-700 hover:border-yellow-700/40 rounded-xl p-4 transition-[border-color,background-color,box-shadow] group"
           >
             <div>
               <p className="text-white text-sm font-semibold group-hover:text-yellow-400 transition-colors">
@@ -2464,7 +2464,7 @@ export default async function MatchDetailPage({ params }: Params) {
       <div className="max-w-2xl mx-auto space-y-4 pb-10">
         <Breadcrumb items={[{ label: 'Home', href: '/' }, { label: 'Match' }]} />
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center space-y-3">
-          <div className="text-4xl">{isNotFound ? '🔍' : '⚽'}</div>
+          <div className="text-4xl" aria-hidden="true">{isNotFound ? '🔍' : '⚽'}</div>
           <h1 className="text-white font-bold text-lg">
             {isNotFound ? 'Match Not Found' : 'Match Details Unavailable'}
           </h1>
@@ -2636,7 +2636,7 @@ async function BelowTheFoldDeferred({ matchId }: { matchId: string }) {
             This match was cancelled or suspended. No result was recorded.
           </p>
           {match.venue && (
-            <p className="text-xs text-gray-600 text-center">Scheduled venue: {match.venue}</p>
+            <p className="text-xs text-gray-500 text-center">Scheduled venue: {match.venue}</p>
           )}
         </div>
         {isWC && (

@@ -194,13 +194,13 @@ function RouteToFinal({
                   ? 'bg-green-500/10 border border-green-500/20'
                   : 'bg-gray-900 border border-gray-800'
               }`}>
-                <span className={`text-[10px] font-black uppercase tracking-wider ${
-                  isCurrent ? 'text-yellow-400' : reached ? 'text-green-400' : 'text-gray-600'
+                <span className={`text-xs font-black uppercase tracking-wider ${
+                  isCurrent ? 'text-yellow-400' : reached ? 'text-green-400' : 'text-gray-500'
                 }`}>
                   {stage.short}
                 </span>
-                <span className={`text-[9px] mt-0.5 text-center leading-tight ${
-                  isCurrent ? 'text-yellow-300/80' : reached ? 'text-green-300/70' : 'text-gray-700'
+                <span className={`text-xs mt-0.5 text-center leading-tight ${
+                  isCurrent ? 'text-yellow-300/80' : reached ? 'text-green-300/70' : 'text-gray-500'
                 }`}>
                   {stage.desc}
                 </span>
@@ -592,7 +592,7 @@ export default async function WCTeamPage({
                     <p className="text-xs text-gray-500 mt-0.5">{formatKickoff(m.utcDate)}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-[10px] text-gray-600">{STAGE_LABELS[m.stage ?? ''] ?? ''}</span>
+                    <span className="text-xs text-gray-500">{STAGE_LABELS[m.stage ?? ''] ?? ''}</span>
                     <span className="text-yellow-600 text-xs">→</span>
                   </div>
                 </Link>
@@ -616,7 +616,7 @@ export default async function WCTeamPage({
                   <Link key={m.id} href={matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name)}
                     className="flex items-center justify-between bg-gray-900 border border-gray-800 hover:border-yellow-700/40 rounded-xl px-4 py-3 transition-colors group">
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black border ${
+                      <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black border ${
                         result === 'W' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
                         result === 'D' ? 'bg-gray-700 text-gray-300 border-gray-600' :
                         'bg-red-500/20 text-red-400 border-red-500/30'
@@ -658,12 +658,12 @@ export default async function WCTeamPage({
                         })} UTC · {f.venueCity}
                       </p>
                     </div>
-                    <span className="text-[10px] text-gray-600 shrink-0">MD{f.matchday}</span>
+                    <span className="text-xs text-gray-500 shrink-0">MD{f.matchday}</span>
                   </div>
                 );
               })}
             </div>
-            <p className="text-xs text-gray-600 mt-2 px-1">
+            <p className="text-xs text-gray-500 mt-2 px-1">
               ℹ️ Scheduled kickoff times — live match links appear once the tournament begins.
             </p>
           </section>
