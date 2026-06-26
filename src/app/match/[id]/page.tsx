@@ -2226,6 +2226,13 @@ export default async function MatchDetailPage({ params }: Params) {
         {/* Breadcrumb: Home > WC 2026 > Group A > Match */}
         <Breadcrumb items={buildBreadcrumb(match)} />
 
+        {/* Accessibility + SEO: every match page needs exactly one <h1>.
+            Visually hidden — the ScoreHero is the visual heading. */}
+        <h1 className="sr-only">
+          {(match.homeTeam.name ?? 'TBD')} vs {(match.awayTeam.name ?? 'TBD')}
+          {match.competition?.code === 'WC' ? ' — FIFA World Cup 2026' : match.competition?.name ? ` — ${match.competition.name}` : ''}
+        </h1>
+
         <ScoreHero
           match={match}
           centerSlot={

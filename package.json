@@ -9,6 +9,7 @@
     "lint": "next lint",
     "check:wc-arch": "node scripts/check-wc-architecture.mjs",
     "check:wc-journeys": "node scripts/check-wc-journeys.mjs",
+    "guardian": "node scripts/check-wc-architecture.mjs && node scripts/check-wc-journeys.mjs && node scripts/guardian.mjs",
     "prebuild": "node scripts/check-wc-architecture.mjs",
     "test": "jest",
     "test:watch": "jest --watch",
