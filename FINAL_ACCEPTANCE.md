@@ -1,130 +1,95 @@
-# FINAL ACCEPTANCE — DATA-18WC.RESET
-**Phase:** DATA-18WC.RESET Phase 13  
-**Date:** 2026-06-25
+# FINAL_ACCEPTANCE — DATA-18WC.MATCH-STORY
+
+**Date:** 2026-06-26
+**Status:** ACCEPTED ✅
 
 ---
 
-## Mission Statement Compliance
+## Success Gate
 
-> "ONE SOURCE OF TRUTH, ONE PIPELINE, ONE VIEW MODEL, ONE COMPONENT, ONE ROUTE"
+### PRIMARY: South Africa vs Canada, Round of 32
 
-### ONE SOURCE OF TRUTH
+Match: WC_KNOCKOUT, `stage = 'LAST_32'`, FINISHED, winner = South Africa
 
-| Before RESET | After RESET |
+**Required text (must be present):**
+
+| Required | Present |
 |---|---|
-| Hub used `getWCKnockoutMatchesCached()` directly | Hub uses `buildKnockoutViewModel()` |
-| SEO bracket used `getWCKnockoutMatchesCached()` directly | SEO bracket uses `buildKnockoutViewModel()` |
+| "winner advances" | ✅ "South Africa advance to the Round of 16" |
+| "loser eliminated" | ✅ "Canada's World Cup journey comes to an end — eliminated at the Round of 32" |
+| "extra time" (draw scenario) | ✅ present in draw branch |
+| "penalties" (draw scenario) | ✅ "penalty shootout will determine who advances" |
+| "road to Round of 16" | ✅ "advance to the Round of 16" |
+| "road to Final" section | ✅ "Road to the Final" section heading |
 
-**Status:** ✅ Authority cache (`goalradar:wc:authority:v1`) is the single source. All knockout consumers read from it via `buildKnockoutViewModel()`.
+**Forbidden text (must be absent):**
 
----
-
-### ONE PIPELINE (Knockout)
-
-**Before:** 3 parallel pipelines for knockout data:
-1. `buildKnockoutViewModel()` → bracket/page + WCRoundPage (x6)
-2. `getWCKnockoutMatchesCached()` direct → hub/page
-3. `getWCKnockoutMatchesCached()` direct → world-cup-2026-bracket/page
-
-**After:** 1 pipeline:
-1. `buildKnockoutViewModel()` → all 10 consumers
-
-```
-buildKnockoutViewModel()
-  ├─ /world-cup-2026/bracket           ✓ (Sprint 15)
-  ├─ /world-cup-2026/round-of-32       ✓ (Sprint 15)
-  ├─ /world-cup-2026/round-of-16       ✓ (Sprint 15)
-  ├─ /world-cup-2026/quarter-finals    ✓ (Sprint 15)
-  ├─ /world-cup-2026/semi-finals       ✓ (Sprint 15)
-  ├─ /world-cup-2026/third-place       ✓ (Sprint 15)
-  ├─ /world-cup-2026/final             ✓ (Sprint 15)
-  ├─ /world-cup-2026                   ✓ (RESET)
-  ├─ /world-cup-2026-bracket           ✓ (RESET)
-  └─ [no other consumers]
-```
-
-**Status:** ✅ One pipeline.
-
----
-
-### ONE VIEW MODEL (Knockout)
-
-**KnockoutViewModel** (`src/lib/knockout-vm.ts`) is the only knockout data structure. No page assembles knockout match arrays independently.
-
-**Status:** ✅ One ViewModel.
-
----
-
-### ONE COMPONENT (per surface)
-
-| Surface | Component |
+| Forbidden | Absent |
 |---|---|
-| Match card | `MatchCard` |
-| Group table | `WCGroupTable` |
-| Bracket tree | `WCBracket` |
-| Round page | `WCRoundPage` |
-
-Deferred (post-RESET): `GroupTable` local function in standings page vs `WCGroupTable`.
-
-**Status:** ✅ No critical component duplication. Deferred items are cosmetic.
-
----
-
-### ONE ROUTE (per feature)
-
-| Duplicate removed | Redirect |
-|---|---|
-| `/world-cup-2026/third-place-playoff` | → `/world-cup-2026/third-place` (301) |
-
-No other routes were deleted — remaining dual-path routes (SEO slug + nested) serve distinct content or distinct navigation purposes.
-
-**Status:** ✅ Critical duplicate removed.
+| "three points" | ✅ |
+| "league table" | ✅ |
+| "draw helps" | ✅ |
+| "campaign" | ✅ |
+| "season" | ✅ |
+| "congested table" | ✅ |
+| "title race" | ✅ |
 
 ---
 
-## Metrics: Before vs After
-
-| Metric | Before RESET | After RESET | Change |
-|---|---|---|---|
-| Knockout pipelines | 3 | 1 | -2 |
-| Direct `getWCKnockoutMatchesCached()` page callers | 3 | 0 | -3 |
-| `buildKnockoutViewModel()` consumers | 8 | 10 | +2 |
-| Duplicate routes deleted | - | 1 | -1 |
-| Dead code (stale comment) | 1 | 0 | -1 |
-| ISR TTL consistency (knockout pages) | Mixed (6h/15min) | Uniform 15min | Fixed |
-
----
-
-## Acceptance Criteria
+## Architecture Criteria
 
 | Criterion | Status |
 |---|---|
-| All knockout consumers call `buildKnockoutViewModel()` | ✅ PASS |
-| No page calls `getWCKnockoutMatchesCached()` directly | ✅ PASS |
-| `injectKnockoutSlotLabels` called only inside knockout-vm.ts | ✅ PASS |
-| `canonicalToMatch` defined only in knockout-vm.ts | ✅ PASS |
-| `AUTHORITY_CACHE_PILOT` gate only in knockout-vm.ts | ✅ PASS |
-| `/world-cup-2026/third-place-playoff` removed + redirected | ✅ PASS |
-| Sprint 14 positional labels preserved | ✅ PASS |
-| Sprint 15 CompetitionSelector on WC standings preserved | ✅ PASS |
-| Sprint 15 Navbar Standings fix preserved | ✅ PASS |
-| TypeScript compile: no source code errors | ✅ PASS |
+| ONE Story Engine (`src/lib/match-story-engine.ts`) | ✅ |
+| ONE source for all narrative (`buildStoryReport`) | ✅ |
+| ONE template per match type (WC_KNOCKOUT / WC_GROUP / STANDARD) | ✅ |
+| No paragraph inspects raw match objects directly | ✅ all through StoryContext |
+| `buildReportSections()` deleted | ✅ |
+| No legacy generator remains | ✅ |
+| No duplicate `ReportSection` definition | ✅ |
+| TypeScript: 0 errors | ✅ |
 
 ---
 
-## Remaining Deferred Items (Post-RESET, future sprints)
+## Deliverables
 
-| Item | Priority |
+| File | Status |
 |---|---|
-| Deprecated API routes DC1 (3 files) | MEDIUM |
-| `fetchFromAPI()` dead function in api.ts | MEDIUM |
-| `GroupTable` local function vs `WCGroupTable` unification | LOW |
-| `LocalKnockoutRound` vs `ScheduleSlots` merge | LOW |
-| ESPN ID legacy sentinel cleanup | LOW |
-| match-identity.ts TODO markers (DATA-15B/C) | SEPARATE SPRINT |
+| `MATCH_STORY_PIPELINE.md` | ✅ |
+| `MATCH_TYPE_MATRIX.md` | ✅ |
+| `MATCH_STORY_ENGINE.md` | ✅ |
+| `MATCH_STAGE_TEMPLATES.md` | ✅ |
+| `MATCH_LANGUAGE_GUIDE.md` | ✅ |
+| `ROAD_TO_FINAL_ENGINE.md` | ✅ |
+| `QUALIFICATION_CONTEXT.md` | ✅ |
+| `STORY_CARD_ENGINE.md` | ✅ |
+| `SEO_STORY_GUIDE.md` | ✅ |
+| `REGRESSION.md` | ✅ |
+| `FINAL_ACCEPTANCE.md` | ✅ |
 
 ---
 
-**DATA-18WC.RESET SPRINT: COMPLETE**
+## Files Changed
 
-Commit when ready. All 12 deliverable documents written.
+| File | Change |
+|---|---|
+| `src/lib/match-story-engine.ts` | NEW — complete Story Engine (~430 lines) |
+| `src/app/match/[id]/page.tsx` | Deleted `buildReportSections()` + local `ReportSection` interface; wired engine via `buildStoryReport(buildStoryContext(match))` |
+
+---
+
+## Scope Boundaries
+
+| Feature | Notes |
+|---|---|
+| Story card UI rendering | Engine designed in STORY_CARD_ENGINE.md; cards not yet rendered in UI |
+| Explicit "Won Group C" sentences | Available via wc-qualification.ts; not yet wired into StoryContext |
+| Extra time / penalty result detection | API doesn't surface ET/PK results reliably — left for future sprint |
+
+---
+
+## Rule Zero
+
+> ONE SOURCE. ONE STORY ENGINE. ONE TEMPLATE PER MATCH TYPE.
+
+All match narrative flows through `buildStoryReport(buildStoryContext(match))` in `src/lib/match-story-engine.ts`. No other code generates match narrative.
