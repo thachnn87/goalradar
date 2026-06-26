@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
@@ -70,10 +71,39 @@ function JsonLd({ groupTables }: { groupTables: StandingTable[] }) {
 }
 
 // ---------------------------------------------------------------------------
-// Page
+// Skeleton (B9)
 // ---------------------------------------------------------------------------
 
-export default async function WCGroupsPage() {
+function WCGroupsSkeleton() {
+  return (
+    <div className="space-y-4">
+      {/* Tab strip skeleton */}
+      <div className="flex gap-1 overflow-x-auto pb-1">
+        {Array.from({ length: 12 }).map((_, i) => (
+          <div key={i} className="h-7 w-16 bg-gray-800 rounded-lg animate-pulse shrink-0" />
+        ))}
+      </div>
+      {/* Table skeleton */}
+      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-gray-800/50 last:border-0">
+            <div className="w-5 h-5 bg-gray-800 rounded-full animate-pulse shrink-0" />
+            <div className="flex-1 h-4 bg-gray-800 rounded animate-pulse" />
+            <div className="w-6 h-4 bg-gray-800 rounded animate-pulse" />
+            <div className="w-6 h-4 bg-gray-800 rounded animate-pulse" />
+            <div className="w-6 h-4 bg-gray-800 rounded animate-pulse" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Async body (B9) — extracted so the shell renders instantly with Suspense
+// ---------------------------------------------------------------------------
+
+async function GroupsBody() {
   let groupTables: StandingTable[] = [];
   let apiError = false;
   try {
@@ -85,7 +115,6 @@ export default async function WCGroupsPage() {
 
   const matchesPlayed = groupTables.some(t => t.table.some(e => e.playedGames > 0));
 
-  // Qualification engine — same computation as the hub
   const qualMap = calculateQualificationStatus(groupTables);
   function groupQualMap(groupKey: string | null): Map<number, QualificationStatus> {
     const letter = (groupKey ?? '').replace(/^GROUP_/, '').toUpperCase();
@@ -98,56 +127,30 @@ export default async function WCGroupsPage() {
 
   return (
     <>
-      <JsonLd groupTables={groupTables} />
-
-      <div className="max-w-5xl mx-auto space-y-8 pb-12">
-        <Breadcrumb items={[
-          { label: 'Home', href: '/' },
-          { label: 'World Cup 2026', href: '/world-cup-2026' },
-          { label: 'Group Standings' },
-        ]} />
-
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <span className="text-2xl">📊</span>
-              <h1 className="text-2xl sm:text-3xl font-black text-white">Group Standings</h1>
-            </div>
-            <p className="text-gray-500 text-sm">
-              FIFA World Cup 2026 · Groups A–L · 48 nations
-            </p>
-          </div>
-          <Link href="/world-cup-2026" className="text-xs text-yellow-500 hover:text-yellow-300 transition-colors font-medium shrink-0 mt-1">
-            ← WC Hub
-          </Link>
-        </div>
-
-        {/* Cross-page navigation */}
-        <WCPageNav />
-
-        {/* Status / legend */}
-        <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-sm bg-green-500 shrink-0" /> Advances to knockout stage
+      {/* Status / legend */}
+      <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-sm bg-green-500 shrink-0" /> Advances to knockout stage
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-sm bg-yellow-500 shrink-0" /> Possible best third-place
+        </span>
+        {apiError && (
+          <span className="text-orange-500 ml-auto">
+            Live standings temporarily unavailable — showing pre-tournament groups
           </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-sm bg-yellow-500 shrink-0" /> Possible best third-place
+        )}
+        {!apiError && !matchesPlayed && (
+          <span className="text-yellow-600 ml-auto">
+            Live standings updating — check back in a few minutes
           </span>
-          {apiError && (
-            <span className="text-orange-500 ml-auto">
-              Live standings temporarily unavailable — showing pre-tournament groups
-            </span>
-          )}
-          {!apiError && !matchesPlayed && (
-            <span className="text-yellow-600 ml-auto">
-              Live standings updating — check back in a few minutes
-            </span>
-          )}
-        </div>
+        )}
+      </div>
 
-        {/* All 12 groups in responsive grid */}
-        {groupTables.length > 0 ? (
+      {groupTables.length > 0 ? (
+        <>
+          {/* B9: tabbed group panels — all 12 rendered SSR, CSS hidden toggles */}
+          {/* WCGroupTabsClient is imported via the groups page wrapper below */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {groupTables.map(t => {
               const slug  = groupSlug(t.group ?? '');
@@ -170,17 +173,68 @@ export default async function WCGroupsPage() {
               );
             })}
           </div>
-        ) : (
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-10 text-center">
-            <div className="text-4xl mb-3">📊</div>
-            <p className="text-gray-300 font-semibold">Standings temporarily unavailable</p>
-            <p className="text-gray-500 text-sm mt-1">
-              Live standings will reappear shortly. Check back in a few minutes.
+        </>
+      ) : (
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-10 text-center">
+          <div className="text-4xl mb-3">📊</div>
+          <p className="text-gray-300 font-semibold">Standings temporarily unavailable</p>
+          <p className="text-gray-500 text-sm mt-1">
+            Live standings will reappear shortly. Check back in a few minutes.
+          </p>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
+export default async function WCGroupsPage() {
+  // Shell renders immediately; GroupsBody suspends for the API call
+  const groupTablesForJsonLd: StandingTable[] = [];
+  try {
+    const data = await getStandingsCached('WC');
+    groupTablesForJsonLd.push(...data.standings.filter(s => s.type === 'TOTAL'));
+  } catch { /* JSON-LD degrades gracefully */ }
+
+  return (
+    <>
+      <JsonLd groupTables={groupTablesForJsonLd} />
+
+      <div className="max-w-5xl mx-auto space-y-8 pb-12">
+        <Breadcrumb items={[
+          { label: 'Home', href: '/' },
+          { label: 'World Cup 2026', href: '/world-cup-2026' },
+          { label: 'Group Standings' },
+        ]} />
+
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <span className="text-2xl" aria-hidden="true">📊</span>
+              <h1 className="text-2xl sm:text-3xl font-black text-white">Group Standings</h1>
+            </div>
+            <p className="text-gray-500 text-sm">
+              FIFA World Cup 2026 · Groups A–L · 48 nations
             </p>
           </div>
-        )}
+          <Link href="/world-cup-2026" className="text-xs text-yellow-500 hover:text-yellow-300 transition-colors font-medium shrink-0 mt-1">
+            ← WC Hub
+          </Link>
+        </div>
 
-        {/* Group A–L direct links */}
+        {/* Cross-page navigation */}
+        <WCPageNav />
+
+        {/* B9: Suspense boundary — skeleton renders while GroupsBody awaits API */}
+        <Suspense fallback={<WCGroupsSkeleton />}>
+          <GroupsBody />
+        </Suspense>
+
+        {/* Group A–L direct links — B10: fixed text-xs, transition-colors, min 44px touch targets */}
         <section>
           <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">
             Browse Groups
@@ -190,12 +244,12 @@ export default async function WCGroupsPage() {
               <Link
                 key={g}
                 href={`/world-cup-2026/group-${g}`}
-                className="bg-gray-900 hover:bg-yellow-500/10 border border-gray-800 hover:border-yellow-700/40 rounded-xl p-3 text-center transition-all group"
+                className="bg-gray-900 hover:bg-yellow-500/10 border border-gray-800 hover:border-yellow-700/40 rounded-xl p-3 min-h-[44px] flex flex-col items-center justify-center text-center transition-colors group"
               >
                 <span className="text-white font-black text-lg group-hover:text-yellow-400 transition-colors">
                   {g.toUpperCase()}
                 </span>
-                <p className="text-gray-600 text-[10px] mt-0.5">Group {g.toUpperCase()}</p>
+                <p className="text-gray-500 text-xs mt-0.5">Group {g.toUpperCase()}</p>
               </Link>
             ))}
           </div>
@@ -207,7 +261,7 @@ export default async function WCGroupsPage() {
           { href: '/world-cup-2026-results',    icon: '🏁', label: 'WC 2026 Results',     desc: 'Full-time and live scores for every match' },
           { href: '/world-cup-2026-bracket',    icon: '🔗', label: 'Knockout Bracket',    desc: 'Round of 32 path to the Final at MetLife' },
           { href: '/world-cup-2026-schedule',   icon: '📅', label: 'Match Schedule',      desc: 'All 104 fixtures with timezone converter' },
-          { href: '/world-cup-2026/teams',           icon: '👥', label: 'All 48 Teams',   desc: 'Squads and stats for every WC nation' },
+          { href: '/world-cup-2026/teams',      icon: '👥', label: 'All 48 Teams',        desc: 'Squads and stats for every WC nation' },
         ]} />
       </div>
     </>

@@ -16,6 +16,7 @@ import MatchCard from '@/components/MatchCard';
 import Breadcrumb from '@/components/Breadcrumb';
 import SnapshotPrewarmHints from '@/components/SnapshotPrewarmHints';
 import WCBracket from '@/components/WCBracket';
+import WCGroupTabsClient from '@/components/WCGroupTabsClient';
 import WCGroupTable from '@/components/WCGroupTable';
 import { calculateQualificationStatus, type QualificationStatus } from '@/lib/wc-qualification';
 import WCCountdown from '@/components/WCCountdown';
@@ -362,6 +363,13 @@ export default async function WorldCup2026Page() {
       ? WC_KNOCKOUT_SLOTS.filter((s) => new Date(s.utcDate) > new Date()).slice(0, 16)
       : [];
 
+  // Hero stats — pure computation from allAuthority, no new I/O
+  const playedCount = allAuthority.filter(m => effectiveBucket(m) === 'finished').length;
+  const goalCount = allAuthority
+    .filter(m => effectiveBucket(m) === 'finished')
+    .reduce((sum, m) => sum + (m.score.fullTime.home ?? 0) + (m.score.fullTime.away ?? 0), 0);
+  const remainingCount = upcomingMatches.length + todayMatches.length + knockoutSlots.length;
+
   // 5. Group standings
   const groupTables: StandingTable[] =
     standingsResult.status === 'fulfilled'
@@ -399,32 +407,47 @@ export default async function WorldCup2026Page() {
         <div className="mt-3 mb-6"><WCPageNav /></div>
 
         {/* ── Hero ──────────────────────────────────────────────────────── */}
-        <div className="relative bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 border border-gray-800 rounded-2xl p-6 sm:p-8 overflow-hidden">
-          {/* Subtle gold glow */}
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(234,179,8,0.06)_0%,_transparent_60%)] pointer-events-none" />
-          <div className="relative flex flex-col sm:flex-row sm:items-center gap-5">
-            <span className="text-6xl shrink-0 leading-none" aria-hidden="true">🏆</span>
-            <div className="flex-1 min-w-0">
-              <h1 className="text-2xl sm:text-3xl font-black text-white leading-tight">
-                FIFA World Cup 2026
-              </h1>
-              <p className="text-gray-400 text-sm mt-1">
-                United States · Canada · Mexico
-              </p>
-              <p className="text-gray-500 text-xs mt-0.5">
-                11 June – 19 July 2026 &nbsp;·&nbsp; 48 teams &nbsp;·&nbsp; 104 matches
-              </p>
+        <section className="relative overflow-hidden rounded-2xl bg-gray-950 border border-amber-800/20 p-6 sm:p-8">
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-950/20 via-transparent to-violet-950/10 pointer-events-none" aria-hidden="true" />
+          <div className="relative">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-2">
+              <span className="text-xs font-semibold uppercase tracking-widest text-amber-400">FIFA World Cup 2026</span>
+              <span className="text-gray-700" aria-hidden="true">·</span>
+              <span className="text-xs text-gray-500">USA · Canada · Mexico</span>
             </div>
-            <div className="flex sm:flex-col gap-2 text-xs">
-              <span className="bg-green-500/15 text-green-400 border border-green-500/25 px-3 py-1 rounded-full font-semibold">
-                48 Nations
-              </span>
-              <span className="bg-blue-500/15 text-blue-400 border border-blue-500/25 px-3 py-1 rounded-full font-semibold">
-                3 Countries
-              </span>
-            </div>
+            <h1 className="text-2xl sm:text-3xl font-black text-white leading-tight mb-2">
+              {allLive.length > 0 ? (
+                <>Live — <span className="text-red-400">{allLive.length} match{allLive.length > 1 ? 'es' : ''} in progress</span></>
+              ) : today >= WC_START && today <= WC_END ? (
+                <>The World Cup is <span className="text-amber-400">Happening Now</span></>
+              ) : (
+                <>FIFA World Cup <span className="text-amber-400">2026</span></>
+              )}
+            </h1>
+            <p className="text-gray-400 text-sm max-w-lg">
+              48 nations · 104 matches · 3 host countries. Follow every goal, every result, every moment.
+            </p>
           </div>
-        </div>
+
+          {playedCount > 0 && (
+            <div className="relative flex flex-wrap gap-6 mt-5 pt-5 border-t border-gray-800/60">
+              <div>
+                <p className="text-white font-black text-xl tabular-nums">{playedCount}</p>
+                <p className="text-gray-500 text-xs">Matches played</p>
+              </div>
+              <div>
+                <p className="text-white font-black text-xl tabular-nums">{goalCount}</p>
+                <p className="text-gray-500 text-xs">Total goals</p>
+              </div>
+              <div>
+                <p className={`font-black text-xl tabular-nums ${allLive.length > 0 ? 'text-red-400' : 'text-amber-400'}`}>
+                  {allLive.length > 0 ? allLive.length : remainingCount}
+                </p>
+                <p className="text-gray-500 text-xs">{allLive.length > 0 ? 'Live now' : 'Remaining'}</p>
+              </div>
+            </div>
+          )}
+        </section>
 
         {/* ── Countdown ────────────────────────────────────────────────── */}
         {/* LIVE-2: live matches drive the CTA; currentPath enables the
@@ -437,47 +460,17 @@ export default async function WorldCup2026Page() {
         {/* Ad: below countdown, above nav */}
         <AdSlot slotId="wc-top" variant="banner" />
 
-        {/* ── Navigation shortcuts — sticky on mobile ───────────────────── */}
-        <nav
-          aria-label="World Cup sections"
-          className="sticky top-16 z-40 -mx-4 px-4 sm:mx-0 sm:px-0 sm:static sm:z-auto bg-gray-950/95 sm:bg-transparent backdrop-blur-md sm:backdrop-blur-none border-b border-gray-800/50 sm:border-0 pb-3 sm:pb-0"
-        >
-          <div className="flex items-center gap-1 overflow-x-auto scrollbar-none pt-3 sm:pt-0">
-            {[
-              { href: '#fixtures',  icon: '📅', label: 'Fixtures'  },
-              { href: '/world-cup-2026/results', icon: '🏁', label: 'Results', external: true },
-              { href: '#groups',    icon: '📊', label: 'Groups'    },
-              { href: '/world-cup-2026/bracket', icon: '🔗', label: 'Bracket', external: true },
-              { href: '/world-cup-2026/group-a', icon: '🗂',  label: 'Group A', external: true },
-            ].map(({ href, icon, label, external }) => (
-              <Link
-                key={label}
-                href={href}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors bg-gray-800/80 hover:bg-yellow-500/15 text-gray-300 hover:text-yellow-400 border border-gray-700/50 hover:border-yellow-500/30 shrink-0"
-              >
-                <span className="text-base leading-none" aria-hidden="true">{icon}</span>
-                {label}
-                {external && <span className="text-gray-600 text-xs">↗</span>}
-              </Link>
-            ))}
-          </div>
-        </nav>
-
-        {/* ── 1. Live Matches ───────────────────────────────────────────── */}
-        {allLive.length > 0 && (
-          <section aria-labelledby="live-heading">
-            <SectionHeader id="live-heading" title="Live Matches" live count={allLive.length} />
+        {/* ── 1. Today (Live + scheduled) ───────────────────────────────── */}
+        <section aria-labelledby="today-heading">
+          <SectionHeader
+            id="today-heading"
+            title={allLive.length > 0 ? 'Live Now' : "Today's Matches"}
+            live={allLive.length > 0}
+            count={allLive.length > 0 ? allLive.length : todayMatches.length}
+          />
+          {allLive.length > 0 || todayMatches.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {allLive.map((m) => <MatchCard key={m.id} match={m} />)}
-            </div>
-          </section>
-        )}
-
-        {/* ── 2. Today's Matches ────────────────────────────────────────── */}
-        <section aria-labelledby="today-heading">
-          <SectionHeader id="today-heading" title="Today's Matches" count={todayMatches.length + allLive.length} />
-          {todayMatches.length > 0 || allLive.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {todayMatches.map((m) => <MatchCard key={m.id} match={m} />)}
             </div>
           ) : (
@@ -509,11 +502,14 @@ export default async function WorldCup2026Page() {
           <SectionHeader id="standings-heading" title="Group Standings" />
           {groupTables.length > 0 ? (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <WCGroupTabsClient tabs={groupTables.map((t) => {
+                const letter = (t.group ?? '').replace(/^GROUP_/, '');
+                return `Group ${letter}`;
+              })}>
                 {groupTables.map((t) => {
                   const groupSlug = (t.group ?? '')
                     .toLowerCase()
-                    .replace(/[\s_]+/g, '-'); // GROUP_A / "Group A" → group-a
+                    .replace(/[\s_]+/g, '-');
                   return (
                     <WCGroupTable
                       key={t.group ?? t.stage}
@@ -524,7 +520,7 @@ export default async function WorldCup2026Page() {
                     />
                   );
                 })}
-              </div>
+              </WCGroupTabsClient>
               <p className="text-xs text-gray-600 mt-3 flex items-center gap-1.5">
                 <span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500 shrink-0" />
                 Advances to knockout round of 32

@@ -5,7 +5,7 @@ import { enrichKnockoutSlots } from '@/lib/knockout-vm';
 import { canonicalToMatch } from '@/lib/canonical-match';
 // WC-LIVE-SSOT: single source of truth for live WC match state
 import { getCurrentLiveMatches, getLiveMatchIdSet } from '@/lib/wc-live-ssot';
-import MatchCard from '@/components/MatchCard';
+import MatchCard, { MatchCardSkeleton } from '@/components/MatchCard';
 import CompetitionSelector from '@/components/CompetitionSelector';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCCountdown from '@/components/WCCountdown';
@@ -202,14 +202,28 @@ async function ScheduleContent({
   );
 }
 
-function SkeletonGrid() {
+function ScheduleSkeleton() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div
-          key={i}
-          className="bg-gray-900 border border-gray-800 rounded-xl h-28 animate-pulse"
-        />
+    <div className="space-y-8">
+      {[6, 3].map((count, gi) => (
+        <div key={gi}>
+          <div className="h-4 w-24 bg-gray-800 rounded animate-pulse mb-3" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: count }).map((_, i) => (
+              <MatchCardSkeleton key={i} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CompetitionSelectorSkeleton() {
+  return (
+    <div className="flex gap-2 overflow-x-auto pb-1">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="h-8 w-20 bg-gray-800 rounded-full animate-pulse shrink-0" />
       ))}
     </div>
   );
@@ -269,13 +283,31 @@ export default async function SchedulePage({
       {/* Timezone banner — client island, no hydration mismatch */}
       <TimezoneBanner />
 
-      <Suspense fallback={null}>
+      <Suspense fallback={<CompetitionSelectorSkeleton />}>
         <CompetitionSelector
           selected={competition}
         />
       </Suspense>
 
-      <Suspense fallback={<SkeletonGrid />}>
+      {/* B8: LIVE NOW pinned section — only when WC tab and live matches exist */}
+      {competition === 'WC' && wcLiveMatches.length > 0 && (
+        <section aria-label="Live matches">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+            </span>
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-red-400">
+              Live Now · {wcLiveMatches.length} match{wcLiveMatches.length > 1 ? 'es' : ''}
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {wcLiveMatches.map((m) => <MatchCard key={m.id} match={m} />)}
+          </div>
+        </section>
+      )}
+
+      <Suspense fallback={<ScheduleSkeleton />}>
         <ScheduleContent
           competition={competition}
         />
