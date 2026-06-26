@@ -87,17 +87,28 @@ All 6 navigation journeys already PASS on production. The single remaining failu
 
 ---
 
-## Post-deploy acceptance (required to declare PASS)
+## Post-deploy acceptance — ✅ CONFIRMED PASS
 
-After Vercel deploys this commit, re-run:
+Re-run against production after deploy of commit `7101d9c`:
 
 ```
-CRAWL_BASE_URL=https://www.goalradar.org node scripts/check-wc-journeys.mjs
+$ CRAWL_BASE_URL=https://www.goalradar.org node scripts/check-wc-journeys.mjs
+
+  ✅ Journey 1 — Home → Bracket → Round32 → Match → Back
+  ✅ Journey 2 — Standings → Group → Team → Match
+  ✅ Journey 3 — Fixtures → Match
+  ✅ Journey 4 — Results → Match
+  ✅ Journey 5 — Schedule → Match
+  ✅ Journey 6 — SEO Bracket → Round → Match
+  ✅ Bracket parity — SEO 32 == nested 32 match ids
+
+✅ ALL 7 JOURNEYS PASS — end-to-end navigation healthy.  (exit 0)
 ```
 
-Expected: **7/7 PASS** — all 6 journeys + bracket parity (SEO == nested == 32 ids).
-Until that run is green, the sprint is **not** PASS (data-only correctness does not
-count, per the new gate).
+**Sprint verdict: PASS.** All 6 mandatory journeys + bracket parity are green on
+production. The parity fix (slice removal) took effect after the bracket page's ISR
+cache regenerated post-deploy — SEO and nested now expose the identical 32 knockout
+match identities.
 
 ---
 
