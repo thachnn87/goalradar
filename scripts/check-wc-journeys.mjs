@@ -56,19 +56,26 @@ const ERROR_PHRASES = [
 async function fetchPage(pathname) {
   const url = pathname.startsWith('http') ? pathname : `${BASE_URL}${pathname}`;
   const t0  = Date.now();
-  try {
-    const res = await fetch(url, {
-      redirect: 'follow',
-      signal:   AbortSignal.timeout(20_000),
-      headers:  { 'User-Agent': 'GoalRadar-JourneyCheck/1.0 (+https://goalradar.org)' },
-    });
-    const ct   = res.headers.get('content-type') ?? '';
-    const html = ct.includes('text/html') ? await res.text() : '';
-    return { status: res.status, finalPath: new URL(res.url).pathname, html, ms: Date.now() - t0 };
-  } catch (err) {
-    const name = err?.name ?? '';
-    return { status: name === 'TimeoutError' ? 'TIMEOUT' : 'ERR', finalPath: pathname, html: '', ms: Date.now() - t0, error: err?.message ?? String(err) };
+  // Retry transient network errors / timeouts so a flaky connection never produces a
+  // false journey failure. Real HTTP responses (incl. 4xx/5xx) are returned immediately.
+  const TRIES = 3;
+  let lastErr = ''; let lastName = '';
+  for (let attempt = 0; attempt < TRIES; attempt++) {
+    try {
+      const res = await fetch(url, {
+        redirect: 'follow',
+        signal:   AbortSignal.timeout(20_000),
+        headers:  { 'User-Agent': 'GoalRadar-JourneyCheck/1.0 (+https://goalradar.org)' },
+      });
+      const ct   = res.headers.get('content-type') ?? '';
+      const html = ct.includes('text/html') ? await res.text() : '';
+      return { status: res.status, finalPath: new URL(res.url).pathname, html, ms: Date.now() - t0 };
+    } catch (err) {
+      lastErr = err?.message ?? String(err); lastName = err?.name ?? '';
+      if (attempt < TRIES - 1) await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+    }
   }
+  return { status: lastName === 'TimeoutError' ? 'TIMEOUT' : 'ERR', finalPath: pathname, html: '', ms: Date.now() - t0, error: lastErr };
 }
 
 /** All same-origin internal link paths in document order. */

@@ -62,16 +62,24 @@ const add = (layer, severity, page, msg) => findings.push({ layer, severity, pag
 async function fetchPage(path) {
   const url = path.startsWith('http') ? path : `${BASE_URL}${path}`;
   const t0 = Date.now();
-  try {
-    const res = await fetch(url, {
-      redirect: 'follow', signal: AbortSignal.timeout(20_000),
-      headers: { 'User-Agent': 'GoalRadar-Guardian/1.0 (+https://goalradar.org)' },
-    });
-    const html = (res.headers.get('content-type') ?? '').includes('text/html') ? await res.text() : '';
-    return { status: res.status, ms: Date.now() - t0, html, headers: res.headers, finalPath: new URL(res.url).pathname };
-  } catch (err) {
-    return { status: 'ERR', ms: Date.now() - t0, html: '', headers: new Headers(), finalPath: path, error: err?.message ?? String(err) };
+  // Retry transient network errors / timeouts so a flaky connection never produces a
+  // false CRITICAL. Real HTTP responses (incl. 4xx/5xx) are returned immediately.
+  const TRIES = 3;
+  let lastErr = '';
+  for (let attempt = 0; attempt < TRIES; attempt++) {
+    try {
+      const res = await fetch(url, {
+        redirect: 'follow', signal: AbortSignal.timeout(20_000),
+        headers: { 'User-Agent': 'GoalRadar-Guardian/1.0 (+https://goalradar.org)' },
+      });
+      const html = (res.headers.get('content-type') ?? '').includes('text/html') ? await res.text() : '';
+      return { status: res.status, ms: Date.now() - t0, html, headers: res.headers, finalPath: new URL(res.url).pathname };
+    } catch (err) {
+      lastErr = err?.message ?? String(err);
+      if (attempt < TRIES - 1) await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+    }
   }
+  return { status: 'ERR', ms: Date.now() - t0, html: '', headers: new Headers(), finalPath: path, error: lastErr };
 }
 
 const internalLinks = (html, fromPath) => {
@@ -149,7 +157,12 @@ function checkPage(page, res) {
 
 // ── server bootstrap ──────────────────────────────────────────────────────────
 let _server = null;
-const isUp = async (u) => { try { await fetch(u, { signal: AbortSignal.timeout(2500) }); return true; } catch { return false; } };
+const isUp = async (u) => {
+  for (let i = 0; i < 3; i++) {
+    try { await fetch(u, { signal: AbortSignal.timeout(5000) }); return true; } catch { await new Promise((r) => setTimeout(r, 1500)); }
+  }
+  return false;
+};
 async function ensureServer() {
   if (await isUp(`${BASE_URL}/`)) return true;
   if (!AUTO_SERVER) { console.error(`\n❌ No server at ${BASE_URL}. Set CRAWL_BASE_URL or AUTO_SERVER=1.\n`); return false; }
