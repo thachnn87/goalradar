@@ -70,23 +70,29 @@ const KNOCKOUT_COMPACT: [
   string, // homeLabel
   string, // awayLabel
 ][] = [
-  // ── Round of 32 (July 2-5) ────────────────────────────────────────────
-  ['LAST_32', 1,  '2026-07-02', '17:00', 'metlife-stadium', 'East Rutherford, NJ', '1st Group A',  '3rd (B/C/D)'],
-  ['LAST_32', 2,  '2026-07-02', '21:00', 'boston',          'Foxborough, MA',       '1st Group C',  '3rd (D/E/F)'],
-  ['LAST_32', 3,  '2026-07-03', '17:00', 'dallas',          'Arlington, TX',        '1st Group B',  '3rd (A/C/D)'],
-  ['LAST_32', 4,  '2026-07-03', '21:00', 'miami',           'Miami Gardens, FL',    '1st Group D',  '2nd Group B'],
-  ['LAST_32', 5,  '2026-07-04', '17:00', 'los-angeles',     'Inglewood, CA',        '1st Group F',  '3rd (G/H/I)'],
-  ['LAST_32', 6,  '2026-07-04', '21:00', 'seattle',         'Seattle, WA',          '1st Group E',  '2nd Group A'],
-  ['LAST_32', 7,  '2026-07-05', '17:00', 'atlanta',         'Atlanta, GA',          '1st Group G',  '3rd (J/K/L)'],
-  ['LAST_32', 8,  '2026-07-05', '21:00', 'kansas-city',     'Kansas City, MO',      '1st Group I',  '2nd Group G'],
-  ['LAST_32', 9,  '2026-07-06', '17:00', 'toronto',         'Toronto, ON',          '1st Group H',  '2nd Group F'],
-  ['LAST_32', 10, '2026-07-06', '21:00', 'san-francisco',   'Santa Clara, CA',      '1st Group J',  '2nd Group I'],
-  ['LAST_32', 11, '2026-07-07', '17:00', 'pasadena',        'Pasadena, CA',         '1st Group K',  '2nd Group L'],
-  ['LAST_32', 12, '2026-07-07', '21:00', 'philadelphia',    'Philadelphia, PA',     '1st Group L',  '2nd Group K'],
-  ['LAST_32', 13, '2026-07-08', '17:00', 'guadalajara',     'Guadalajara',          '2nd Group C',  '2nd Group D'],
-  ['LAST_32', 14, '2026-07-08', '21:00', 'monterrey',       'Monterrey',            '2nd Group E',  '2nd Group H'],
-  ['LAST_32', 15, '2026-07-09', '17:00', 'vancouver',       'Vancouver, BC',        '2nd Group J',  '3rd (E/F/G)'],
-  ['LAST_32', 16, '2026-07-09', '21:00', 'dallas',          'Arlington, TX',        '3rd best',     '3rd best'],
+  // ── Round of 32 — OFFICIAL FIFA 2026 bracket pairings ─────────────────────
+  // Source: FIFA 2026 knockout bracket (Wikipedia / Sky Sports). matchNumber is
+  // the official R32 match order; football-data.org assigns its match ids in this
+  // same order, so injectKnockoutSlotLabels maps each FD match to its slot by
+  // sorted match id (the authority's own bracket position). Home/away labels are
+  // the deterministic group-position pairings; "3rd (…)" are the best-third-place
+  // wildcards (resolved by FIFA's combination table only after all groups finish).
+  ['LAST_32', 1,  '2026-07-02', '17:00', 'los-angeles',     'Inglewood, CA',        '1st Group E',  '3rd (A/B/C/D/F)'],
+  ['LAST_32', 2,  '2026-07-02', '21:00', 'boston',          'Foxborough, MA',       '1st Group I',  '3rd (C/D/F/G/H)'],
+  ['LAST_32', 3,  '2026-07-03', '17:00', 'metlife-stadium', 'East Rutherford, NJ',  '2nd Group A',  '2nd Group B'],
+  ['LAST_32', 4,  '2026-07-03', '21:00', 'dallas',          'Arlington, TX',        '1st Group F',  '2nd Group C'],
+  ['LAST_32', 5,  '2026-07-04', '17:00', 'seattle',         'Seattle, WA',          '2nd Group K',  '2nd Group L'],
+  ['LAST_32', 6,  '2026-07-04', '21:00', 'atlanta',         'Atlanta, GA',          '1st Group H',  '2nd Group J'],
+  ['LAST_32', 7,  '2026-07-05', '17:00', 'miami',           'Miami Gardens, FL',    '1st Group D',  '3rd (B/E/F/I/J)'],
+  ['LAST_32', 8,  '2026-07-05', '21:00', 'kansas-city',     'Kansas City, MO',      '1st Group G',  '3rd (A/E/H/I/J)'],
+  ['LAST_32', 9,  '2026-07-06', '17:00', 'philadelphia',    'Philadelphia, PA',     '1st Group C',  '2nd Group F'],
+  ['LAST_32', 10, '2026-07-06', '21:00', 'san-francisco',   'Santa Clara, CA',      '2nd Group E',  '2nd Group I'],
+  ['LAST_32', 11, '2026-07-07', '17:00', 'houston',         'Houston, TX',          '1st Group A',  '3rd (C/E/F/H/I)'],
+  ['LAST_32', 12, '2026-07-07', '21:00', 'guadalajara',     'Guadalajara',          '1st Group L',  '3rd (E/H/I/J/K)'],
+  ['LAST_32', 13, '2026-07-08', '17:00', 'mexico-city',     'Mexico City',          '1st Group J',  '2nd Group H'],
+  ['LAST_32', 14, '2026-07-08', '21:00', 'monterrey',       'Monterrey',            '2nd Group D',  '2nd Group G'],
+  ['LAST_32', 15, '2026-07-09', '17:00', 'toronto',         'Toronto, ON',          '1st Group B',  '3rd (E/F/G/I/J)'],
+  ['LAST_32', 16, '2026-07-09', '21:00', 'vancouver',       'Vancouver, BC',        '1st Group K',  '3rd (D/E/I/J/L)'],
 
   // ── Round of 16 (July 12-15) ──────────────────────────────────────────
   ['LAST_16', 1,  '2026-07-12', '17:00', 'metlife-stadium', 'East Rutherford, NJ', 'Winner R32 M1',  'Winner R32 M2'],
@@ -137,90 +143,58 @@ export function getKnockoutSlots(round: WCKnockoutSlot['round']): WCKnockoutSlot
 }
 
 /**
- * When the FD API has posted knockout fixture skeletons with null team names
- * (group stage still ongoing), substitute positional labels from WC_KNOCKOUT_SLOTS
- * (e.g. "1st Group A", "2nd Group C") so the UI never shows bare "TBD".
+ * Fill knockout fixtures that still have null team names with the correct bracket
+ * content, derived from the SINGLE source — never reordered by editorial guesswork.
  *
  * MUST be called with ALL matches for a single stage at once.
  *
- * Slot assignment (DATA-18WC: fixed Mexico-in-wrong-slot bug):
- *   1. ANCHOR — when a match already has a confirmed team whose group position is
- *      known (`groupPositions`: teamId → "1st Group A"), bind that match to the
- *      editorial slot whose home/away label matches that position. This is the
- *      authority: FD says "Mexico plays here", standings say "Mexico = 1st Group A",
- *      so this match IS the "1st Group A" slot and its opponent label is taken from
- *      that slot — regardless of the FD kickoff order.
- *   2. ORDINAL FALLBACK — remaining (fully-TBD) matches are mapped to the remaining
- *      slots by utcDate ascending. WC_KNOCKOUT_SLOTS uses pre-draw editorial dates
- *      so only relative order is used, never absolute date matching.
+ * Slot mapping — by sorted match id:
+ *   football-data.org assigns knockout match ids in official bracket order, so the
+ *   i-th match by ascending id is bracket slot matchNumber i+1. This is the
+ *   authority's own bracket position (verified: Germany=1E→match1, USA=1D→match7,
+ *   Mexico=1A→match11, Argentina=1J→match13). No date heuristics, no reordering.
  *
- * Only enriches sides whose team name is falsy. Confirmed teams are never overwritten.
- * Without `groupPositions` (or for non-R32 rounds whose labels are positional
- * "Winner R32 Mx") the function degrades to pure ordinal mapping — no regression.
+ * Side resolution:
+ *   • a side FD already names (confirmed team) is never overwritten;
+ *   • a null side is filled from its slot's group-position label — resolved to the
+ *     ACTUAL qualified team when `labelToTeam` has it (its group is decided), else
+ *     left as the descriptive placeholder ("2nd Group I", "3rd (A/B/C/D/F)").
  */
 type SlotTeam = { id: number; name: string; shortName: string; tla: string; crest: string };
 
 export function injectKnockoutSlotLabels<T extends {
+  id: number;
   utcDate: string;
   homeTeam: { id: number; name: string; shortName: string; tla: string; crest: string } | null | undefined;
   awayTeam: { id: number; name: string; shortName: string; tla: string; crest: string } | null | undefined;
 }>(
   matches: T[],
   stage: string,
-  groupPositions?: Map<number, string>,
   labelToTeam?: Map<string, SlotTeam>,
 ): T[] {
-  // Resolve a slot label to the real qualified team when its group is decided,
-  // otherwise fall back to the editorial placeholder label.
   const teamFor = (label: string): SlotTeam =>
     labelToTeam?.get(label) ?? { id: 0, name: label, shortName: label, tla: '', crest: '' };
+
   const round = stage as WCKnockoutSlot['round'];
   const slots = WC_KNOCKOUT_SLOTS
     .filter((s) => s.round === round)
     .sort((a, b) => a.matchNumber - b.matchNumber);
   if (slots.length === 0) return matches;
 
-  const usedSlot = new Array<boolean>(slots.length).fill(false);
-  const slotForMatch = new Array<number>(matches.length).fill(-1);
-
-  // ── Phase 1: anchor confirmed teams to their true slot by group position ────
-  if (groupPositions && groupPositions.size > 0) {
-    matches.forEach((m, idx) => {
-      const homeId = m.homeTeam?.id ?? 0;
-      const awayId = m.awayTeam?.id ?? 0;
-      const homeLabel = homeId > 0 ? groupPositions.get(homeId) : undefined;
-      const awayLabel = awayId > 0 ? groupPositions.get(awayId) : undefined;
-
-      let slotIdx = -1;
-      if (homeLabel) slotIdx = slots.findIndex((s, i) => !usedSlot[i] && s.homeLabel === homeLabel);
-      if (slotIdx < 0 && awayLabel) slotIdx = slots.findIndex((s, i) => !usedSlot[i] && s.awayLabel === awayLabel);
-      if (slotIdx >= 0) { slotForMatch[idx] = slotIdx; usedSlot[slotIdx] = true; }
-    });
-  }
-
-  // ── Phase 2: remaining matches → remaining slots by utcDate ascending ───────
-  const remaining = matches
+  // Authority bracket position = ascending match-id order → slot[i].
+  const order = matches
     .map((_, i) => i)
-    .filter((i) => slotForMatch[i] < 0)
-    .sort((a, b) => new Date(matches[a].utcDate).getTime() - new Date(matches[b].utcDate).getTime());
-  let cursor = 0;
-  for (const idx of remaining) {
-    while (cursor < slots.length && usedSlot[cursor]) cursor++;
-    if (cursor >= slots.length) break;
-    slotForMatch[idx] = cursor;
-    usedSlot[cursor] = true;
-    cursor++;
-  }
+    .sort((a, b) => (matches[a].id ?? 0) - (matches[b].id ?? 0));
 
-  // ── Phase 3: fill only the null sides from each match's assigned slot ────────
   const result = [...matches];
-  matches.forEach((m, idx) => {
-    const slot = slots[slotForMatch[idx]];
+  order.forEach((origIdx, pos) => {
+    const slot = slots[pos];
     if (!slot) return;
+    const m = result[origIdx];
     const needsHome = !m.homeTeam?.name;
     const needsAway = !m.awayTeam?.name;
     if (!needsHome && !needsAway) return;
-    result[idx] = {
+    result[origIdx] = {
       ...m,
       homeTeam: needsHome ? teamFor(slot.homeLabel) : m.homeTeam,
       awayTeam: needsAway ? teamFor(slot.awayLabel) : m.awayTeam,
