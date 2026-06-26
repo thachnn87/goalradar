@@ -12,6 +12,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 // DATA-18WC.VERIFY: authority:v1 direct read — same source as fixtures page.
 import { getWCAuthorityMatchesV2 } from '@/lib/api';
+import { enrichKnockoutSlots } from '@/lib/knockout-vm';
 import { classifyMatchState } from '@/lib/match-classify';
 import type { CanonicalMatch } from '@/lib/canonical-match';
 import AdSlot from '@/components/AdSlot';
@@ -136,10 +137,11 @@ export default async function WC2026SchedulePage() {
   try {
     const today = new Date().toISOString().split('T')[0];
     const data = await getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026-schedule', sourceType: 'page' });
-    upcoming = data.matches
+    const raw = data.matches
       .filter((m) => { const b = classifyMatchState(m, today); return b === 'today' || b === 'upcoming'; })
       .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
       .slice(0, 48);
+    upcoming = await enrichKnockoutSlots(raw);
   } catch { /* empty state renders below */ }
 
   const byDay = groupByDay(upcoming);

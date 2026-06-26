@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 
 import { getWCAuthorityMatchesV2 } from '@/lib/api';
+import { enrichKnockoutSlots } from '@/lib/knockout-vm';
 import { classifyMatchState } from '@/lib/match-classify';
 import type { CanonicalMatch } from '@/lib/canonical-match';
 import { matchPath } from '@/lib/url';
@@ -234,9 +235,10 @@ export default async function WCFixturesPage() {
   let fixtures: CanonicalMatch[] = [];
   try {
     const data = await getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026/fixtures', sourceType: 'page' });
-    fixtures = [...data.matches].sort(
+    const sorted = [...data.matches].sort(
       (a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()
     );
+    fixtures = await enrichKnockoutSlots(sorted);
   } catch { /* graceful degradation */ }
   const today = new Date().toISOString().split('T')[0];
 

@@ -12,6 +12,7 @@
 import { getWCAuthorityMatchesV2, getStandingsCached } from './api';
 import type { Match } from './types';
 import { canonicalToMatch } from './canonical-match';
+import type { CanonicalMatch } from './canonical-match';
 import { injectKnockoutSlotLabels } from './wc-fixtures';
 
 // ---------------------------------------------------------------------------
@@ -66,6 +67,35 @@ async function buildLabelToTeam(): Promise<Map<string, SlotTeam>> {
     // standings unavailable — empty map → placeholder labels in injection
   }
   return labelToTeam;
+}
+
+/**
+ * Enrich a raw authority match array with knockout slot labels.
+ *
+ * Non-knockout matches (GROUP_STAGE) pass through unchanged.
+ * Knockout matches with empty/null team names get the official slot label
+ * ("1st Group E", "2nd Group A", "Winner R32 M1", etc.).
+ * Decided group positions are resolved to the actual team if the group is complete.
+ *
+ * ONE PIPELINE: call this in any page that receives raw authority matches and
+ * must show upcoming knockout fixtures (schedule, fixtures, etc.).
+ */
+export async function enrichKnockoutSlots(matches: CanonicalMatch[]): Promise<CanonicalMatch[]> {
+  const labelToTeam = await buildLabelToTeam();
+  const knockoutSet = new Set<string>(ALL_KNOCKOUT_STAGES);
+
+  // Enrich each knockout stage and index by id for O(1) lookup
+  const enrichedById = new Map<number, CanonicalMatch>();
+  for (const stage of ALL_KNOCKOUT_STAGES) {
+    const stageMatches = matches.filter((m) => m.stage === stage);
+    if (stageMatches.length === 0) continue;
+    for (const m of injectKnockoutSlotLabels(stageMatches, stage, stage === 'LAST_32' ? labelToTeam : undefined)) {
+      enrichedById.set(m.id, m);
+    }
+  }
+
+  // Preserve caller's sort order
+  return matches.map((m) => (knockoutSet.has(m.stage) ? (enrichedById.get(m.id) ?? m) : m));
 }
 
 // ---------------------------------------------------------------------------
