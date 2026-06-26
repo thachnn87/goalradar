@@ -158,11 +158,22 @@ export function getKnockoutSlots(round: WCKnockoutSlot['round']): WCKnockoutSlot
  * Without `groupPositions` (or for non-R32 rounds whose labels are positional
  * "Winner R32 Mx") the function degrades to pure ordinal mapping — no regression.
  */
+type SlotTeam = { id: number; name: string; shortName: string; tla: string; crest: string };
+
 export function injectKnockoutSlotLabels<T extends {
   utcDate: string;
   homeTeam: { id: number; name: string; shortName: string; tla: string; crest: string } | null | undefined;
   awayTeam: { id: number; name: string; shortName: string; tla: string; crest: string } | null | undefined;
-}>(matches: T[], stage: string, groupPositions?: Map<number, string>): T[] {
+}>(
+  matches: T[],
+  stage: string,
+  groupPositions?: Map<number, string>,
+  labelToTeam?: Map<string, SlotTeam>,
+): T[] {
+  // Resolve a slot label to the real qualified team when its group is decided,
+  // otherwise fall back to the editorial placeholder label.
+  const teamFor = (label: string): SlotTeam =>
+    labelToTeam?.get(label) ?? { id: 0, name: label, shortName: label, tla: '', crest: '' };
   const round = stage as WCKnockoutSlot['round'];
   const slots = WC_KNOCKOUT_SLOTS
     .filter((s) => s.round === round)
@@ -211,12 +222,8 @@ export function injectKnockoutSlotLabels<T extends {
     if (!needsHome && !needsAway) return;
     result[idx] = {
       ...m,
-      homeTeam: needsHome
-        ? { id: 0, name: slot.homeLabel, shortName: slot.homeLabel, tla: '', crest: '' }
-        : m.homeTeam,
-      awayTeam: needsAway
-        ? { id: 0, name: slot.awayLabel, shortName: slot.awayLabel, tla: '', crest: '' }
-        : m.awayTeam,
+      homeTeam: needsHome ? teamFor(slot.homeLabel) : m.homeTeam,
+      awayTeam: needsAway ? teamFor(slot.awayLabel) : m.awayTeam,
     };
   });
   return result;

@@ -20,15 +20,35 @@ import { injectKnockoutSlotLabels } from './wc-fixtures';
 
 const ORDINAL: Record<number, string> = { 1: '1st', 2: '2nd', 3: '3rd' };
 
+type SlotTeam = { id: number; name: string; shortName: string; tla: string; crest: string };
+
+export interface GroupResolution {
+  /** teamId → "1st Group A" — anchors a confirmed team to its true bracket slot. */
+  positions: Map<number, string>;
+  /**
+   * "1st Group A" / "2nd Group A" → the actual qualified team, but ONLY for groups
+   * whose stage is complete (every team has played all group matches). Lets the
+   * bracket show the certain qualifier instead of a placeholder label. Wildcard
+   * labels ("3rd (B/C/D)", "3rd best") are never resolvable here.
+   */
+  labelToTeam: Map<string, SlotTeam>;
+}
+
 /**
- * Build teamId → "{1st|2nd} Group X" from WC standings so R32 slot labels can be
- * anchored to the team FD has actually placed in each match (fixes the
- * "Mexico (1st Group A) shown in the wrong slot" bug). Best-effort: returns an
- * empty map on any failure, which makes injectKnockoutSlotLabels fall back to
- * pure ordinal-by-date mapping (no regression).
+ * Derive bracket resolution from WC standings:
+ *   • positions   — for anchoring confirmed teams to their correct slot.
+ *   • labelToTeam — for filling decided 1st/2nd slots with the real qualified team.
+ *
+ * A group is "decided" only when every team in it has played the full group
+ * schedule (playedGames === teams − 1). Until then its 1st/2nd are NOT resolved,
+ * so the bracket never shows a team that could still change.
+ *
+ * Best-effort: returns empty maps on any failure → injection falls back to pure
+ * ordinal-by-date label mapping (no regression).
  */
-async function buildGroupPositions(): Promise<Map<number, string>> {
-  const map = new Map<number, string>();
+async function buildGroupResolution(): Promise<GroupResolution> {
+  const positions   = new Map<number, string>();
+  const labelToTeam = new Map<string, SlotTeam>();
   try {
     const { standings } = await getStandingsCached('WC');
     for (const table of standings) {
@@ -38,16 +58,33 @@ async function buildGroupPositions(): Promise<Map<number, string>> {
         .replace(/^Group\s*/i, '')
         .trim()
         .toUpperCase();
-      if (!letter) continue;
+      if (!letter || table.table.length === 0) continue;
+
+      // Group decided when every team played the full schedule (N-1 matches).
+      const expectedGames = table.table.length - 1;
+      const decided = expectedGames > 0 && table.table.every((e) => e.playedGames === expectedGames);
+
       for (const entry of table.table) {
         const ord = ORDINAL[entry.position];
-        if (ord && entry.team?.id) map.set(entry.team.id, `${ord} Group ${letter}`);
+        if (!ord || !entry.team?.id) continue;
+        const label = `${ord} Group ${letter}`;
+        positions.set(entry.team.id, label);
+        // Only 1st/2nd of a decided group are certain qualifiers.
+        if (decided && (entry.position === 1 || entry.position === 2)) {
+          labelToTeam.set(label, {
+            id:        entry.team.id,
+            name:      entry.team.name,
+            shortName: entry.team.shortName ?? entry.team.name,
+            tla:       entry.team.tla ?? '',
+            crest:     entry.team.crest ?? '',
+          });
+        }
       }
     }
   } catch {
-    // standings unavailable — empty map → ordinal fallback in injection
+    // standings unavailable — empty maps → ordinal fallback in injection
   }
-  return map;
+  return { positions, labelToTeam };
 }
 
 // ---------------------------------------------------------------------------
@@ -129,10 +166,11 @@ export const buildKnockoutViewModel: () => Promise<KnockoutViewModel> = async ()
     .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
 
   // Anchor R32 slot labels to the team FD has placed in each match (via standings
-  // group position) instead of the unreliable kickoff order. Only meaningful for
-  // LAST_32, whose labels are group positions ("1st Group A"); other rounds use
-  // positional "Winner R32 Mx" labels that map fine by order.
-  const groupPositions = await buildGroupPositions();
+  // group position) instead of the unreliable kickoff order, AND resolve decided
+  // group positions to the actual qualified team. Only meaningful for LAST_32,
+  // whose labels are group positions ("1st Group A"); other rounds use positional
+  // "Winner R32 Mx" labels that map fine by order.
+  const { positions, labelToTeam } = await buildGroupResolution();
 
   // Enrich null team names with positional labels — must be called per stage with all stage matches
   const matches: Match[] = ALL_KNOCKOUT_STAGES
@@ -140,7 +178,8 @@ export const buildKnockoutViewModel: () => Promise<KnockoutViewModel> = async ()
       injectKnockoutSlotLabels(
         knockoutRaw.filter((m) => m.stage === stage),
         stage,
-        stage === 'LAST_32' ? groupPositions : undefined,
+        stage === 'LAST_32' ? positions   : undefined,
+        stage === 'LAST_32' ? labelToTeam : undefined,
       ),
     )
     .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
