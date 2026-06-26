@@ -1,6 +1,8 @@
 import { Suspense } from 'react';
-// PERF-4.5 / DATA-4 unified authority
-import { getUpcomingMatchesCached, getRecentMatchesCached, getWCAuthorityMatchesCached } from '@/lib/api';
+// ONE PIPELINE: authority:v1 → enrichKnockoutSlots → canonicalToMatch → Match[]
+import { getUpcomingMatchesCached, getRecentMatchesCached, getWCAuthorityMatchesV2 } from '@/lib/api';
+import { enrichKnockoutSlots } from '@/lib/knockout-vm';
+import { canonicalToMatch } from '@/lib/canonical-match';
 // WC-LIVE-SSOT: single source of truth for live WC match state
 import { getCurrentLiveMatches, getLiveMatchIdSet } from '@/lib/wc-live-ssot';
 import MatchCard from '@/components/MatchCard';
@@ -77,18 +79,18 @@ async function ScheduleContent({
 
   try {
     if (competition === 'WC') {
-      // DATA-4 unified: authority function merges SCHEDULED/TIMED + FINISHED so a
-      // finished match is never shown as upcoming. Schedule shows SCHEDULED/TIMED
-      // matches going forward; past matches have correct FT scores via MatchCard.
-      const [authority, liveMatchIds] = await Promise.all([
-        getWCAuthorityMatchesCached(),
+      // ONE PIPELINE: authority:v1 → enrichKnockoutSlots → canonicalToMatch
+      // enrichKnockoutSlots injects slot labels ("1st Group E", "Winner Match 42")
+      // for upcoming knockout matches so they never show as TBD.
+      const [authorityData, liveMatchIds] = await Promise.all([
+        getWCAuthorityMatchesV2(new Date().toISOString(), { source: '/schedule', sourceType: 'page' }),
         getLiveMatchIdSet().catch(() => new Set<number>()),
       ]);
-      // DATA-18B.3E: live is decided ONLY by the live SSOT (liveMatchIds), never
-      // by authority status. Normalise status so MatchCard (which reads
-      // match.status) never shows a non-SSOT match as live: SSOT-live → IN_PLAY;
-      // authority-live but absent from SSOT (ended) → FINISHED.
-      matches = authority.matches.map((m) => {
+      const enriched = await enrichKnockoutSlots(authorityData.matches);
+      // Live status is decided ONLY by the live SSOT (liveMatchIds), never by
+      // authority status. SSOT-live → IN_PLAY; authority-live but absent from
+      // SSOT (ended) → FINISHED.
+      matches = enriched.map(canonicalToMatch).map((m) => {
         const authLive = m.status === 'IN_PLAY' || m.status === 'PAUSED';
         if (liveMatchIds.has(m.id)) return authLive ? m : { ...m, status: 'IN_PLAY' as Match['status'] };
         return authLive ? { ...m, status: 'FINISHED' as Match['status'] } : m;
