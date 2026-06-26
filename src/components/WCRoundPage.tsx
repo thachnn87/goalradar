@@ -6,11 +6,12 @@
  *   /world-cup-2026/round-of-16   /world-cup-2026/third-place
  *   /world-cup-2026/quarter-finals /world-cup-2026/final
  *
- * Data: getWCKnockoutMatchesCached() — L1 → readKVOnly → static fallback.
+ * Data: buildKnockoutViewModel() — L1 → readKVOnly → static fallback.
  * ZERO provider calls (PERF-7A invariant). Before fixtures exist in the API,
  * the bundled WC_KNOCKOUT_SLOTS schedule renders so the page is never thin.
  */
 
+import { Suspense } from 'react';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
@@ -27,7 +28,7 @@ import {
 import { type WCKnockoutSlot } from '@/lib/wc-fixtures';
 import { buildKnockoutViewModel } from '@/lib/knockout-vm';
 import Breadcrumb from '@/components/Breadcrumb';
-import MatchCard from '@/components/MatchCard';
+import MatchCard, { MatchCardSkeleton } from '@/components/MatchCard';
 import AdSlot from '@/components/AdSlot';
 import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
@@ -133,31 +134,59 @@ function ScheduleSlots({ slots }: { slots: WCKnockoutSlot[] }) {
                 day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
               })} UTC
             </span>
-            <p className="text-gray-700 text-[10px]">{s.venueCity}</p>
+            <p className="text-gray-500 text-xs">{s.venueCity}</p>
           </div>
           <span className="text-sm text-gray-300 font-medium truncate flex-1 text-right">{s.awayLabel}</span>
         </div>
       ))}
-      <div className="px-4 py-2 text-[10px] text-gray-700">
-        ℹ️ Scheduled fixtures — teams confirmed once the previous round completes
+      <div className="px-4 py-2 text-xs text-gray-500">
+        Scheduled fixtures — teams confirmed once the previous round completes
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Page
+// Skeleton — shown while RoundContent awaits buildKnockoutViewModel
 // ---------------------------------------------------------------------------
 
-export default async function WCRoundPage({ slug }: { slug: string }) {
-  const round = getRoundBySlug(slug)!;
+function RoundContentSkeleton() {
+  return (
+    <div className="space-y-8">
+      {/* Round nav pills skeleton */}
+      <div className="flex flex-wrap gap-2">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="h-8 w-24 bg-gray-800 rounded-lg animate-pulse shrink-0" />
+        ))}
+      </div>
+      {/* Blurb skeleton */}
+      <div className="space-y-2">
+        <div className="h-4 w-full bg-gray-800 rounded animate-pulse" />
+        <div className="h-4 w-2/3 bg-gray-800 rounded animate-pulse" />
+      </div>
+      {/* Match grid skeleton */}
+      <div>
+        <div className="h-4 w-36 bg-gray-800 rounded animate-pulse mb-4" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <MatchCardSkeleton key={i} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
-  // DATA-18WC.15: single KnockoutViewModel — same data as bracket page and tree.
+// ---------------------------------------------------------------------------
+// Async content — all vm-dependent sections
+// ---------------------------------------------------------------------------
+
+async function RoundContent({ slug }: { slug: string }) {
+  const round = getRoundBySlug(slug)!;
   const vm = await buildKnockoutViewModel();
   const matches = vm.byStage(round.stage);
   const slots   = matches.length === 0 ? getRoundSlots(round.stage) : [];
   const played    = matches.filter((m) => m.status === 'FINISHED').length;
-  const dateRange = getRoundDateRange(round.stage);
 
   const idx       = WC_ROUNDS.findIndex((r) => r.slug === round.slug);
   const prevRound = idx > 0 ? WC_ROUNDS[idx - 1] : null;
@@ -167,107 +196,127 @@ export default async function WCRoundPage({ slug }: { slug: string }) {
     <>
       <JsonLd round={round} matches={matches} />
 
-      <div className="max-w-5xl mx-auto space-y-8 pb-12">
-        <Breadcrumb
-          items={[
-            { label: 'Home',           href: '/' },
-            { label: 'World Cup 2026', href: '/world-cup-2026' },
-            { label: round.label },
-          ]}
-        />
-
-        {/* Hero */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <span className="text-3xl">{round.icon}</span>
-              <h1 className="text-2xl sm:text-3xl font-black text-white">
-                World Cup 2026 {round.label}
-              </h1>
-            </div>
-            <p className="text-gray-500 text-sm">
-              {dateRange} · {round.matchCount} match{round.matchCount !== 1 ? 'es' : ''}
-              {matches.length > 0 && ` · ${played}/${matches.length} played`}
-            </p>
-          </div>
+      {/* Round navigation pills */}
+      <nav aria-label="Knockout rounds" className="flex flex-wrap gap-2">
+        {WC_ROUNDS.map((r) => (
           <Link
-            href="/world-cup-2026/bracket"
-            className="text-sm text-yellow-500 hover:text-yellow-300 transition-colors font-medium shrink-0"
+            key={r.slug}
+            href={`/world-cup-2026/${r.slug}`}
+            aria-current={r.slug === round.slug ? 'page' : undefined}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border whitespace-nowrap transition-colors ${
+              r.slug === round.slug
+                ? 'bg-yellow-500 text-black border-yellow-400'
+                : 'bg-gray-800 text-gray-300 hover:text-white hover:bg-gray-700 border-gray-700'
+            }`}
           >
-            Full bracket →
+            {r.icon} {r.label}
           </Link>
-        </div>
+        ))}
+      </nav>
 
-        {/* Cross-page navigation */}
-        <WCPageNav />
+      <AdSlot slotId={`round-${round.slug}-top`} variant="banner" />
 
-        {/* Intro */}
-        <p className="text-gray-400 text-sm leading-relaxed max-w-3xl">{round.blurb}</p>
+      {/* Intro */}
+      <p className="text-gray-400 text-sm leading-relaxed max-w-3xl">{round.blurb}</p>
 
-        {/* Round navigation pills */}
-        <nav aria-label="Knockout rounds" className="flex flex-wrap gap-2">
-          {WC_ROUNDS.map((r) => (
-            <Link
-              key={r.slug}
-              href={`/world-cup-2026/${r.slug}`}
-              aria-current={r.slug === round.slug ? 'page' : undefined}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border whitespace-nowrap transition-colors ${
-                r.slug === round.slug
-                  ? 'bg-yellow-500 text-black border-yellow-400'
-                  : 'bg-gray-800 text-gray-300 hover:text-white hover:bg-gray-700 border-gray-700'
-              }`}
-            >
-              {r.icon} {r.label}
-            </Link>
-          ))}
-        </nav>
-
-        <AdSlot slotId={`round-${round.slug}-top`} variant="banner" />
-
-        {/* Fixtures / results */}
-        <section aria-labelledby="round-matches-heading">
-          <h2
-            id="round-matches-heading"
-            className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4"
-          >
-            {round.label} Fixtures &amp; Results
-          </h2>
-          {matches.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {matches.map((m) => (
-                <MatchCard key={m.id} match={m} />
-              ))}
-            </div>
-          ) : (
-            <ScheduleSlots slots={slots} />
+      {/* Fixtures / results */}
+      <section aria-labelledby="round-matches-heading">
+        <h2
+          id="round-matches-heading"
+          className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4"
+        >
+          {round.label} Fixtures &amp; Results
+          {matches.length > 0 && (
+            <span className="ml-2 text-gray-600 font-normal normal-case tracking-normal">
+              {played}/{matches.length} played
+            </span>
           )}
-        </section>
+        </h2>
+        {matches.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {matches.map((m) => (
+              <MatchCard key={m.id} match={m} />
+            ))}
+          </div>
+        ) : (
+          <ScheduleSlots slots={slots} />
+        )}
+      </section>
 
-        {/* Prev / next round */}
-        <div className="flex justify-between text-sm">
-          {prevRound ? (
-            <Link href={`/world-cup-2026/${prevRound.slug}`} className="text-yellow-500 hover:text-yellow-300 font-medium">
-              ← {prevRound.label}
-            </Link>
-          ) : <span />}
-          {nextRound ? (
-            <Link href={`/world-cup-2026/${nextRound.slug}`} className="text-yellow-500 hover:text-yellow-300 font-medium">
-              {nextRound.label} →
-            </Link>
-          ) : <span />}
-        </div>
-
-        <AdSlot slotId={`round-${round.slug}-bottom`} variant="banner" />
-
-        <WCRelatedLinks links={[
-          { href: '/world-cup-2026/bracket',    icon: '🔗', label: 'Knockout Bracket',  desc: 'Full visual bracket from Round of 32 to the Final' },
-          { href: '/world-cup-2026-schedule',   icon: '📅', label: 'WC 2026 Schedule',  desc: 'All 104 fixtures with kickoff times' },
-          { href: '/world-cup-2026-results',    icon: '🏁', label: 'WC 2026 Results',   desc: 'Latest scores and completed matches' },
-          { href: '/world-cup-2026-standings',  icon: '📊', label: 'Group Standings',   desc: 'Final group tables that seeded the knockouts' },
-          { href: '/world-cup-2026-predictions',icon: '🔮', label: 'Predictions',       desc: 'Data-driven picks for every knockout tie' },
-          { href: '/world-cup-2026-tv-guide',   icon: '📺', label: 'TV Channel Guide',  desc: `What channel is the ${round.label} on?` },
-        ]} />
+      {/* Prev / next round */}
+      <div className="flex justify-between text-sm">
+        {prevRound ? (
+          <Link href={`/world-cup-2026/${prevRound.slug}`} className="text-yellow-500 hover:text-yellow-300 transition-colors font-medium">
+            ← {prevRound.label}
+          </Link>
+        ) : <span />}
+        {nextRound ? (
+          <Link href={`/world-cup-2026/${nextRound.slug}`} className="text-yellow-500 hover:text-yellow-300 transition-colors font-medium">
+            {nextRound.label} →
+          </Link>
+        ) : <span />}
       </div>
+
+      <AdSlot slotId={`round-${round.slug}-bottom`} variant="banner" />
+
+      <WCRelatedLinks links={[
+        { href: '/world-cup-2026/bracket',    icon: '🔗', label: 'Knockout Bracket',  desc: 'Full visual bracket from Round of 32 to the Final' },
+        { href: '/world-cup-2026-schedule',   icon: '📅', label: 'WC 2026 Schedule',  desc: 'All 104 fixtures with kickoff times' },
+        { href: '/world-cup-2026-results',    icon: '🏁', label: 'WC 2026 Results',   desc: 'Latest scores and completed matches' },
+        { href: '/world-cup-2026-standings',  icon: '📊', label: 'Group Standings',   desc: 'Final group tables that seeded the knockouts' },
+        { href: '/world-cup-2026-predictions',icon: '🔮', label: 'Predictions',       desc: 'Data-driven picks for every knockout tie' },
+        { href: '/world-cup-2026-tv-guide',   icon: '📺', label: 'TV Channel Guide',  desc: `What channel is the ${round.label} on?` },
+      ]} />
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page shell — renders immediately; RoundContent suspends for the API call
+// ---------------------------------------------------------------------------
+
+export default function WCRoundPage({ slug }: { slug: string }) {
+  const round = getRoundBySlug(slug)!;
+  const dateRange = getRoundDateRange(round.stage);
+
+  return (
+    <div className="max-w-5xl mx-auto space-y-8 pb-12">
+      <Breadcrumb
+        items={[
+          { label: 'Home',           href: '/' },
+          { label: 'World Cup 2026', href: '/world-cup-2026' },
+          { label: round.label },
+        ]}
+      />
+
+      {/* Hero — uses round config only, no await needed */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+            <span className="text-3xl" aria-hidden="true">{round.icon}</span>
+            <h1 className="text-2xl sm:text-3xl font-black text-white">
+              World Cup 2026 {round.label}
+            </h1>
+          </div>
+          <p className="text-gray-500 text-sm">
+            {dateRange} · {round.matchCount} match{round.matchCount !== 1 ? 'es' : ''}
+          </p>
+        </div>
+        <Link
+          href="/world-cup-2026/bracket"
+          className="text-sm text-yellow-500 hover:text-yellow-300 transition-colors font-medium shrink-0"
+        >
+          Full bracket →
+        </Link>
+      </div>
+
+      {/* Cross-page navigation */}
+      <WCPageNav />
+
+      {/* C7: Suspense — skeleton while RoundContent awaits buildKnockoutViewModel */}
+      <Suspense fallback={<RoundContentSkeleton />}>
+        <RoundContent slug={slug} />
+      </Suspense>
+    </div>
   );
 }
