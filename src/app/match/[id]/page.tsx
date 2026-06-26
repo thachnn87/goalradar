@@ -1665,6 +1665,306 @@ function WCBottomFunnel({
 }
 
 // ---------------------------------------------------------------------------
+// Match Page State Machine — ONE VIEW MODEL → MANY STATES
+// ---------------------------------------------------------------------------
+// Each state maps to a distinct visual template. "Missing data" (PROJECTED) is
+// a valid state, not an error. Matches like Round of 32 with TBD teams always
+// render a useful page instead of an error card.
+
+type MatchPageState =
+  | 'PROJECTED'   // knockout, teams TBD (homeTeam.id === 0) — slot labels shown
+  | 'QUALIFIED'   // teams confirmed, >24h to kickoff
+  | 'PRE_MATCH'   // teams confirmed, ≤24h to kickoff
+  | 'LIVE'        // IN_PLAY or PAUSED
+  | 'FINISHED'    // match completed
+  | 'CANCELLED';  // CANCELLED | SUSPENDED | POSTPONED
+
+function deriveMatchPageState(match: MatchDetail): MatchPageState {
+  const { status, homeTeam, awayTeam, utcDate } = match;
+  if (status === 'IN_PLAY' || status === 'PAUSED')                         return 'LIVE';
+  if (status === 'FINISHED')                                                return 'FINISHED';
+  if (status === 'CANCELLED' || status === 'SUSPENDED' || status === 'POSTPONED') return 'CANCELLED';
+  // SCHEDULED / TIMED — TBD check: id === 0 means slot not yet resolved
+  if (!homeTeam?.id || homeTeam.id === 0 || !awayTeam?.id || awayTeam.id === 0) return 'PROJECTED';
+  const msToKO = new Date(utcDate).getTime() - Date.now();
+  return msToKO <= 24 * 60 * 60 * 1000 ? 'PRE_MATCH' : 'QUALIFIED';
+}
+
+const STAGE_LABELS: Record<string, string> = {
+  LAST_32:        'Round of 32',
+  LAST_16:        'Round of 16',
+  QUARTER_FINALS: 'Quarter-finals',
+  SEMI_FINALS:    'Semi-finals',
+  THIRD_PLACE:    'Third Place Play-off',
+  FINAL:          'Final',
+};
+
+const STAGE_NEXT: Record<string, string> = {
+  LAST_32:        'Round of 16',
+  LAST_16:        'Quarter-finals',
+  QUARTER_FINALS: 'Semi-finals',
+  SEMI_FINALS:    'Final',
+};
+
+// ---------------------------------------------------------------------------
+// PROJECTED hero — knockout match, teams TBD
+// ---------------------------------------------------------------------------
+
+function ProjectedHero({ match }: { match: MatchDetail }) {
+  const isWC       = match.competition?.code === 'WC';
+  const stageLabel = STAGE_LABELS[match.stage] ?? match.stage?.replace(/_/g, ' ') ?? 'Knockout Stage';
+  const nextRound  = STAGE_NEXT[match.stage] ?? null;
+  const homeLabel  = match.homeTeam?.name || 'TBD';
+  const awayLabel  = match.awayTeam?.name || 'TBD';
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 sm:p-8">
+      {/* Stage header */}
+      <div className="text-center mb-6">
+        <Link
+          href={isWC ? '/world-cup-2026/bracket' : `/competition/${match.competition?.code}`}
+          className="inline-flex items-center gap-1.5 text-xs text-yellow-400/80 uppercase tracking-wider font-semibold hover:text-yellow-400 transition-colors"
+        >
+          <span>🏆</span>
+          {isWC ? 'FIFA World Cup 2026' : (match.competition?.name ?? 'Football')} · {stageLabel}
+        </Link>
+        <p className="text-xs text-gray-500 mt-1">{formatMatchDate(match.utcDate)} UTC</p>
+        <LocalTime utcDate={match.utcDate} variant="with-label" className="mt-2" />
+        <AddToCalendar
+          matchId={match.id}
+          utcDate={match.utcDate}
+          homeTeam={homeLabel}
+          awayTeam={awayLabel}
+          competition={isWC ? 'FIFA World Cup 2026' : (match.competition?.name ?? 'Football')}
+          venue={match.venue ?? undefined}
+        />
+      </div>
+
+      {/* Team slots */}
+      <div className="grid grid-cols-3 items-center gap-4 mb-6">
+        <div className="text-center">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-3 rounded-full bg-gray-800 border-2 border-dashed border-gray-600 flex items-center justify-center">
+            <span className="text-xl sm:text-2xl text-gray-500">?</span>
+          </div>
+          <p className="font-bold text-white text-sm sm:text-base leading-tight">{homeLabel}</p>
+          <p className="text-gray-600 text-[10px] mt-1">Home team</p>
+        </div>
+
+        <div className="text-center space-y-2">
+          <span className="inline-block bg-blue-500/15 text-blue-400 border border-blue-500/25 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
+            UPCOMING
+          </span>
+          <div className="text-2xl font-bold text-gray-600">vs</div>
+          {nextRound && (
+            <p className="text-[10px] text-gray-600 leading-tight">Winner → {nextRound}</p>
+          )}
+        </div>
+
+        <div className="text-center">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-3 rounded-full bg-gray-800 border-2 border-dashed border-gray-600 flex items-center justify-center">
+            <span className="text-xl sm:text-2xl text-gray-500">?</span>
+          </div>
+          <p className="font-bold text-white text-sm sm:text-base leading-tight">{awayLabel}</p>
+          <p className="text-gray-600 text-[10px] mt-1">Away team</p>
+        </div>
+      </div>
+
+      {/* Qualification status + venue */}
+      <div className="flex flex-wrap justify-center gap-2 pt-4 border-t border-gray-800 text-xs">
+        <span className="inline-flex items-center gap-1.5 text-amber-400/80 bg-amber-400/8 border border-amber-400/20 rounded-lg px-3 py-1.5">
+          <span>⏳</span> Teams to be confirmed after group stage
+        </span>
+        {match.venue && (
+          <span className="inline-flex items-center gap-1.5 text-gray-400">
+            <span>📍</span> {match.venue}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// CANCELLED hero
+// ---------------------------------------------------------------------------
+
+function CancelledHero({ match }: { match: MatchDetail }) {
+  const isWC       = match.competition?.code === 'WC';
+  const homeLabel  = match.homeTeam?.shortName || match.homeTeam?.name || 'TBD';
+  const awayLabel  = match.awayTeam?.shortName || match.awayTeam?.name || 'TBD';
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 sm:p-8">
+      <div className="text-center mb-4">
+        <Link
+          href={isWC ? '/world-cup-2026' : `/competition/${match.competition?.code}`}
+          className="text-xs text-gray-500 uppercase tracking-wider font-medium hover:text-white transition-colors"
+        >
+          {isWC ? 'FIFA World Cup 2026' : (match.competition?.name ?? '')}
+        </Link>
+        <p className="text-xs text-gray-500 mt-1">{formatMatchDate(match.utcDate)} UTC</p>
+      </div>
+      <div className="grid grid-cols-3 items-center gap-4 mb-6">
+        <div className="text-center opacity-50">
+          {match.homeTeam.crest && <img src={match.homeTeam.crest} alt={homeLabel} width={64} height={64} className="object-contain mx-auto mb-3" />}
+          <p className="font-bold text-white text-sm leading-tight">{homeLabel}</p>
+        </div>
+        <div className="text-center">
+          <span className="inline-block bg-red-900/30 text-red-400 border border-red-800/50 px-3 py-1 rounded-full text-sm font-bold mb-2">
+            CANCELLED
+          </span>
+          <div className="text-3xl font-bold text-gray-700">–</div>
+        </div>
+        <div className="text-center opacity-50">
+          {match.awayTeam.crest && <img src={match.awayTeam.crest} alt={awayLabel} width={64} height={64} className="object-contain mx-auto mb-3" />}
+          <p className="font-bold text-white text-sm leading-tight">{awayLabel}</p>
+        </div>
+      </div>
+      {match.venue && (
+        <p className="text-center text-xs text-gray-500 pt-3 border-t border-gray-800">
+          📍 {match.venue}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// PROJECTED content — below-fold sections for TBD knockout matches
+// ---------------------------------------------------------------------------
+
+function ProjectedContent({
+  match,
+  matchGroupSlug,
+  matchGroupLabel,
+}: {
+  match: MatchDetail;
+  matchGroupSlug: string | null;
+  matchGroupLabel: string | null;
+}) {
+  const isWC       = match.competition?.code === 'WC';
+  const homeLabel  = match.homeTeam?.name || 'TBD';
+  const awayLabel  = match.awayTeam?.name || 'TBD';
+  const stageLabel = STAGE_LABELS[match.stage] ?? match.stage?.replace(/_/g, ' ') ?? 'Knockout Stage';
+  const nextRound  = STAGE_NEXT[match.stage] ?? null;
+
+  const detailRows: { label: string; value: string }[] = [
+    { label: 'Stage',       value: stageLabel },
+    { label: 'Competition', value: match.competition?.name ?? '–' },
+    {
+      label: 'Date',
+      value: new Date(match.utcDate).toLocaleDateString('en-GB', {
+        weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC',
+      }),
+    },
+    {
+      label: 'Kickoff',
+      value: new Date(match.utcDate).toLocaleTimeString('en-GB', {
+        hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
+      }) + ' UTC',
+    },
+    ...(match.venue  ? [{ label: 'Venue',      value: match.venue }]    : []),
+    ...(nextRound    ? [{ label: 'Next Round', value: nextRound }]       : []),
+  ];
+
+  return (
+    <>
+      {/* Match details grid */}
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+        {sectionTitle('Match Details')}
+        <dl className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {detailRows.map(({ label, value }) => (
+            <div key={label} className="bg-gray-800/50 rounded-xl p-3 text-center">
+              <dt className="text-xs text-gray-500 mb-1">{label}</dt>
+              <dd className="text-white font-bold text-sm leading-tight">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+
+      {/* Qualification status panel */}
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+        {sectionTitle('Qualification Status')}
+        <div className="space-y-3">
+          {[
+            { label: homeLabel, side: 'Home team' },
+            { label: awayLabel, side: 'Away team' },
+          ].map(({ label, side }) => (
+            <div key={side} className="flex items-center gap-3 p-3 bg-gray-800/40 rounded-xl">
+              <div className="w-9 h-9 rounded-full bg-gray-700 border-2 border-dashed border-gray-500 flex items-center justify-center text-base shrink-0">
+                ?
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-sm font-semibold">{label}</p>
+                <p className="text-gray-500 text-xs">{side} · Qualification in progress</p>
+              </div>
+              <span className="text-[10px] font-semibold text-amber-400 bg-amber-400/10 border border-amber-400/20 rounded px-2 py-0.5 shrink-0">
+                Awaiting
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-gray-600 mt-4 text-center leading-relaxed">
+          Teams will be confirmed once the group stage is complete.
+          Page updates automatically when slots are resolved.
+        </p>
+      </div>
+
+      {/* Bracket path */}
+      {isWC && (
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+          {sectionTitle('Bracket Path')}
+          {nextRound && (
+            <p className="text-sm text-gray-400 mb-4">
+              The winner of this {stageLabel} match advances to the <strong className="text-white">{nextRound}</strong>.
+            </p>
+          )}
+          <Link
+            href="/world-cup-2026/bracket"
+            className="flex items-center justify-between bg-gray-800/60 hover:bg-gray-800 border border-gray-700 hover:border-yellow-700/40 rounded-xl p-4 transition-all group"
+          >
+            <div>
+              <p className="text-white text-sm font-semibold group-hover:text-yellow-400 transition-colors">
+                View Full Knockout Bracket
+              </p>
+              <p className="text-gray-500 text-xs mt-0.5">
+                Track all {stageLabel} fixtures and beyond
+              </p>
+            </div>
+            <span className="text-gray-400 group-hover:text-yellow-400 transition-colors text-lg">→</span>
+          </Link>
+        </div>
+      )}
+
+      {/* WC navigation */}
+      {isWC && (
+        <>
+          <WCMidFunnel />
+          <WCNavBox
+            groupSlug={matchGroupSlug}
+            groupLabel={matchGroupLabel}
+            homeTeam={{ id: 0, name: homeLabel, shortName: homeLabel, crest: '' }}
+            awayTeam={{ id: 0, name: awayLabel, shortName: awayLabel, crest: '' }}
+          />
+          <WCBottomFunnel
+            match={match}
+            matchGroupSlug={matchGroupSlug}
+            matchGroupLabel={matchGroupLabel}
+          />
+        </>
+      )}
+
+      <NewsletterSignup
+        source="match-page"
+        variant="inline"
+        heading={isWC ? 'Get World Cup 2026 alerts' : 'Get football updates'}
+      />
+      <AdSlot slotId="match-bottom" variant="banner" />
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // JSON-LD
 // ---------------------------------------------------------------------------
 
@@ -2137,9 +2437,13 @@ export default async function MatchDetailPage({ params }: Params) {
   // GEO-1 fix: this must live OUTSIDE the try block — redirect() works by
   // throwing NEXT_REDIRECT, which the catch above was swallowing and turning
   // into the "Match Details Unavailable" card for every bare /match/{id} URL.
+  // PROJECTED matches redirect to /match/{id}-tbd-vs-tbd to avoid slot-label slugs.
   if (snapshot && slug === numericId) {
-    const m = snapshot.match;
-    redirect(matchPath(m.id, m.homeTeam.name, m.awayTeam.name));
+    const m     = snapshot.match;
+    const state = deriveMatchPageState(m);
+    const home  = state === 'PROJECTED' ? null : m.homeTeam.name;
+    const away  = state === 'PROJECTED' ? null : m.awayTeam.name;
+    redirect(matchPath(m.id, home, away));
   }
 
   // ── Performance logging ──────────────────────────────────────────────────
@@ -2186,7 +2490,8 @@ export default async function MatchDetailPage({ params }: Params) {
   }
 
   // match is always non-null here (error guard above exits otherwise)
-  const match = snapshot.match;
+  const match     = snapshot.match;
+  const pageState = deriveMatchPageState(match);
 
   // ── Data derived from snapshot (score hero, events, report) ─────────────
   const isWC     = match.competition?.code === 'WC';
@@ -2233,22 +2538,29 @@ export default async function MatchDetailPage({ params }: Params) {
           {match.competition?.code === 'WC' ? ' — FIFA World Cup 2026' : match.competition?.name ? ` — ${match.competition.name}` : ''}
         </h1>
 
-        <ScoreHero
-          match={match}
-          centerSlot={
-            (match.status === 'IN_PLAY' || match.status === 'PAUSED') ? (
-              <MatchLiveZone
-                matchId={String(match.id)}
-                initialStatus={match.status}
-                initialScore={match.score}
-                initialMinute={match.minute ?? null}
-              />
-            ) : undefined
-          }
-        />
+        {/* State-driven hero — ONE VIEW MODEL → MANY STATES */}
+        {pageState === 'PROJECTED' ? (
+          <ProjectedHero match={match} />
+        ) : pageState === 'CANCELLED' ? (
+          <CancelledHero match={match} />
+        ) : (
+          <ScoreHero
+            match={match}
+            centerSlot={
+              pageState === 'LIVE' ? (
+                <MatchLiveZone
+                  matchId={String(match.id)}
+                  initialStatus={match.status}
+                  initialScore={match.score}
+                  initialMinute={match.minute ?? null}
+                />
+              ) : undefined
+            }
+          />
+        )}
 
-        {/* ── Above-fold revenue funnel (WC only) ─────────────────────────── */}
-        {isWC && <WCAboveFoldCTA matchId={match.id} />}
+        {/* ── Above-fold revenue funnel (WC only, not for cancelled) ──────── */}
+        {isWC && pageState !== 'CANCELLED' && <WCAboveFoldCTA matchId={match.id} />}
 
         {/* Ad: below score hero — high visibility placement */}
         <AdSlot slotId="match-top" variant="banner" />
@@ -2297,10 +2609,49 @@ async function BelowTheFoldDeferred({ matchId }: { matchId: string }) {
   // Same memoised promise as the page body — never a second fetch.
   const snapshot = await getOrBuildMatchSnapshot(matchId);
   const match    = snapshot.match;
+  const pageState = deriveMatchPageState(match);
 
   const isWC            = match.competition?.code === 'WC';
   const matchGroupSlug  = match.group ? match.group.toLowerCase().replace(/[\s_]+/g, '-') : null;
   const matchGroupLabel = match.group ? match.group.replace('GROUP_', 'Group ') : null;
+
+  // PROJECTED: dedicated template — no events, no H2H, no report
+  if (pageState === 'PROJECTED') {
+    return (
+      <ProjectedContent
+        match={match}
+        matchGroupSlug={matchGroupSlug}
+        matchGroupLabel={matchGroupLabel}
+      />
+    );
+  }
+
+  // CANCELLED: minimal content — no events, no H2H, no report
+  if (pageState === 'CANCELLED') {
+    return (
+      <>
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+          {sectionTitle('Match Information')}
+          <p className="text-sm text-gray-400 text-center py-4">
+            This match was cancelled or suspended. No result was recorded.
+          </p>
+          {match.venue && (
+            <p className="text-xs text-gray-600 text-center">Scheduled venue: {match.venue}</p>
+          )}
+        </div>
+        {isWC && (
+          <WCNavBox
+            groupSlug={matchGroupSlug}
+            groupLabel={matchGroupLabel}
+            homeTeam={match.homeTeam}
+            awayTeam={match.awayTeam}
+          />
+        )}
+        <AdSlot slotId="match-bottom" variant="banner" />
+      </>
+    );
+  }
+
   const hasEvents =
     (match.goals?.length ?? 0) > 0 ||
     (match.bookings?.length ?? 0) > 0 ||
@@ -2311,11 +2662,11 @@ async function BelowTheFoldDeferred({ matchId }: { matchId: string }) {
   return (
     <>
       <LazySection>
-        {showStats && match.status !== 'CANCELLED' && match.status !== 'SUSPENDED' && (
+        {showStats && (
           <MatchSummary match={match} />
         )}
 
-        {match.status !== 'CANCELLED' && match.status !== 'SUSPENDED' && (
+        {(pageState === 'QUALIFIED' || pageState === 'PRE_MATCH' || pageState === 'LIVE' || pageState === 'FINISHED') && (
           <MatchReport match={match} />
         )}
 
