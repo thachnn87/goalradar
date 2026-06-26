@@ -58,15 +58,17 @@ CRITICAL → exit 1 (pipeline fails). WARN → reported, non-fatal (tracked, not
 ```
 Architecture : ✅ pass
 Journeys     : ✅ 7/7 (6 journeys + bracket parity 32==32)
-Guardian     : ✅ 0 CRITICAL · 13 WARN · 291 internal links all resolve
+Guardian     : ✅ 0 CRITICAL · 12 WARN · 291 internal links all resolve
 ```
+
+Post-deploy re-run confirmed the match-page `<h1>` WARN cleared (13 → 12 WARN).
 
 ### Open WARNs (tracked, non-gating)
 | Layer | Where | Note |
 |---|---|---|
 | seo | hub, bracket, round, standings, groups, schedule, results, team pages | `<title>` > 70 chars — trim for SERP (content pass) |
 | seo | `/world-cup-2026/round-of-32` | meta description 247 chars (want ≤ 200) |
-| a11y | `/match/[id]` | missing `<h1>` — **fixed this sprint** (sr-only matchup h1) |
+| a11y | `/match/[id]` | ~~missing `<h1>`~~ — **FIXED & verified live** (sr-only matchup h1) |
 | cache | `/match/[id]` | `Cache-Control: no-store` though `revalidate=60` — match page is effectively dynamic; review whether ISR is intended for live freshness |
 
 ---

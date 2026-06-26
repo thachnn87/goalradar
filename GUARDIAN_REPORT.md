@@ -2,9 +2,9 @@
 
 > Base URL: `https://www.goalradar.org`
 > Pages inspected: 13 · Links checked: 291
-> CRITICAL: 0 · WARN: 13
+> CRITICAL: 0 · WARN: 12
 > CRITICAL by layer — http:0  hydration:0  seo:0  a11y:0  links:0  cache:0  perf:0
-> WARN by layer — http:0  hydration:0  seo:11  a11y:1  links:0  cache:1  perf:0
+> WARN by layer — http:0  hydration:0  seo:11  a11y:0  links:0  cache:1  perf:0
 
 ## ⚠️ WARN
 
@@ -21,5 +21,4 @@
 | seo | `/world-cup-2026/results` | title > 70 chars (76) |
 | seo | `/world-cup-2026-results` | title > 70 chars (79) |
 | seo | `/world-cup-2026/teams/mexico` | title > 70 chars (85) |
-| a11y | `/match/537425-mexico-vs-3rd-bcd` | no <h1> |
 | cache | `/match/537425-mexico-vs-3rd-bcd` | Cache-Control: no-store (ISR expected) | MISS |
