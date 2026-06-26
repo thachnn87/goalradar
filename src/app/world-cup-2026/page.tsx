@@ -162,26 +162,28 @@ function groupByDate(matches: CanonicalMatch[]): Record<string, CanonicalMatch[]
 
 function SectionHeader({
   title,
+  id,
   live = false,
   count,
 }: {
   title: string;
+  id?: string;
   live?: boolean;
   count?: number;
 }) {
   return (
     <div className="flex items-center gap-2 mb-4">
       {live && (
-        <span className="relative flex h-2.5 w-2.5 shrink-0">
+        <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
           <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
         </span>
       )}
-      <h2 className={`text-xs font-semibold uppercase tracking-widest ${live ? 'text-red-400' : 'text-gray-400'}`}>
+      <h2 id={id} className={`text-xs font-semibold uppercase tracking-widest ${live ? 'text-red-400' : 'text-gray-400'}`}>
         {title}
       </h2>
       {count !== undefined && count > 0 && (
-        <span className="text-xs text-gray-600 ml-auto">{count} matches</span>
+        <span className="text-xs text-gray-500 ml-auto">{count} matches</span>
       )}
     </div>
   );
@@ -277,7 +279,7 @@ function LocalKnockoutRound({ slots }: { slots: WCKnockoutSlot[] }) {
           </div>
           <div className="mx-4 text-center shrink-0">
             <p className="text-gray-500 text-xs font-semibold">{s.roundLabel}</p>
-            <p className="text-gray-600 text-[11px]">
+            <p className="text-gray-500 text-xs">
               {new Date(s.utcDate).toLocaleDateString('en-GB', {
                 day: 'numeric', month: 'short', timeZone: 'UTC',
               })}
@@ -288,7 +290,7 @@ function LocalKnockoutRound({ slots }: { slots: WCKnockoutSlot[] }) {
           </div>
         </div>
       ))}
-      <div className="px-4 py-2 text-[10px] text-gray-700">
+      <div className="px-4 py-2 text-xs text-gray-500">
         Scheduled — teams confirmed once group stage qualifies
       </div>
     </div>
@@ -401,7 +403,7 @@ export default async function WorldCup2026Page() {
           {/* Subtle gold glow */}
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(234,179,8,0.06)_0%,_transparent_60%)] pointer-events-none" />
           <div className="relative flex flex-col sm:flex-row sm:items-center gap-5">
-            <span className="text-6xl shrink-0 leading-none">🏆</span>
+            <span className="text-6xl shrink-0 leading-none" aria-hidden="true">🏆</span>
             <div className="flex-1 min-w-0">
               <h1 className="text-2xl sm:text-3xl font-black text-white leading-tight">
                 FIFA World Cup 2026
@@ -453,7 +455,7 @@ export default async function WorldCup2026Page() {
                 href={href}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors bg-gray-800/80 hover:bg-yellow-500/15 text-gray-300 hover:text-yellow-400 border border-gray-700/50 hover:border-yellow-500/30 shrink-0"
               >
-                <span className="text-base leading-none">{icon}</span>
+                <span className="text-base leading-none" aria-hidden="true">{icon}</span>
                 {label}
                 {external && <span className="text-gray-600 text-xs">↗</span>}
               </Link>
@@ -464,7 +466,7 @@ export default async function WorldCup2026Page() {
         {/* ── 1. Live Matches ───────────────────────────────────────────── */}
         {allLive.length > 0 && (
           <section aria-labelledby="live-heading">
-            <SectionHeader title="Live Matches" live count={allLive.length} />
+            <SectionHeader id="live-heading" title="Live Matches" live count={allLive.length} />
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {allLive.map((m) => <MatchCard key={m.id} match={m} />)}
             </div>
@@ -473,7 +475,7 @@ export default async function WorldCup2026Page() {
 
         {/* ── 2. Today's Matches ────────────────────────────────────────── */}
         <section aria-labelledby="today-heading">
-          <SectionHeader title="Today's Matches" count={todayMatches.length + allLive.length} />
+          <SectionHeader id="today-heading" title="Today's Matches" count={todayMatches.length + allLive.length} />
           {todayMatches.length > 0 || allLive.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {todayMatches.map((m) => <MatchCard key={m.id} match={m} />)}
@@ -488,7 +490,7 @@ export default async function WorldCup2026Page() {
 
         {/* ── 3. Upcoming Matches ───────────────────────────────────────── */}
         <section id="fixtures" aria-labelledby="upcoming-heading">
-          <SectionHeader title="Upcoming Matches" count={upcomingMatches.length || knockoutSlots.length} />
+          <SectionHeader id="upcoming-heading" title="Upcoming Matches" count={upcomingMatches.length || knockoutSlots.length} />
           {upcomingMatches.length > 0 ? (
             <MatchGrid matches={upcomingMatches} />
           ) : knockoutSlots.length > 0 ? (
@@ -504,7 +506,7 @@ export default async function WorldCup2026Page() {
 
         {/* ── 4. Group Standings ────────────────────────────────────────── */}
         <section id="groups" aria-labelledby="standings-heading">
-          <SectionHeader title="Group Standings" />
+          <SectionHeader id="standings-heading" title="Group Standings" />
           {groupTables.length > 0 ? (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -541,11 +543,11 @@ export default async function WorldCup2026Page() {
 
         {/* ── 5. Knockout Bracket ───────────────────────────────────────── */}
         <section aria-labelledby="bracket-heading">
-          <SectionHeader title="Knockout Bracket" />
+          <SectionHeader id="bracket-heading" title="Knockout Bracket" />
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 sm:p-6">
             <WCBracket matches={bracketMatches} />
             <div className="mt-4 flex items-center justify-between">
-              <p className="text-xs text-gray-700">
+              <p className="text-xs text-gray-500">
                 Bracket auto-updates as teams advance · Scroll horizontally on small screens
               </p>
               <Link
@@ -560,10 +562,10 @@ export default async function WorldCup2026Page() {
 
         {/* ── 6. Recent Results ─────────────────────────────────────────── */}
         <section id="results" aria-labelledby="results-heading">
-          <SectionHeader title="Recent Results" count={recentResults.length} />
+          <SectionHeader id="results-heading" title="Recent Results" count={recentResults.length} />
           {recentResults.length > 0 ? (
             <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden divide-y divide-gray-800/50">
-              {recentResults.map((m) => <ResultRow key={m.id} match={m} />)}
+              {recentResults.map((m) => <MatchCard variant="result" key={m.id} match={m} />)}
             </div>
           ) : (
             <EmptyState

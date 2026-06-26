@@ -2,12 +2,19 @@ import type { Match } from '@/lib/types';
 import type { CanonicalMatch } from '@/lib/canonical-match';
 import { matchPath } from '@/lib/url';
 import LocalTime from '@/components/LocalTime';
-// PERF-8: MatchLink = Link with prefetch + hover/touch/viewport snapshot prewarm
 import MatchLink from '@/components/MatchLink';
 
 type MatchInput = Match | CanonicalMatch;
 
-// Map CanonicalMatch.state → FD status string for internal helpers.
+export type MatchCardVariant = 'medium' | 'bracket' | 'result';
+
+export interface MatchCardProps {
+  match: MatchInput;
+  variant?: MatchCardVariant;
+  theme?: 'default' | 'gold' | 'bronze';
+  className?: string;
+}
+
 function effectiveStatus(m: MatchInput): Match['status'] {
   if ('status' in m && m.status) return m.status as Match['status'];
   if ('state' in m) {
@@ -29,13 +36,16 @@ function effectiveCompName(m: MatchInput): string {
 
 function formatTime(utcDate: string) {
   return new Date(utcDate).toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'UTC',
+    hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
   });
 }
 
-/** Returns a short phase label for the bottom of a live card. */
+function formatDate(utcDate: string) {
+  return new Date(utcDate).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'short', timeZone: 'UTC',
+  });
+}
+
 function matchProgress(status: Match['status'], minute: number | null | undefined): string | null {
   if (status === 'PAUSED') return 'Half Time';
   if (status !== 'IN_PLAY' || minute == null) return null;
@@ -44,14 +54,8 @@ function matchProgress(status: Match['status'], minute: number | null | undefine
   return 'Stoppage Time';
 }
 
-function StatusBadge({
-  status,
-  duration,
-  minute,
-}: {
-  status:    Match['status'];
-  duration?: string;
-  minute?:   number | null;
+function StatusBadge({ status, duration, minute }: {
+  status: Match['status']; duration?: string; minute?: number | null;
 }) {
   if (status === 'FINISHED') {
     const suffix =
@@ -78,33 +82,19 @@ function StatusBadge({
     );
   }
 
-  const map: Partial<Record<Match['status'], { text: string; className: string }>> = {
-    PAUSED:    { text: 'HT',   className: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' },
-    POSTPONED: { text: 'PST',  className: 'bg-orange-500/20 text-orange-400' },
-    CANCELLED: { text: 'CANC', className: 'bg-gray-700 text-gray-500' },
-    SUSPENDED: { text: 'SUSP', className: 'bg-orange-500/20 text-orange-400' },
+  const statusMap: Partial<Record<Match['status'], { text: string; cls: string }>> = {
+    PAUSED:    { text: 'HT',   cls: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' },
+    POSTPONED: { text: 'PST',  cls: 'bg-orange-500/20 text-orange-400' },
+    CANCELLED: { text: 'CANC', cls: 'bg-gray-700 text-gray-500' },
+    SUSPENDED: { text: 'SUSP', cls: 'bg-orange-500/20 text-orange-400' },
   };
-
-  const config = map[status];
-  if (!config) return null;
-
-  return (
-    <span className={`text-xs font-bold px-2 py-0.5 rounded ${config.className}`}>
-      {config.text}
-    </span>
-  );
+  const cfg = statusMap[status];
+  if (!cfg) return null;
+  return <span className={`text-xs font-bold px-2 py-0.5 rounded ${cfg.cls}`}>{cfg.text}</span>;
 }
 
-function TeamRow({
-  crest,
-  name,
-  score,
-  bold,
-}: {
-  crest: string;
-  name: string;
-  score: number | null;
-  bold: boolean;
+function TeamRow({ crest, name, score, bold }: {
+  crest: string; name: string; score: number | null; bold: boolean;
 }) {
   return (
     <div className={`flex items-center justify-between ${bold ? 'text-white' : 'text-gray-400'}`}>
@@ -112,7 +102,7 @@ function TeamRow({
         {crest && (
           <img src={crest} alt="" width={20} height={20} className="object-contain shrink-0" />
         )}
-        <span className="font-medium text-sm truncate">{name}</span>
+        <span className="font-medium text-sm truncate max-w-[120px] sm:max-w-[160px]">{name}</span>
       </div>
       <span className={`font-bold text-base w-5 text-right shrink-0 ${bold ? 'text-white' : 'text-gray-400'}`}>
         {score ?? '–'}
@@ -121,23 +111,187 @@ function TeamRow({
   );
 }
 
-export default function MatchCard({ match }: { match: MatchInput }) {
+// ---------------------------------------------------------------------------
+// Skeleton — for Suspense fallbacks
+// ---------------------------------------------------------------------------
+
+export function MatchCardSkeleton() {
+  return (
+    <div className="bg-gray-950 border border-gray-800/60 rounded-xl p-4 h-full animate-pulse">
+      <div className="flex items-center justify-between mb-3">
+        <div className="h-3 w-24 bg-gray-800 rounded" />
+        <div className="h-5 w-10 bg-gray-800 rounded" />
+      </div>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="h-4 w-32 bg-gray-800 rounded" />
+          <div className="h-4 w-5 bg-gray-800 rounded" />
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="h-4 w-28 bg-gray-800 rounded" />
+          <div className="h-4 w-5 bg-gray-800 rounded" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main export
+// ---------------------------------------------------------------------------
+
+export default function MatchCard({
+  match,
+  variant = 'medium',
+  theme = 'default',
+  className = '',
+}: MatchCardProps) {
   const { score } = match;
   const status = effectiveStatus(match);
   const compName = effectiveCompName(match);
   const showScore = status === 'FINISHED' || status === 'IN_PLAY' || status === 'PAUSED';
   const homeWins = score.winner === 'HOME_TEAM';
   const awayWins = score.winner === 'AWAY_TEAM';
-
-  // Static pre-tournament fixtures carry negative IDs (no real API record exists yet).
-  // Guard: only render a navigable link when the ID is a valid positive integer.
   const isLinkable = Number.isFinite(match.id) && match.id > 0;
+  const isLive = status === 'IN_PLAY' || status === 'PAUSED';
 
+  // ──────────────────────────────────────────────────────────
+  // bracket variant  (replaces BracketMatchCard in WCBracket)
+  // ──────────────────────────────────────────────────────────
+  if (variant === 'bracket') {
+    const isGold = theme === 'gold';
+    const isTbd = !match.homeTeam?.name && !match.awayTeam?.name;
+    const hn = match.homeTeam?.shortName || match.homeTeam?.name || 'TBD';
+    const an = match.awayTeam?.shortName || match.awayTeam?.name || 'TBD';
+    const hWins = score.winner === 'HOME_TEAM';
+    const aWins = score.winner === 'AWAY_TEAM';
+
+    const bracketCls = [
+      'flex flex-col justify-between rounded-lg border overflow-hidden h-[68px] w-full',
+      isLinkable ? 'transition-[border-color,background-color] duration-150' : 'cursor-default',
+      isGold
+        ? `bg-gradient-to-br from-yellow-950/60 to-gray-900 border-yellow-700/40${isLinkable ? ' hover:border-yellow-600/60' : ''}`
+        : `bg-gray-900 border-gray-700${isLinkable ? ' hover:border-gray-500' : ''}`,
+      isLive ? '!border-red-500/60' : '',
+      className,
+    ].filter(Boolean).join(' ');
+
+    const bracketInner = (
+      <>
+        <div className={`flex items-center justify-between px-2.5 py-1.5 ${hWins ? 'bg-gray-800/60' : ''}`}>
+          <div className="flex items-center gap-1.5 min-w-0">
+            {match.homeTeam?.crest && (
+              <img src={match.homeTeam.crest} alt="" width={14} height={14} className="object-contain shrink-0" />
+            )}
+            <span className={`text-xs truncate font-medium ${isTbd ? 'text-gray-500 italic' : hWins ? 'text-white font-bold' : 'text-gray-300'}`}>
+              {hn}
+            </span>
+          </div>
+          <span className={`text-xs font-bold tabular-nums ml-1 ${hWins ? 'text-white' : 'text-gray-500'}`}>
+            {showScore ? (score.fullTime.home ?? 0) : '–'}
+          </span>
+        </div>
+
+        <div className="flex items-center px-2.5">
+          <div className="flex-1 h-px bg-gray-800" />
+          <span className="text-gray-500 text-xs px-1.5">
+            {isLive
+              ? <span className="text-red-400 font-bold">LIVE</span>
+              : status === 'FINISHED' ? 'FT'
+              : formatDate(match.utcDate)}
+          </span>
+          <div className="flex-1 h-px bg-gray-800" />
+        </div>
+
+        <div className={`flex items-center justify-between px-2.5 py-1.5 ${aWins ? 'bg-gray-800/60' : ''}`}>
+          <div className="flex items-center gap-1.5 min-w-0">
+            {match.awayTeam?.crest && (
+              <img src={match.awayTeam.crest} alt="" width={14} height={14} className="object-contain shrink-0" />
+            )}
+            <span className={`text-xs truncate font-medium ${isTbd ? 'text-gray-500 italic' : aWins ? 'text-white font-bold' : 'text-gray-300'}`}>
+              {an}
+            </span>
+          </div>
+          <span className={`text-xs font-bold tabular-nums ml-1 ${aWins ? 'text-white' : 'text-gray-500'}`}>
+            {showScore ? (score.fullTime.away ?? 0) : '–'}
+          </span>
+        </div>
+      </>
+    );
+
+    if (isLinkable) {
+      return (
+        <MatchLink
+          href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}
+          matchId={match.id}
+          className={`${bracketCls} focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:outline-none`}
+        >
+          {bracketInner}
+        </MatchLink>
+      );
+    }
+    return <div className={bracketCls}>{bracketInner}</div>;
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // result variant  (replaces ResultRow in Hub)
+  // ──────────────────────────────────────────────────────────
+  if (variant === 'result') {
+    const hn = match.homeTeam?.shortName || match.homeTeam?.name || 'TBD';
+    const an = match.awayTeam?.shortName || match.awayTeam?.name || 'TBD';
+
+    const resultInner = (
+      <div className={`flex items-center gap-3 px-4 py-3 rounded-xl ${className}`}>
+        <span className="text-xs text-gray-500 w-16 shrink-0">{formatDate(match.utcDate)}</span>
+        <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
+          <span className="text-white text-sm font-medium truncate text-right">{hn}</span>
+          {match.homeTeam?.crest && (
+            <img src={match.homeTeam.crest} alt="" width={18} height={18} className="object-contain shrink-0" />
+          )}
+        </div>
+        <div className="text-center shrink-0 w-16">
+          <span className="text-white font-black tabular-nums text-sm">
+            {score.fullTime.home ?? '–'} – {score.fullTime.away ?? '–'}
+          </span>
+          {(score.winner === 'HOME_TEAM' || score.winner === 'AWAY_TEAM' || score.winner === 'DRAW') && (
+            <p className="text-xs text-gray-500">FT</p>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          {match.awayTeam?.crest && (
+            <img src={match.awayTeam.crest} alt="" width={18} height={18} className="object-contain shrink-0" />
+          )}
+          <span className="text-white text-sm font-medium truncate">{an}</span>
+        </div>
+      </div>
+    );
+
+    if (isLinkable) {
+      return (
+        <MatchLink
+          href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}
+          matchId={match.id}
+          className="block rounded-xl hover:bg-gray-800/60 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:outline-none"
+        >
+          {resultInner}
+        </MatchLink>
+      );
+    }
+    return resultInner;
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // medium variant  (default)
+  // ──────────────────────────────────────────────────────────
   const cardInner = (
     <div
-      className={`bg-gray-900 border border-gray-800 rounded-xl p-4 transition-all h-full${
-        isLinkable ? ' hover:border-gray-700 hover:bg-gray-800/50' : ''
-      }`}
+      className={[
+        'bg-gray-950 border rounded-xl p-4 h-full',
+        'transition-[border-color,background-color,box-shadow,transform] duration-150',
+        isLive ? 'border-red-500/30 shadow-wc-live' : 'border-gray-800/60',
+        isLinkable ? 'hover:border-gray-700 hover:bg-gray-900 hover:-translate-y-0.5 hover:shadow-wc-raised' : '',
+        className,
+      ].filter(Boolean).join(' ')}
     >
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs text-gray-500 truncate mr-2">{compName}</span>
@@ -166,19 +320,21 @@ export default function MatchCard({ match }: { match: MatchInput }) {
         />
       </div>
       {matchProgress(status, match.minute) && (
-        <p className="text-[10px] text-gray-500 mt-2 text-right">
+        <p className="text-xs text-gray-500 mt-2 text-right">
           {matchProgress(status, match.minute)}
         </p>
       )}
     </div>
   );
 
-  if (!isLinkable) {
-    return cardInner;
-  }
+  if (!isLinkable) return cardInner;
 
   return (
-    <MatchLink href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)} matchId={match.id}>
+    <MatchLink
+      href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)}
+      matchId={match.id}
+      className="block rounded-xl focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:outline-none"
+    >
       {cardInner}
     </MatchLink>
   );

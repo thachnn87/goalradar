@@ -1,6 +1,5 @@
-import Link from 'next/link';
 import type { Match } from '@/lib/types';
-import { matchPath } from '@/lib/url';
+import MatchCard from '@/components/MatchCard';
 
 // ---------------------------------------------------------------------------
 // Layout constants  (all in px, used for both HTML and inline SVG)
@@ -13,7 +12,6 @@ const CONN_W = 36;   // width of the SVG connector strip between columns
 const NUM_L32_SLOTS = 16;
 const TOTAL_H = NUM_L32_SLOTS * SLOT_H; // 1408 px
 
-// How many LAST_32 slots each round's match occupies
 const SLOTS_PER_MATCH: Record<string, number> = {
   LAST_32: 1,
   LAST_16: 2,
@@ -48,122 +46,13 @@ const ROUND_MATCH_COUNT: Record<AllRoundKey, number> = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Vertical center (px) for the i-th match in the given round. */
 function matchCenterY(roundKey: RoundKey, matchIndex: number): number {
   const slotsPerMatch = SLOTS_PER_MATCH[roundKey];
   return (matchIndex * slotsPerMatch + slotsPerMatch / 2) * SLOT_H;
 }
 
-/** Top offset so the card is vertically centred in its slots. */
 function cardTop(roundKey: RoundKey, matchIndex: number): number {
   return matchCenterY(roundKey, matchIndex) - CARD_H / 2;
-}
-
-function formatDate(utcDate: string) {
-  return new Date(utcDate).toLocaleDateString('en-GB', {
-    day: 'numeric', month: 'short', timeZone: 'UTC',
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Match card — compact, fixed-size
-// ---------------------------------------------------------------------------
-
-function BracketMatchCard({ match, isFinal = false }: { match: Match; isFinal?: boolean }) {
-  const { score, status } = match;
-  const showScore = ['FINISHED', 'IN_PLAY', 'PAUSED'].includes(status);
-  const isLive = status === 'IN_PLAY' || status === 'PAUSED';
-
-  const hn = match.homeTeam?.name || 'TBD';
-  const an = match.awayTeam?.name || 'TBD';
-  const hShort = match.homeTeam?.shortName || hn;
-  const aShort = match.awayTeam?.shortName || an;
-  const hWins = score.winner === 'HOME_TEAM';
-  const aWins = score.winner === 'AWAY_TEAM';
-  const isTbd = !match.homeTeam?.name && !match.awayTeam?.name;
-
-  // Only link when the match has a real API id — synthetic / static fixtures
-  // (id ≤ 0) must not produce clickable cards that silently navigate elsewhere.
-  const isLinkable = Number.isFinite(match.id) && match.id > 0;
-
-  const cardClassName = `
-    flex flex-col justify-between rounded-lg border overflow-hidden
-    ${isLinkable ? 'transition-all' : 'cursor-default'}
-    ${isFinal
-      ? `bg-gradient-to-br from-yellow-950/60 to-gray-900 border-yellow-700/40 ${isLinkable ? 'hover:border-yellow-600/60' : ''}`
-      : `bg-gray-900 border-gray-700 ${isLinkable ? 'hover:border-gray-500' : ''}`}
-    ${isLive ? 'border-red-500/60' : ''}
-  `;
-
-  const cardStyle = { width: CARD_W, height: CARD_H };
-
-  // Shared inner content — rendered inside either <Link> or <div>
-  const inner = (
-    <>
-      {/* Home team */}
-      <div className={`flex items-center justify-between px-2.5 py-1.5 ${hWins ? 'bg-gray-800/60' : ''}`}>
-        <div className="flex items-center gap-1.5 min-w-0">
-          {match.homeTeam?.crest && !isTbd && (
-            <img src={match.homeTeam.crest} alt="" width={14} height={14} className="object-contain shrink-0" />
-          )}
-          <span className={`text-xs truncate font-medium ${isTbd ? 'text-gray-600 italic' : hWins ? 'text-white font-bold' : 'text-gray-300'}`}>
-            {isTbd ? 'TBD' : hShort}
-          </span>
-        </div>
-        <span className={`text-xs font-bold tabular-nums ml-1 ${hWins ? 'text-white' : 'text-gray-500'}`}>
-          {showScore ? (score.fullTime.home ?? 0) : '–'}
-        </span>
-      </div>
-
-      {/* Divider + date */}
-      <div className="flex items-center px-2.5">
-        <div className="flex-1 h-px bg-gray-800" />
-        <span className="text-gray-600 text-[10px] px-1.5">
-          {isLive ? (
-            <span className="text-red-400 font-bold">LIVE</span>
-          ) : status === 'FINISHED' ? (
-            'FT'
-          ) : (
-            formatDate(match.utcDate)
-          )}
-        </span>
-        <div className="flex-1 h-px bg-gray-800" />
-      </div>
-
-      {/* Away team */}
-      <div className={`flex items-center justify-between px-2.5 py-1.5 ${aWins ? 'bg-gray-800/60' : ''}`}>
-        <div className="flex items-center gap-1.5 min-w-0">
-          {match.awayTeam?.crest && !isTbd && (
-            <img src={match.awayTeam.crest} alt="" width={14} height={14} className="object-contain shrink-0" />
-          )}
-          <span className={`text-xs truncate font-medium ${isTbd ? 'text-gray-600 italic' : aWins ? 'text-white font-bold' : 'text-gray-300'}`}>
-            {isTbd ? 'TBD' : aShort}
-          </span>
-        </div>
-        <span className={`text-xs font-bold tabular-nums ml-1 ${aWins ? 'text-white' : 'text-gray-500'}`}>
-          {showScore ? (score.fullTime.away ?? 0) : '–'}
-        </span>
-      </div>
-    </>
-  );
-
-  if (isLinkable) {
-    return (
-      <Link
-        href={matchPath(match.id, match.homeTeam?.name, match.awayTeam?.name)} prefetch={true}
-        style={cardStyle}
-        className={cardClassName}
-      >
-        {inner}
-      </Link>
-    );
-  }
-
-  return (
-    <div style={cardStyle} className={cardClassName}>
-      {inner}
-    </div>
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -173,33 +62,22 @@ function BracketMatchCard({ match, isFinal = false }: { match: Match; isFinal?: 
 function BracketConnector({ fromRound, toRound }: { fromRound: RoundKey; toRound: RoundKey }) {
   const fromCount = ROUND_MATCH_COUNT[fromRound];
   const toCount = ROUND_MATCH_COUNT[toRound];
-  const pairs = toCount; // each pair of "from" matches feeds one "to" match
+  const pairs = toCount;
 
   const paths: string[] = [];
-
   for (let i = 0; i < pairs; i++) {
-    const y1 = matchCenterY(fromRound, i * 2);     // top source match center
-    const y2 = matchCenterY(fromRound, i * 2 + 1); // bottom source match center
-    const midY = (y1 + y2) / 2;                     // = target match center
-
-    // Top branch: right → mid-x → down to midY
+    const y1 = matchCenterY(fromRound, i * 2);
+    const y2 = matchCenterY(fromRound, i * 2 + 1);
+    const midY = (y1 + y2) / 2;
     paths.push(`M 0 ${y1} H ${CONN_W / 2} V ${midY}`);
-    // Bottom branch: right → mid-x → up to midY
     paths.push(`M 0 ${y2} H ${CONN_W / 2} V ${midY}`);
-    // Horizontal to target column
     paths.push(`M ${CONN_W / 2} ${midY} H ${CONN_W}`);
   }
 
-  // Suppress unused warning (fromCount is used implicitly via math above)
   void fromCount;
 
   return (
-    <svg
-      width={CONN_W}
-      height={TOTAL_H}
-      className="shrink-0"
-      aria-hidden="true"
-    >
+    <svg width={CONN_W} height={TOTAL_H} className="shrink-0" aria-hidden="true">
       {paths.map((d, i) => (
         <path key={i} d={d} stroke="#374151" strokeWidth="1.5" fill="none" />
       ))}
@@ -208,67 +86,10 @@ function BracketConnector({ fromRound, toRound }: { fromRound: RoundKey; toRound
 }
 
 // ---------------------------------------------------------------------------
-// A single round column
-// ---------------------------------------------------------------------------
-
-function BracketColumn({
-  roundKey,
-  matches,
-}: {
-  roundKey: RoundKey;
-  matches: Match[];
-}) {
-  const isFinal = roundKey === 'FINAL';
-  const expectedCount = ROUND_MATCH_COUNT[roundKey];
-  const label = ROUND_LABELS[roundKey];
-
-  return (
-    <div className="shrink-0" style={{ width: CARD_W }}>
-      {/* Column header */}
-      <div
-        className="text-center mb-2"
-        style={{ height: 32 }}
-      >
-        <span className={`text-xs font-semibold uppercase tracking-wider ${isFinal ? 'text-yellow-400' : 'text-gray-400'}`}>
-          {label}
-        </span>
-        <p className="text-gray-600 text-[10px] mt-0.5">{expectedCount} match{expectedCount > 1 ? 'es' : ''}</p>
-      </div>
-
-      {/* Match cards — absolutely positioned within a fixed-height container */}
-      <div className="relative" style={{ height: TOTAL_H }}>
-        {matches.map((match, i) => (
-          <div
-            key={match.id}
-            className="absolute"
-            style={{ top: cardTop(roundKey, i), left: 0, width: CARD_W }}
-          >
-            <BracketMatchCard match={match} isFinal={isFinal} />
-          </div>
-        ))}
-
-        {/* Placeholder slots if no data yet */}
-        {matches.length === 0 &&
-          Array.from({ length: expectedCount }).map((_, i) => (
-            <div
-              key={i}
-              className="absolute rounded-lg border border-gray-800 border-dashed bg-gray-900/30 flex items-center justify-center"
-              style={{ top: cardTop(roundKey, i), left: 0, width: CARD_W, height: CARD_H }}
-            >
-              <span className="text-gray-700 text-xs">TBD</span>
-            </div>
-          ))}
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Public component — accepts raw knockout matches, no data fetching
 // ---------------------------------------------------------------------------
 
 export default function WCBracket({ matches }: { matches: Match[] }) {
-  // Bucket matches by stage
   const byStage = ROUND_KEYS.reduce<Record<RoundKey, Match[]>>(
     (acc, key) => {
       acc[key] = matches
@@ -279,7 +100,6 @@ export default function WCBracket({ matches }: { matches: Match[] }) {
     { LAST_32: [], LAST_16: [], QUARTER_FINALS: [], SEMI_FINALS: [], FINAL: [] }
   );
 
-  // Third place playoff — separate from the main elimination chain
   const thirdPlaceMatches = matches
     .filter((m) => m.stage === 'THIRD_PLACE')
     .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
@@ -288,18 +108,15 @@ export default function WCBracket({ matches }: { matches: Match[] }) {
     <div className="w-full overflow-x-auto pb-2">
       <div className="min-w-max">
         {/* Column headers row */}
-        <div className="flex" style={{ paddingLeft: 0 }}>
+        <div className="flex">
           {ROUND_KEYS.map((key, ri) => (
             <div key={key} className="flex items-start">
-              {/* Spacer for connector (not before first column) */}
               {ri > 0 && <div style={{ width: CONN_W + 8 }} />}
-
-              {/* Header */}
               <div className="text-center shrink-0" style={{ width: CARD_W }}>
                 <span className={`text-xs font-semibold uppercase tracking-wider ${key === 'FINAL' ? 'text-yellow-400' : 'text-gray-400'}`}>
                   {ROUND_LABELS[key]}
                 </span>
-                <p className="text-gray-600 text-[10px] mt-0.5">
+                <p className="text-gray-500 text-xs mt-0.5">
                   {ROUND_MATCH_COUNT[key]} match{ROUND_MATCH_COUNT[key] > 1 ? 'es' : ''}
                 </p>
               </div>
@@ -309,64 +126,59 @@ export default function WCBracket({ matches }: { matches: Match[] }) {
 
         {/* Bracket body */}
         <div className="flex mt-2">
-          {ROUND_KEYS.map((key, ri) => {
-            const nextKey = ROUND_KEYS[ri + 1] as RoundKey | undefined;
-            return (
-              <div key={key} className="flex items-start">
-                {/* Connector from previous round */}
-                {ri > 0 && (
-                  <div className="mt-0" style={{ marginRight: 8 }}>
-                    <BracketConnector
-                      fromRound={ROUND_KEYS[ri - 1]}
-                      toRound={key}
-                    />
-                  </div>
-                )}
-
-                {/* Match cards column */}
-                <div className="shrink-0 relative" style={{ width: CARD_W, height: TOTAL_H }}>
-                  {byStage[key].length > 0
-                    ? byStage[key].map((match, i) => (
-                        <div
-                          key={match.id}
-                          className="absolute"
-                          style={{ top: cardTop(key, i), left: 0, width: CARD_W }}
-                        >
-                          <BracketMatchCard match={match} isFinal={key === 'FINAL'} />
-                        </div>
-                      ))
-                    : Array.from({ length: ROUND_MATCH_COUNT[key] }).map((_, i) => (
-                        <div
-                          key={i}
-                          className="absolute rounded-lg border border-gray-800 border-dashed bg-gray-900/30 flex items-center justify-center"
-                          style={{ top: cardTop(key, i), left: 0, width: CARD_W, height: CARD_H }}
-                        >
-                          <span className="text-gray-700 text-xs">TBD</span>
-                        </div>
-                      ))}
+          {ROUND_KEYS.map((key, ri) => (
+            <div key={key} className="flex items-start">
+              {ri > 0 && (
+                <div className="mt-0" style={{ marginRight: 8 }}>
+                  <BracketConnector fromRound={ROUND_KEYS[ri - 1]} toRound={key} />
                 </div>
+              )}
+              <div className="shrink-0 relative" style={{ width: CARD_W, height: TOTAL_H }}>
+                {byStage[key].length > 0
+                  ? byStage[key].map((match, i) => (
+                      <div
+                        key={match.id}
+                        className="absolute"
+                        style={{ top: cardTop(key, i), left: 0, width: CARD_W }}
+                      >
+                        <MatchCard
+                          variant="bracket"
+                          match={match}
+                          theme={key === 'FINAL' ? 'gold' : 'default'}
+                        />
+                      </div>
+                    ))
+                  : Array.from({ length: ROUND_MATCH_COUNT[key] }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="absolute rounded-lg border border-gray-800 border-dashed bg-gray-900/30 flex items-center justify-center"
+                        style={{ top: cardTop(key, i), left: 0, width: CARD_W, height: CARD_H }}
+                      >
+                        <span className="text-gray-500 text-xs">TBD</span>
+                      </div>
+                    ))}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
 
-        {/* Third Place playoff — standalone match below the bracket, no connector */}
+        {/* Third Place playoff — standalone below the bracket, no connector */}
         <div className="mt-6 border-t border-gray-800 pt-4">
           <div className="mb-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Third Place</span>
-            <p className="text-gray-600 text-[10px] mt-0.5">1 match</p>
+            <p className="text-gray-500 text-xs mt-0.5">1 match</p>
           </div>
-          <div>
+          <div style={{ width: CARD_W }}>
             {thirdPlaceMatches.length > 0
               ? thirdPlaceMatches.map((match) => (
-                  <BracketMatchCard key={match.id} match={match} />
+                  <MatchCard variant="bracket" key={match.id} match={match} />
                 ))
               : (
                   <div
                     className="rounded-lg border border-gray-800 border-dashed bg-gray-900/30 flex items-center justify-center"
                     style={{ width: CARD_W, height: CARD_H }}
                   >
-                    <span className="text-gray-700 text-xs">TBD</span>
+                    <span className="text-gray-500 text-xs">TBD</span>
                   </div>
                 )}
           </div>
