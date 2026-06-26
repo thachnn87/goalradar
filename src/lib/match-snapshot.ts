@@ -104,10 +104,18 @@ function getSnapshotTtlSec(match: MatchDetail): number {
   if (match.status === 'FINISHED') return 7 * 24 * 3_600; // 7 days
 
   if (match.status === 'SCHEDULED' || match.status === 'TIMED') {
+    // ONE SOURCE: WC knockout slot with unresolved teams (homeTeam.id === 0) must
+    // refresh frequently so group-stage resolution is picked up within minutes.
+    // Once teams are resolved (id > 0), the normal 6h TTL applies.
+    const isProjectedKnockout =
+      match.competition?.code === 'WC' &&
+      !match.group &&
+      (!match.homeTeam?.id || match.homeTeam.id === 0);
+    if (isProjectedKnockout) return 5 * 60; // 5 min — re-enriches until slot resolves
+
     const msUntilKickoff = new Date(match.utcDate).getTime() - Date.now();
     if (msUntilKickoff <= 0) {
       // Kickoff has passed; the match may be live but API hasn't updated yet.
-      // Use 60 s to force a quick refresh.
       return 60;
     }
     const secUntilKickoff = Math.ceil(msUntilKickoff / 1000);
@@ -746,6 +754,39 @@ export const getOrBuildMatchSnapshot: (matchId: string) => Promise<MatchSnapshot
           }
         }
         // lock not acquired → another request is already healing; serve cached
+      }
+
+      // ONE SOURCE self-heal: WC knockout slot with stale TBD teams.
+      // Groups may have resolved since this snapshot was written (old TTL was 6h,
+      // new TTL is 5 min — but existing entries need an explicit trigger).
+      // Rebuild when snapshot is older than 5 min so authority:v1 enrichment
+      // picks up freshly confirmed teams (homeTeam.id > 0 after group completes).
+      const isProjectedStale =
+        hm.competition?.code === 'WC' &&
+        !hm.group &&
+        (!hm.homeTeam?.id || hm.homeTeam.id === 0) &&
+        (hm.status === 'SCHEDULED' || hm.status === 'TIMED');
+      const snapshotAgeSec = Math.ceil((Date.now() - kvHit.generatedAt) / 1_000);
+
+      if (isProjectedStale && snapshotAgeSec > 5 * 60 && KV_ENABLED) {
+        const teamResolveLock = `goalradar:team-resolve-lock:${matchId}`;
+        const acquired = await kv.set(teamResolveLock, '1', { nx: true, ex: 300 }).catch(() => null);
+        if (acquired) {
+          console.log(`[Snapshot] TBD-RESOLVE match:${matchId} — rebuilding to propagate group resolution`);
+          try {
+            const rebuilt = await buildSnapshot(matchId);
+            await writeKVSnapshot(matchId, rebuilt).catch(() => undefined);
+            writeDRSnapshot(matchId, rebuilt);
+            recordSnapshotFetch(Date.now() - t0, 'build-provider');
+            return rebuilt;
+          } catch (healErr) {
+            console.error(
+              `[Snapshot] TBD-RESOLVE failed match:${matchId}:` +
+              ` ${healErr instanceof Error ? healErr.message : String(healErr)} — serving cached`,
+            );
+          }
+        }
+        // lock held by another instance — serve cached, it will resolve shortly
       }
 
       // DATA-18WC.7B: score-drift guard — FINISHED WC snapshot vs FD match detail.
