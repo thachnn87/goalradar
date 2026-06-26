@@ -139,43 +139,77 @@ export function getKnockoutSlots(round: WCKnockoutSlot['round']): WCKnockoutSlot
 /**
  * When the FD API has posted knockout fixture skeletons with null team names
  * (group stage still ongoing), substitute positional labels from WC_KNOCKOUT_SLOTS
- * (e.g. "1st Group A", "Runner-up Group C") so the UI never shows bare "TBD".
+ * (e.g. "1st Group A", "2nd Group C") so the UI never shows bare "TBD".
  *
- * MUST be called with ALL matches for a single stage at once — ordinal position
- * within the sorted array maps to WC_KNOCKOUT_SLOTS matchNumber order.
+ * MUST be called with ALL matches for a single stage at once.
  *
- * WC_KNOCKOUT_SLOTS uses pre-draw editorial dates that differ from the FD API's
- * confirmed schedule, so date matching is not used. Instead, matches sorted by
- * utcDate (ascending) are mapped 1-to-1 to slots sorted by matchNumber.
+ * Slot assignment (DATA-18WC: fixed Mexico-in-wrong-slot bug):
+ *   1. ANCHOR — when a match already has a confirmed team whose group position is
+ *      known (`groupPositions`: teamId → "1st Group A"), bind that match to the
+ *      editorial slot whose home/away label matches that position. This is the
+ *      authority: FD says "Mexico plays here", standings say "Mexico = 1st Group A",
+ *      so this match IS the "1st Group A" slot and its opponent label is taken from
+ *      that slot — regardless of the FD kickoff order.
+ *   2. ORDINAL FALLBACK — remaining (fully-TBD) matches are mapped to the remaining
+ *      slots by utcDate ascending. WC_KNOCKOUT_SLOTS uses pre-draw editorial dates
+ *      so only relative order is used, never absolute date matching.
  *
- * Only enriches matches whose homeTeam.name or awayTeam.name is falsy.
- * Teams that are already confirmed are left untouched.
+ * Only enriches sides whose team name is falsy. Confirmed teams are never overwritten.
+ * Without `groupPositions` (or for non-R32 rounds whose labels are positional
+ * "Winner R32 Mx") the function degrades to pure ordinal mapping — no regression.
  */
 export function injectKnockoutSlotLabels<T extends {
   utcDate: string;
   homeTeam: { id: number; name: string; shortName: string; tla: string; crest: string } | null | undefined;
   awayTeam: { id: number; name: string; shortName: string; tla: string; crest: string } | null | undefined;
-}>(matches: T[], stage: string): T[] {
+}>(matches: T[], stage: string, groupPositions?: Map<number, string>): T[] {
   const round = stage as WCKnockoutSlot['round'];
   const slots = WC_KNOCKOUT_SLOTS
     .filter((s) => s.round === round)
     .sort((a, b) => a.matchNumber - b.matchNumber);
   if (slots.length === 0) return matches;
 
-  // Sort matches by utcDate ascending so position i corresponds to slot[i]
-  const sortedOrder = matches
-    .map((_, i) => i)
-    .sort((a, b) => new Date(matches[a].utcDate).getTime() - new Date(matches[b].utcDate).getTime());
+  const usedSlot = new Array<boolean>(slots.length).fill(false);
+  const slotForMatch = new Array<number>(matches.length).fill(-1);
 
+  // ── Phase 1: anchor confirmed teams to their true slot by group position ────
+  if (groupPositions && groupPositions.size > 0) {
+    matches.forEach((m, idx) => {
+      const homeId = m.homeTeam?.id ?? 0;
+      const awayId = m.awayTeam?.id ?? 0;
+      const homeLabel = homeId > 0 ? groupPositions.get(homeId) : undefined;
+      const awayLabel = awayId > 0 ? groupPositions.get(awayId) : undefined;
+
+      let slotIdx = -1;
+      if (homeLabel) slotIdx = slots.findIndex((s, i) => !usedSlot[i] && s.homeLabel === homeLabel);
+      if (slotIdx < 0 && awayLabel) slotIdx = slots.findIndex((s, i) => !usedSlot[i] && s.awayLabel === awayLabel);
+      if (slotIdx >= 0) { slotForMatch[idx] = slotIdx; usedSlot[slotIdx] = true; }
+    });
+  }
+
+  // ── Phase 2: remaining matches → remaining slots by utcDate ascending ───────
+  const remaining = matches
+    .map((_, i) => i)
+    .filter((i) => slotForMatch[i] < 0)
+    .sort((a, b) => new Date(matches[a].utcDate).getTime() - new Date(matches[b].utcDate).getTime());
+  let cursor = 0;
+  for (const idx of remaining) {
+    while (cursor < slots.length && usedSlot[cursor]) cursor++;
+    if (cursor >= slots.length) break;
+    slotForMatch[idx] = cursor;
+    usedSlot[cursor] = true;
+    cursor++;
+  }
+
+  // ── Phase 3: fill only the null sides from each match's assigned slot ────────
   const result = [...matches];
-  sortedOrder.forEach((originalIdx, pos) => {
-    const slot = slots[pos];
+  matches.forEach((m, idx) => {
+    const slot = slots[slotForMatch[idx]];
     if (!slot) return;
-    const m = result[originalIdx];
     const needsHome = !m.homeTeam?.name;
     const needsAway = !m.awayTeam?.name;
     if (!needsHome && !needsAway) return;
-    result[originalIdx] = {
+    result[idx] = {
       ...m,
       homeTeam: needsHome
         ? { id: 0, name: slot.homeLabel, shortName: slot.homeLabel, tla: '', crest: '' }

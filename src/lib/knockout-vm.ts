@@ -9,10 +9,46 @@
  * to every consumer; List and Tree are guaranteed to see identical data.
  */
 
-import { getWCAuthorityMatchesV2 } from './api';
+import { getWCAuthorityMatchesV2, getStandingsCached } from './api';
 import type { Match } from './types';
 import { canonicalToMatch } from './canonical-match';
 import { injectKnockoutSlotLabels } from './wc-fixtures';
+
+// ---------------------------------------------------------------------------
+// Group-position map — teamId → editorial slot label ("1st Group A")
+// ---------------------------------------------------------------------------
+
+const ORDINAL: Record<number, string> = { 1: '1st', 2: '2nd', 3: '3rd' };
+
+/**
+ * Build teamId → "{1st|2nd} Group X" from WC standings so R32 slot labels can be
+ * anchored to the team FD has actually placed in each match (fixes the
+ * "Mexico (1st Group A) shown in the wrong slot" bug). Best-effort: returns an
+ * empty map on any failure, which makes injectKnockoutSlotLabels fall back to
+ * pure ordinal-by-date mapping (no regression).
+ */
+async function buildGroupPositions(): Promise<Map<number, string>> {
+  const map = new Map<number, string>();
+  try {
+    const { standings } = await getStandingsCached('WC');
+    for (const table of standings) {
+      if (table.type !== 'TOTAL') continue;
+      const letter = (table.group ?? '')
+        .replace(/^GROUP[_\s]*/i, '')
+        .replace(/^Group\s*/i, '')
+        .trim()
+        .toUpperCase();
+      if (!letter) continue;
+      for (const entry of table.table) {
+        const ord = ORDINAL[entry.position];
+        if (ord && entry.team?.id) map.set(entry.team.id, `${ord} Group ${letter}`);
+      }
+    }
+  } catch {
+    // standings unavailable — empty map → ordinal fallback in injection
+  }
+  return map;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -92,10 +128,20 @@ export const buildKnockoutViewModel: () => Promise<KnockoutViewModel> = async ()
     .filter((m) => stageSet.has(m.stage))
     .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
 
+  // Anchor R32 slot labels to the team FD has placed in each match (via standings
+  // group position) instead of the unreliable kickoff order. Only meaningful for
+  // LAST_32, whose labels are group positions ("1st Group A"); other rounds use
+  // positional "Winner R32 Mx" labels that map fine by order.
+  const groupPositions = await buildGroupPositions();
+
   // Enrich null team names with positional labels — must be called per stage with all stage matches
   const matches: Match[] = ALL_KNOCKOUT_STAGES
     .flatMap((stage) =>
-      injectKnockoutSlotLabels(knockoutRaw.filter((m) => m.stage === stage), stage),
+      injectKnockoutSlotLabels(
+        knockoutRaw.filter((m) => m.stage === stage),
+        stage,
+        stage === 'LAST_32' ? groupPositions : undefined,
+      ),
     )
     .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
 
