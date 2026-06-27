@@ -85,23 +85,53 @@ const BENCH = process.env.MATCH_SNAPSHOT_BENCH === 'true';
 const DR_TTL_SEC = 30 * 24 * 3_600; // 2 592 000 s
 
 // ---------------------------------------------------------------------------
-// Tier-aware snapshot TTL (Phase 5)
+// Snapshot Lifecycle Policy (DATA-18WC.SNAPSHOT.LIFECYCLE)
 // ---------------------------------------------------------------------------
 
 /**
- * Return the KV TTL in seconds for a snapshot based on match status.
+ * Snapshot lifecycle policy — determined by match state and time since kickoff.
  *
- *   FINISHED  → 7 days   — score never changes
- *   UPCOMING  → min(6h, time-until-kickoff + 5 min grace)
- *               — forces refresh when match starts so we don't serve
- *                 SCHEDULED snapshot while match is IN_PLAY
- *   LIVE      → 30 s     — but live matches are not written (isLiveStatus guard)
- *   other     → 15 min   — safe default (POSTPONED, SUSPENDED, etc.)
+ *   PRE_MATCH          upcoming — expires close to kickoff so live data is served promptly
+ *   LIVE               in-play  — owned by live-cache.ts, never written here
+ *   RECENTLY_FINISHED  <50h post-kickoff — provider may still correct score/goals/OGs
+ *   ARCHIVED           >50h post-kickoff — data stable, long TTL
+ */
+export type SnapshotPolicy = 'PRE_MATCH' | 'LIVE' | 'RECENTLY_FINISHED' | 'ARCHIVED';
+
+/** Classify the lifecycle policy for a match. */
+export function getSnapshotPolicy(match: MatchDetail): SnapshotPolicy {
+  if (isLiveStatus(match.status)) return 'LIVE';
+  if (match.status !== 'FINISHED') return 'PRE_MATCH';
+  const hoursSinceKickoff = (Date.now() - new Date(match.utcDate).getTime()) / 3_600_000;
+  return hoursSinceKickoff < 50 ? 'RECENTLY_FINISHED' : 'ARCHIVED';
+}
+
+// ---------------------------------------------------------------------------
+// Tier-aware snapshot TTL (DATA-18WC.SNAPSHOT.LIFECYCLE stepped TTL)
+// ---------------------------------------------------------------------------
+
+/**
+ * Return the KV TTL in seconds for a snapshot.
+ *
+ *   ARCHIVED           → 7 days  — stable, score won't change
+ *   RECENTLY_FINISHED  → stepped:
+ *      < 4h since kickoff  → 10 min  (HOT: VAR, OG corrections, referee report)
+ *      < 14h               → 30 min  (WARM: data curator updates)
+ *      < 50h               → 2h      (COOL: late disciplinary / appeal window)
+ *   PRE_MATCH (SCHEDULED/TIMED) → min(6h, time-to-kickoff + 5 min grace)
+ *   LIVE      → 30 s but never written (live-cache.ts owns this)
+ *   other     → 15 min — safe default (POSTPONED, SUSPENDED, CANCELLED …)
  */
 function getSnapshotTtlSec(match: MatchDetail): number {
   if (isLiveStatus(match.status)) return 30; // won't be reached (write guard above)
 
-  if (match.status === 'FINISHED') return 7 * 24 * 3_600; // 7 days
+  if (match.status === 'FINISHED') {
+    const h = (Date.now() - new Date(match.utcDate).getTime()) / 3_600_000;
+    if (h < 4)  return 10 * 60;        // 10 min — HOT
+    if (h < 14) return 30 * 60;        // 30 min — WARM
+    if (h < 50) return 2  * 3_600;     // 2h     — COOL
+    return 7 * 24 * 3_600;             // 7 days — ARCHIVED
+  }
 
   if (match.status === 'SCHEDULED' || match.status === 'TIMED') {
     // ONE SOURCE: WC knockout slot with unresolved teams (homeTeam.id === 0) must
