@@ -199,6 +199,13 @@ function GoalScorers({ match }: { match: MatchDetail }) {
   if (!goals.length) return null;
   if (!['IN_PLAY', 'PAUSED', 'FINISHED'].includes(match.status)) return null;
 
+  // For FINISHED matches the score object is authoritative.
+  // If reported total is 0 but events exist, the events are stale/erroneous — suppress.
+  if (match.status === 'FINISHED') {
+    const reported = (match.score.fullTime.home ?? 0) + (match.score.fullTime.away ?? 0);
+    if (reported === 0) return null;
+  }
+
   const homeGoals = goals.filter((g) => g.team?.id === match.homeTeam.id);
   const awayGoals = goals.filter((g) => g.team?.id !== match.homeTeam.id);
 
