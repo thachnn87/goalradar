@@ -162,6 +162,9 @@ export default function MatchLiveZone({ matchId, initialStatus, initialEffective
           {!isReliableScore && effectiveScore === null && (
             <p className="text-xs text-gray-500 mt-2">Awaiting official score</p>
           )}
+          {!isReliableScore && effectiveScore !== null && (
+            <p className="text-xs text-gray-500 mt-2">Score from goal events · official pending</p>
+          )}
         </>
       ) : (
         <div className="text-3xl font-bold text-gray-600">vs</div>

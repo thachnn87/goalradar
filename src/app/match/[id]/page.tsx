@@ -188,9 +188,13 @@ function minuteLabel(minute: number, injuryTime?: number | null) {
   return `${minute}${injuryTime ? `+${injuryTime}` : ''}'`;
 }
 
+function isOwnGoalType(type: string): boolean {
+  return type === 'OWN_GOAL' || type === 'Own Goal' || type === 'OWN';
+}
+
 function goalSuffix(type: string): string {
   if (type === 'PENALTY'  || type === 'Penalty')  return '(P)';
-  if (type === 'OWN_GOAL' || type === 'Own Goal') return '(OG)';
+  if (isOwnGoalType(type))                        return '(OG)';
   return '';
 }
 
@@ -212,8 +216,18 @@ function GoalScorers({ match, effectiveScore }: { match: MatchDetail; effectiveS
     if (total === 0) return null;
   }
 
-  const homeGoals = goals.filter((g) => g.team?.id === match.homeTeam.id);
-  const awayGoals = goals.filter((g) => g.team?.id !== match.homeTeam.id);
+  // OWN GOAL by home player → benefits away team (show in away col, mirror score logic)
+  // OWN GOAL by away player → benefits home team (show in home col)
+  const homeGoals = goals.filter((g) => {
+    const og = isOwnGoalType(g.type);
+    const isHome = g.team?.id === match.homeTeam.id;
+    return og ? !isHome : isHome;
+  });
+  const awayGoals = goals.filter((g) => {
+    const og = isOwnGoalType(g.type);
+    const isHome = g.team?.id === match.homeTeam.id;
+    return og ? isHome : !isHome;
+  });
 
   function ScorerRow({ g, reverse }: { g: Goal; reverse?: boolean }) {
     const suffix = goalSuffix(g.type);
@@ -302,7 +316,7 @@ function StatusPill({ status }: { status: MatchDetail['status'] }) {
 // Score hero
 // ---------------------------------------------------------------------------
 
-function ScoreHero({ match, effectiveScore, centerSlot }: { match: MatchDetail; effectiveScore: EffectiveScore | null; centerSlot?: React.ReactNode }) {
+function ScoreHero({ match, effectiveScore, isReliableScore = true, centerSlot }: { match: MatchDetail; effectiveScore: EffectiveScore | null; isReliableScore?: boolean; centerSlot?: React.ReactNode }) {
   const { score, homeTeam, awayTeam, status } = match;
   const showScore   = ['IN_PLAY', 'PAUSED', 'FINISHED'].includes(status);
   const isUpcoming  = ['SCHEDULED', 'TIMED'].includes(status);
@@ -392,6 +406,9 @@ function ScoreHero({ match, effectiveScore, centerSlot }: { match: MatchDetail; 
                     <p className="text-xs text-gray-500 mt-2">
                       HT {score.halfTime.home} – {score.halfTime.away}
                     </p>
+                  )}
+                  {!isReliableScore && effectiveScore !== null && (
+                    <p className="text-xs text-gray-500 mt-1">Score from goal events · official pending</p>
                   )}
                 </>
               ) : (
@@ -2311,11 +2328,12 @@ export default async function MatchDetailPage({ params }: Params) {
   // match is always non-null here (error guard above exits otherwise)
   // DATA-18WC.RUNTIME.TRUTH Phase 2: derive MatchRuntimeState once — all sub-components
   // read version, pageState, storyContext from this object, never re-derive.
-  const runtimeState   = deriveRuntimeState(snapshot);
-  const match          = runtimeState.match;
-  const pageState      = runtimeState.pageState;
-  const matchVersion   = runtimeState.version;
-  const effectiveScore = runtimeState.effectiveScore;
+  const runtimeState    = deriveRuntimeState(snapshot);
+  const match           = runtimeState.match;
+  const pageState       = runtimeState.pageState;
+  const matchVersion    = runtimeState.version;
+  const effectiveScore  = runtimeState.effectiveScore;
+  const isReliableScore = runtimeState.isReliableScore;
 
   // ── Data derived from snapshot (score hero, events, report) ─────────────
   const isWC     = match.competition?.code === 'WC';
@@ -2374,6 +2392,7 @@ export default async function MatchDetailPage({ params }: Params) {
           <ScoreHero
             match={match}
             effectiveScore={effectiveScore}
+            isReliableScore={isReliableScore}
             centerSlot={
               pageState === 'LIVE' ? (
                 <MatchLiveZone
