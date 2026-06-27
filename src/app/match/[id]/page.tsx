@@ -34,7 +34,7 @@ import type {
 } from '@/lib/types';
 import { buildStoryContext, buildStoryReport, buildStoryCards, type ReportSection } from '@/lib/match-story-engine';
 import { deriveMatchPageState, type MatchPageState } from '@/lib/match-page-state';
-import { deriveRuntimeState, versionFromTimestamp }  from '@/lib/match-runtime-state';
+import { deriveRuntimeState, versionFromTimestamp, resolveEffectiveScore, type EffectiveScore } from '@/lib/match-runtime-state';
 import StoryCardStrip from '@/components/StoryCardStrip';
 import MatchTimeline from '@/components/MatchTimeline';
 import RoadToFinal from '@/components/RoadToFinal';
@@ -75,8 +75,9 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     const isFinished  = match.status === 'FINISHED';
     const isCancelled = match.status === 'CANCELLED' || match.status === 'SUSPENDED';
     const isLive      = match.status === 'IN_PLAY' || match.status === 'PAUSED';
-    const ftH = match.score?.fullTime?.home;
-    const ftA = match.score?.fullTime?.away;
+    const es = resolveEffectiveScore(match);
+    const ftH = es?.home ?? null;
+    const ftA = es?.away ?? null;
     const hasScore = isFinished && !isCancelled && ftH != null && ftA != null;
 
     // Build a rich, status-aware title
@@ -194,16 +195,16 @@ function goalSuffix(type: string): string {
   return '';
 }
 
-function GoalScorers({ match }: { match: MatchDetail }) {
+function GoalScorers({ match, effectiveScore }: { match: MatchDetail; effectiveScore: EffectiveScore | null }) {
   const goals = [...(match.goals ?? [])].sort((a, b) => a.minute - b.minute);
   if (!goals.length) return null;
   if (!['IN_PLAY', 'PAUSED', 'FINISHED'].includes(match.status)) return null;
 
-  // For FINISHED matches the score object is authoritative.
-  // If reported total is 0 but events exist, the events are stale/erroneous — suppress.
+  // For FINISHED matches, effectiveScore is authoritative (already reconciled).
+  // If total is 0 but events exist, the events are stale/disallowed — suppress.
   if (match.status === 'FINISHED') {
-    const reported = (match.score.fullTime.home ?? 0) + (match.score.fullTime.away ?? 0);
-    if (reported === 0) return null;
+    const total = (effectiveScore?.home ?? 0) + (effectiveScore?.away ?? 0);
+    if (total === 0) return null;
   }
 
   const homeGoals = goals.filter((g) => g.team?.id === match.homeTeam.id);
@@ -296,7 +297,7 @@ function StatusPill({ status }: { status: MatchDetail['status'] }) {
 // Score hero
 // ---------------------------------------------------------------------------
 
-function ScoreHero({ match, centerSlot }: { match: MatchDetail; centerSlot?: React.ReactNode }) {
+function ScoreHero({ match, effectiveScore, centerSlot }: { match: MatchDetail; effectiveScore: EffectiveScore | null; centerSlot?: React.ReactNode }) {
   const { score, homeTeam, awayTeam, status } = match;
   const showScore   = ['IN_PLAY', 'PAUSED', 'FINISHED'].includes(status);
   const isUpcoming  = ['SCHEDULED', 'TIMED'].includes(status);
@@ -378,9 +379,9 @@ function ScoreHero({ match, centerSlot }: { match: MatchDetail; centerSlot?: Rea
               {showScore ? (
                 <>
                   <div className="text-4xl sm:text-5xl font-black text-white tabular-nums">
-                    {score.fullTime.home ?? 0}
+                    {effectiveScore?.home ?? '–'}
                     <span className="text-gray-600 mx-1">–</span>
-                    {score.fullTime.away ?? 0}
+                    {effectiveScore?.away ?? '–'}
                   </div>
                   {score.halfTime.home !== null && (
                     <p className="text-xs text-gray-500 mt-2">
@@ -438,7 +439,7 @@ function ScoreHero({ match, centerSlot }: { match: MatchDetail; centerSlot?: Rea
       )}
 
       {/* Goal scorers — compact above-fold summary */}
-      <GoalScorers match={match} />
+      <GoalScorers match={match} effectiveScore={effectiveScore} />
     </div>
   );
 }
@@ -447,25 +448,36 @@ function ScoreHero({ match, centerSlot }: { match: MatchDetail; centerSlot?: Rea
 // Match summary
 // ---------------------------------------------------------------------------
 
-function MatchSummary({ match }: { match: MatchDetail }) {
+function MatchSummary({ match, effectiveScore }: { match: MatchDetail; effectiveScore: EffectiveScore | null }) {
   const { score, homeTeam, awayTeam, status } = match;
 
+  // Derive winner from effectiveScore when score.winner is absent
   let winner = '';
   if (status === 'FINISHED') {
-    if (score.winner === 'HOME_TEAM')
+    if (score.winner === 'HOME_TEAM') {
       winner = homeTeam.shortName || homeTeam.name;
-    else if (score.winner === 'AWAY_TEAM')
+    } else if (score.winner === 'AWAY_TEAM') {
       winner = awayTeam.shortName || awayTeam.name;
-    else if (score.winner === 'DRAW')
+    } else if (score.winner === 'DRAW') {
       winner = 'Draw';
+    } else if (effectiveScore) {
+      // score.winner absent — derive from effectiveScore
+      if (effectiveScore.home > effectiveScore.away)
+        winner = homeTeam.shortName || homeTeam.name;
+      else if (effectiveScore.away > effectiveScore.home)
+        winner = awayTeam.shortName || awayTeam.name;
+      else
+        winner = 'Draw';
+    }
   }
+
+  const ftDisplay = effectiveScore
+    ? `${effectiveScore.home} – ${effectiveScore.away}`
+    : '–';
 
   const stats: { label: string; value: string }[] = [
     ...(winner ? [{ label: 'Winner', value: winner }] : []),
-    {
-      label: 'Full Time',
-      value: `${score.fullTime.home ?? '–'} – ${score.fullTime.away ?? '–'}`,
-    },
+    { label: 'Full Time', value: ftDisplay },
     ...(score.halfTime.home !== null
       ? [{ label: 'Half Time', value: `${score.halfTime.home} – ${score.halfTime.away}` }]
       : []),
@@ -1772,7 +1784,7 @@ function ProjectedContent({
 // JSON-LD
 // ---------------------------------------------------------------------------
 
-function JsonLd({ match }: { match: MatchDetail }) {
+function JsonLd({ match, effectiveScore }: { match: MatchDetail; effectiveScore: EffectiveScore | null }) {
   const isFinished  = match.status === 'FINISHED';
   const isLive      = match.status === 'IN_PLAY' || match.status === 'PAUSED';
   const isCancelled = match.status === 'CANCELLED' || match.status === 'SUSPENDED';
@@ -1794,8 +1806,8 @@ function JsonLd({ match }: { match: MatchDetail }) {
     ? 'https://schema.org/EventInProgress'
     : 'https://schema.org/EventScheduled';
 
-  const homeScore = match.score?.fullTime?.home;
-  const awayScore = match.score?.fullTime?.away;
+  const homeScore = effectiveScore?.home ?? null;
+  const awayScore = effectiveScore?.away ?? null;
   const hasScore  = isFinished && homeScore != null && awayScore != null;
 
   const compName     = match.competition?.name ?? 'Football';
@@ -1885,7 +1897,7 @@ function JsonLd({ match }: { match: MatchDetail }) {
 
 interface Faq { q: string; a: string }
 
-function buildFaqs(match: MatchDetail, h2h: HeadToHead | null): Faq[] {
+function buildFaqs(match: MatchDetail, h2h: HeadToHead | null, effectiveScore?: EffectiveScore | null): Faq[] {
   const home  = match.homeTeam.name  ?? 'Home';
   const away  = match.awayTeam.name  ?? 'Away';
   const homeS = match.homeTeam.shortName || home;
@@ -1902,8 +1914,8 @@ function buildFaqs(match: MatchDetail, h2h: HeadToHead | null): Faq[] {
   const isFinished = match.status === 'FINISHED';
   const isLive     = match.status === 'IN_PLAY' || match.status === 'PAUSED';
   const isUpcoming = !isFinished && !isLive;
-  const ftH = match.score?.fullTime?.home ?? 0;
-  const ftA = match.score?.fullTime?.away ?? 0;
+  const ftH = effectiveScore?.home ?? 0;
+  const ftA = effectiveScore?.away ?? 0;
   const md  = match.matchday ? `, Matchday ${match.matchday}` : '';
 
   const faqs: Faq[] = [];
@@ -2296,10 +2308,11 @@ export default async function MatchDetailPage({ params }: Params) {
   // match is always non-null here (error guard above exits otherwise)
   // DATA-18WC.RUNTIME.TRUTH Phase 2: derive MatchRuntimeState once — all sub-components
   // read version, pageState, storyContext from this object, never re-derive.
-  const runtimeState = deriveRuntimeState(snapshot);
-  const match        = runtimeState.match;
-  const pageState    = runtimeState.pageState;
-  const matchVersion = runtimeState.version;
+  const runtimeState   = deriveRuntimeState(snapshot);
+  const match          = runtimeState.match;
+  const pageState      = runtimeState.pageState;
+  const matchVersion   = runtimeState.version;
+  const effectiveScore = runtimeState.effectiveScore;
 
   // ── Data derived from snapshot (score hero, events, report) ─────────────
   const isWC     = match.competition?.code === 'WC';
@@ -2318,13 +2331,13 @@ export default async function MatchDetailPage({ params }: Params) {
 
   // FAQs built from match detail only (no H2H — that data is in deferred Suspense).
   // The H2H FAQ entry is excluded here; the H2H section itself streams in separately.
-  const faqs = buildFaqs(match, null);
+  const faqs = buildFaqs(match, null, effectiveScore);
 
   return (
     <>
       {/* PERF-8 Phase 4: click→content-visible telemetry beacon */}
       <MatchNavTelemetry matchId={numericId} />
-      <JsonLd match={match} />
+      <JsonLd match={match} effectiveScore={effectiveScore} />
       <MatchFaqJsonLd faqs={faqs} />
       <AnalyticsTracker event={{
         type:        'match_view',
@@ -2357,6 +2370,7 @@ export default async function MatchDetailPage({ params }: Params) {
         ) : (
           <ScoreHero
             match={match}
+            effectiveScore={effectiveScore}
             centerSlot={
               pageState === 'LIVE' ? (
                 <MatchLiveZone
@@ -2383,7 +2397,7 @@ export default async function MatchDetailPage({ params }: Params) {
             renders the hero block above flushes FIRST while this subtree is
             still rendering server-side. */}
         <Suspense fallback={<BelowFoldSkeleton />}>
-          <BelowTheFoldDeferred matchId={numericId} />
+          <BelowTheFoldDeferred matchId={numericId} effectiveScore={effectiveScore} />
         </Suspense>
       </div>
     </>
@@ -2417,7 +2431,7 @@ function BelowFoldSkeleton() {
   );
 }
 
-async function BelowTheFoldDeferred({ matchId }: { matchId: string }) {
+async function BelowTheFoldDeferred({ matchId, effectiveScore }: { matchId: string; effectiveScore: EffectiveScore | null }) {
   // Same memoised promise as the page body — never a second fetch.
   const snapshot = await getOrBuildMatchSnapshot(matchId);
   const match    = snapshot.match;
@@ -2469,7 +2483,7 @@ async function BelowTheFoldDeferred({ matchId }: { matchId: string }) {
     (match.bookings?.length ?? 0) > 0 ||
     (match.substitutions?.length ?? 0) > 0;
   const showStats = ['IN_PLAY', 'PAUSED', 'FINISHED'].includes(match.status);
-  const faqs = buildFaqs(match, null);
+  const faqs = buildFaqs(match, null, effectiveScore);
 
   // Story cards — pure derivation from match data, no I/O
   const storyCards = buildStoryCards(match);
@@ -2483,7 +2497,7 @@ async function BelowTheFoldDeferred({ matchId }: { matchId: string }) {
 
       <LazySection>
         {showStats && (
-          <MatchSummary match={match} />
+          <MatchSummary match={match} effectiveScore={effectiveScore} />
         )}
 
         {/* ── Match Timeline — unified chronological event spine ─────────── */}
