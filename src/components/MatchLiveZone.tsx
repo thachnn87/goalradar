@@ -153,9 +153,9 @@ export default function MatchLiveZone({ matchId, initialStatus, initialScore, in
       {showScore ? (
         <>
           <div className="text-4xl sm:text-5xl font-black text-white tabular-nums">
-            {score.fullTime.home ?? 0}
+            {score.fullTime.home ?? '–'}
             <span className="text-gray-600 mx-1">–</span>
-            {score.fullTime.away ?? 0}
+            {score.fullTime.away ?? '–'}
           </div>
           {score.halfTime.home !== null && (
             <p className="text-xs text-gray-500 mt-2">
