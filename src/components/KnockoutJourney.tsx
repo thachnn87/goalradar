@@ -17,6 +17,7 @@
 
 import Link from 'next/link';
 import type { Match } from '@/lib/types';
+import { deriveMatchDisplay } from '@/lib/match-display';
 import { matchPath } from '@/lib/url';
 import type { KnockoutStage } from '@/lib/knockout-vm';
 import { ALL_KNOCKOUT_STAGES } from '@/lib/knockout-vm';
@@ -47,24 +48,18 @@ const STAGE_FULL: Record<string, string> = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function isWinner(match: Match, teamId: number): boolean {
-  if (match.status !== 'FINISHED') return false;
-  if (match.score.winner === 'HOME_TEAM') return match.homeTeam?.id === teamId;
-  if (match.score.winner === 'AWAY_TEAM') return match.awayTeam?.id === teamId;
-  return false;
-}
-
 function opponent(match: Match, teamId: number): string {
   const opp = match.homeTeam?.id === teamId ? match.awayTeam : match.homeTeam;
   return opp?.shortName || opp?.name || 'TBD';
 }
 
 function scoreFor(match: Match, teamId: number): string {
+  const display = deriveMatchDisplay(match);
+  if (display.homeScore === null || display.awayScore === null) return '–';
   const isHome = match.homeTeam?.id === teamId;
-  const h = match.score.fullTime.home;
-  const a = match.score.fullTime.away;
-  if (h === null || a === null) return '–';
-  return isHome ? `${h}–${a}` : `${a}–${h}`;
+  return isHome
+    ? `${display.homeScore}–${display.awayScore}`
+    : `${display.awayScore}–${display.homeScore}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -85,9 +80,12 @@ function StageNode({
   const label = STAGE_LABELS[stage] ?? stage;
   const full  = STAGE_FULL[stage]  ?? stage;
 
-  const isFinished = match?.status === 'FINISHED';
-  const isLive     = match?.status === 'IN_PLAY' || match?.status === 'PAUSED';
-  const won        = match ? isWinner(match, teamId) : false;
+  const display    = match ? deriveMatchDisplay(match) : null;
+  const isFinished = display?.badgeStyle === 'finished';
+  const isLive     = display?.showLiveBadge ?? false;
+  const won        = match && display
+    ? (match.homeTeam?.id === teamId ? display.winner === 'home' : display.winner === 'away')
+    : false;
   const opp        = match ? opponent(match, teamId) : null;
   const score      = isFinished && match ? scoreFor(match, teamId) : null;
 

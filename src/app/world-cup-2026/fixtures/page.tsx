@@ -5,6 +5,8 @@ import { getWCAuthorityMatchesV2 } from '@/lib/api';
 import { enrichKnockoutSlots } from '@/lib/knockout-vm';
 import { classifyMatchState } from '@/lib/match-classify';
 import type { CanonicalMatch } from '@/lib/canonical-match';
+import { canonicalToMatch } from '@/lib/canonical-match';
+import { deriveMatchDisplay } from '@/lib/match-display';
 import { matchPath } from '@/lib/url';
 import Breadcrumb from '@/components/Breadcrumb';
 import MatchCard from '@/components/MatchCard';
@@ -120,23 +122,26 @@ function MatchDateList({
                       {m.homeTeam?.crest && <img src={m.homeTeam.crest} alt="" width={18} height={18} className="object-contain shrink-0" />}
                       <span className="text-gray-200 text-sm font-medium truncate text-right group-hover:text-white">{hn}</span>
                     </div>
-                    {classifyMatchState(m, today) === 'finished' ? (
-                      <div className="flex flex-col items-center shrink-0 gap-0">
-                        <span className="text-white font-bold text-sm font-mono leading-tight">
-                          {m.score.fullTime.home ?? '–'}&nbsp;–&nbsp;{m.score.fullTime.away ?? '–'}
-                        </span>
-                        <span className="text-gray-600 text-[10px] leading-tight">FT</span>
-                      </div>
-                    ) : classifyMatchState(m, today) === 'live' ? (
-                      <div className="flex flex-col items-center shrink-0 gap-0">
-                        <span className="text-red-400 font-bold text-sm font-mono leading-tight">
-                          {m.score.fullTime.home ?? '0'}&nbsp;–&nbsp;{m.score.fullTime.away ?? '0'}
-                        </span>
-                        <span className="text-red-500 text-[10px] leading-tight">LIVE</span>
-                      </div>
-                    ) : (
-                      <span className="text-gray-600 text-xs shrink-0 font-mono">vs</span>
-                    )}
+                    {(() => {
+                      const md = deriveMatchDisplay(canonicalToMatch(m));
+                      if (md.badgeStyle === 'finished') return (
+                        <div className="flex flex-col items-center shrink-0 gap-0">
+                          <span className="text-white font-bold text-sm font-mono leading-tight">
+                            {md.homeScore ?? '–'}&nbsp;–&nbsp;{md.awayScore ?? '–'}
+                          </span>
+                          <span className="text-gray-600 text-[10px] leading-tight">FT</span>
+                        </div>
+                      );
+                      if (md.showLiveBadge) return (
+                        <div className="flex flex-col items-center shrink-0 gap-0">
+                          <span className="text-red-400 font-bold text-sm font-mono leading-tight">
+                            {md.homeScore ?? '–'}&nbsp;–&nbsp;{md.awayScore ?? '–'}
+                          </span>
+                          <span className="text-red-500 text-[10px] leading-tight">LIVE</span>
+                        </div>
+                      );
+                      return <span className="text-gray-600 text-xs shrink-0 font-mono">vs</span>;
+                    })()}
                     <div className="flex items-center gap-1.5 flex-1 min-w-0">
                       <span className="text-gray-200 text-sm font-medium truncate group-hover:text-white">{an}</span>
                       {m.awayTeam?.crest && <img src={m.awayTeam.crest} alt="" width={18} height={18} className="object-contain shrink-0" />}

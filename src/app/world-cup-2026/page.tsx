@@ -11,6 +11,8 @@ import { getCurrentLiveMatches } from '@/lib/wc-live-ssot';
 import { classifyMatchState } from '@/lib/match-classify';
 import type { Match, StandingTable } from '@/lib/types';
 import type { CanonicalMatch } from '@/lib/canonical-match';
+import { canonicalToMatch } from '@/lib/canonical-match';
+import { deriveMatchDisplay } from '@/lib/match-display';
 import { matchPath } from '@/lib/url';
 import MatchCard from '@/components/MatchCard';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -221,7 +223,7 @@ function MatchGrid({ matches, maxDays = 99 }: { matches: CanonicalMatch[]; maxDa
 // ---------------------------------------------------------------------------
 
 function ResultRow({ match }: { match: CanonicalMatch }) {
-  const { score } = match;
+  const display = deriveMatchDisplay(canonicalToMatch(match));
   const hn = match.homeTeam?.shortName || match.homeTeam?.name || 'TBD';
   const an = match.awayTeam?.shortName || match.awayTeam?.name || 'TBD';
 
@@ -231,7 +233,7 @@ function ResultRow({ match }: { match: CanonicalMatch }) {
       className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-800/60 transition-colors"
     >
       {/* Date */}
-      <span className="text-xs text-gray-600 w-16 shrink-0">{formatResultDate(match.utcDate)}</span>
+      <span className="text-xs text-gray-600 w-16 shrink-0">{display.displayDate}</span>
 
       {/* Home crest + name */}
       <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
@@ -244,11 +246,11 @@ function ResultRow({ match }: { match: CanonicalMatch }) {
       {/* Score */}
       <div className="text-center shrink-0 w-16">
         <span className="text-white font-black tabular-nums text-sm">
-          {score.fullTime.home ?? '–'} – {score.fullTime.away ?? '–'}
+          {display.homeScore ?? '–'} – {display.awayScore ?? '–'}
         </span>
-        {score.winner === 'HOME_TEAM' || score.winner === 'AWAY_TEAM' || score.winner === 'DRAW' ? (
+        {display.winner !== null && (
           <p className="text-xs text-gray-600">FT</p>
-        ) : null}
+        )}
       </div>
 
       {/* Away crest + name */}

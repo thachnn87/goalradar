@@ -1,5 +1,6 @@
 import type { Match } from '@/lib/types';
 import type { CanonicalMatch } from '@/lib/canonical-match';
+import { deriveMatchDisplay, type MatchDisplay } from '@/lib/match-display';
 import { matchPath } from '@/lib/url';
 import LocalTime from '@/components/LocalTime';
 import MatchLink from '@/components/MatchLink';
@@ -15,14 +16,14 @@ export interface MatchCardProps {
   className?: string;
 }
 
-function effectiveStatus(m: MatchInput): Match['status'] {
-  if ('status' in m && m.status) return m.status as Match['status'];
-  if ('state' in m) {
-    if (m.state === 'live')      return 'IN_PLAY';
-    if (m.state === 'finished')  return 'FINISHED';
-    if (m.state === 'cancelled') return 'CANCELLED';
-  }
-  return 'SCHEDULED';
+/** Normalize MatchInput → Match for deriveMatchDisplay.
+ *  CanonicalMatch uses `state` instead of `status` — we coerce to the Match shape. */
+function toMatch(m: MatchInput): Match {
+  if ('status' in m && m.status) return m as Match;
+  // CanonicalMatch: map `state` → `status`
+  const stateMap = { live: 'IN_PLAY', finished: 'FINISHED', scheduled: 'SCHEDULED', cancelled: 'POSTPONED' } as const;
+  const state = (m as CanonicalMatch).state;
+  return { ...m, status: stateMap[state] ?? 'SCHEDULED' } as unknown as Match;
 }
 
 function effectiveCompName(m: MatchInput): string {
@@ -34,63 +35,44 @@ function effectiveCompName(m: MatchInput): string {
   return '';
 }
 
-function formatTime(utcDate: string) {
-  return new Date(utcDate).toLocaleTimeString('en-GB', {
-    hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
-  });
-}
-
-function formatDate(utcDate: string) {
-  return new Date(utcDate).toLocaleDateString('en-GB', {
-    day: 'numeric', month: 'short', timeZone: 'UTC',
-  });
-}
-
-function matchProgress(status: Match['status'], minute: number | null | undefined): string | null {
-  if (status === 'PAUSED') return 'Half Time';
-  if (status !== 'IN_PLAY' || minute == null) return null;
-  if (minute <= 45) return 'First Half';
-  if (minute <= 90) return 'Second Half';
+function matchProgressLabel(display: MatchDisplay): string | null {
+  if (display.clockLabel === 'HT') return 'Half Time';
+  if (!display.showLiveBadge || display.clockLabel == null) return null;
+  const min = parseInt(display.clockLabel, 10);
+  if (isNaN(min)) return null;
+  if (min <= 45) return 'First Half';
+  if (min <= 90) return 'Second Half';
   return 'Stoppage Time';
 }
 
-function StatusBadge({ status, duration, minute }: {
-  status: Match['status']; duration?: string; minute?: number | null;
-}) {
-  if (status === 'FINISHED') {
-    const suffix =
-      duration === 'PENALTY_SHOOTOUT' ? ' (P)'
-      : duration === 'EXTRA_TIME'     ? ' AET'
-      : '';
-    return (
-      <span className="text-xs font-bold px-2 py-0.5 rounded bg-gray-700 text-gray-400">
-        FT{suffix}
-      </span>
-    );
-  }
+function StatusBadge({ display }: { display: MatchDisplay }) {
+  const { badgeStyle, statusLabel } = display;
+  if (!badgeStyle) return null;
 
-  if (status === 'IN_PLAY') {
-    const label = minute != null ? `${minute}'` : 'LIVE';
+  if (badgeStyle === 'live') {
     return (
       <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30">
         <span className="relative flex h-1.5 w-1.5">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
           <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500" />
         </span>
-        {label}
+        {statusLabel}
       </span>
     );
   }
 
-  const statusMap: Partial<Record<Match['status'], { text: string; cls: string }>> = {
-    PAUSED:    { text: 'HT',   cls: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' },
-    POSTPONED: { text: 'PST',  cls: 'bg-orange-500/20 text-orange-400' },
-    CANCELLED: { text: 'CANC', cls: 'bg-gray-700 text-gray-500' },
-    SUSPENDED: { text: 'SUSP', cls: 'bg-orange-500/20 text-orange-400' },
+  const clsMap: Record<NonNullable<typeof badgeStyle>, string> = {
+    finished:  'bg-gray-700 text-gray-400',
+    paused:    'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
+    postponed: 'bg-orange-500/20 text-orange-400',
+    cancelled: 'bg-gray-700 text-gray-500',
+    suspended: 'bg-orange-500/20 text-orange-400',
   };
-  const cfg = statusMap[status];
-  if (!cfg) return null;
-  return <span className={`text-xs font-bold px-2 py-0.5 rounded ${cfg.cls}`}>{cfg.text}</span>;
+  return (
+    <span className={`text-xs font-bold px-2 py-0.5 rounded ${clsMap[badgeStyle]}`}>
+      {statusLabel}
+    </span>
+  );
 }
 
 function TeamRow({ crest, name, score, bold }: {
@@ -146,14 +128,10 @@ export default function MatchCard({
   theme = 'default',
   className = '',
 }: MatchCardProps) {
-  const { score } = match;
-  const status = effectiveStatus(match);
-  const compName = effectiveCompName(match);
-  const showScore = status === 'FINISHED' || status === 'IN_PLAY' || status === 'PAUSED';
-  const homeWins = score.winner === 'HOME_TEAM';
-  const awayWins = score.winner === 'AWAY_TEAM';
+  const display   = deriveMatchDisplay(toMatch(match));
+  const compName  = effectiveCompName(match);
   const isLinkable = Number.isFinite(match.id) && match.id > 0;
-  const isLive = status === 'IN_PLAY' || status === 'PAUSED';
+  const { showScore, showLiveBadge: isLive, winner } = display;
 
   // ──────────────────────────────────────────────────────────
   // bracket variant  (replaces BracketMatchCard in WCBracket)
@@ -163,8 +141,8 @@ export default function MatchCard({
     const isTbd = !match.homeTeam?.name && !match.awayTeam?.name;
     const hn = match.homeTeam?.shortName || match.homeTeam?.name || 'TBD';
     const an = match.awayTeam?.shortName || match.awayTeam?.name || 'TBD';
-    const hWins = score.winner === 'HOME_TEAM';
-    const aWins = score.winner === 'AWAY_TEAM';
+    const hWins = winner === 'home';
+    const aWins = winner === 'away';
 
     const bracketCls = [
       'flex flex-col justify-between rounded-lg border overflow-hidden h-[68px] w-full',
@@ -188,7 +166,7 @@ export default function MatchCard({
             </span>
           </div>
           <span className={`text-xs font-bold tabular-nums ml-1 ${hWins ? 'text-white' : 'text-gray-500'}`}>
-            {showScore ? (score.fullTime.home ?? '–') : '–'}
+            {showScore ? (display.homeScore ?? '–') : '–'}
           </span>
         </div>
 
@@ -197,8 +175,8 @@ export default function MatchCard({
           <span className="text-gray-500 text-xs px-1.5">
             {isLive
               ? <span className="text-red-400 font-bold">LIVE</span>
-              : status === 'FINISHED' ? 'FT'
-              : formatDate(match.utcDate)}
+              : display.badgeStyle === 'finished' ? 'FT'
+              : display.displayDate}
           </span>
           <div className="flex-1 h-px bg-gray-800" />
         </div>
@@ -213,7 +191,7 @@ export default function MatchCard({
             </span>
           </div>
           <span className={`text-xs font-bold tabular-nums ml-1 ${aWins ? 'text-white' : 'text-gray-500'}`}>
-            {showScore ? (score.fullTime.away ?? '–') : '–'}
+            {showScore ? (display.awayScore ?? '–') : '–'}
           </span>
         </div>
       </>
@@ -242,7 +220,7 @@ export default function MatchCard({
 
     const resultInner = (
       <div className={`flex items-center gap-3 px-4 py-3 rounded-xl ${className}`}>
-        <span className="text-xs text-gray-500 w-16 shrink-0">{formatDate(match.utcDate)}</span>
+        <span className="text-xs text-gray-500 w-16 shrink-0">{display.displayDate}</span>
         <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
           <span className="text-white text-sm font-medium truncate text-right">{hn}</span>
           {match.homeTeam?.crest && (
@@ -251,9 +229,9 @@ export default function MatchCard({
         </div>
         <div className="text-center shrink-0 w-16">
           <span className="text-white font-black tabular-nums text-sm">
-            {score.fullTime.home ?? '–'} – {score.fullTime.away ?? '–'}
+            {display.homeScore ?? '–'} – {display.awayScore ?? '–'}
           </span>
-          {(score.winner === 'HOME_TEAM' || score.winner === 'AWAY_TEAM' || score.winner === 'DRAW') && (
+          {winner !== null && (
             <p className="text-xs text-gray-500">FT</p>
           )}
         </div>
@@ -298,30 +276,30 @@ export default function MatchCard({
         <div className="flex items-center gap-2 shrink-0">
           {!showScore && (
             <div className="flex flex-col items-end gap-0.5">
-              <span className="text-xs text-gray-400">{formatTime(match.utcDate)} UTC</span>
+              <span className="text-xs text-gray-400">{display.displayTime} UTC</span>
               <LocalTime utcDate={match.utcDate} variant="badge" />
             </div>
           )}
-          <StatusBadge status={status} duration={score.duration} minute={match.minute} />
+          <StatusBadge display={display} />
         </div>
       </div>
       <div className="space-y-2">
         <TeamRow
           crest={match.homeTeam?.crest ?? ''}
           name={match.homeTeam?.shortName || match.homeTeam?.name || 'TBD'}
-          score={showScore ? score.fullTime.home : null}
-          bold={status === 'FINISHED' ? homeWins : true}
+          score={display.homeScore}
+          bold={display.badgeStyle === 'finished' ? winner === 'home' : true}
         />
         <TeamRow
           crest={match.awayTeam?.crest ?? ''}
           name={match.awayTeam?.shortName || match.awayTeam?.name || 'TBD'}
-          score={showScore ? score.fullTime.away : null}
-          bold={status === 'FINISHED' ? awayWins : true}
+          score={display.awayScore}
+          bold={display.badgeStyle === 'finished' ? winner === 'away' : true}
         />
       </div>
-      {matchProgress(status, match.minute) && (
+      {matchProgressLabel(display) && (
         <p className="text-xs text-gray-500 mt-2 text-right">
-          {matchProgress(status, match.minute)}
+          {matchProgressLabel(display)}
         </p>
       )}
     </div>
