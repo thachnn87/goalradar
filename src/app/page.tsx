@@ -13,6 +13,7 @@ import { buildKnockoutViewModel } from '@/lib/knockout-vm';
 // WC-LIVE-SSOT: single source of truth for live WC match state
 import { getCurrentLiveMatches } from '@/lib/wc-live-ssot';
 import type { Match, StandingTable } from '@/lib/types';
+import { deriveMatchDisplay } from '@/lib/match-display';
 import MatchCard from '@/components/MatchCard';
 import WCGroupTable from '@/components/WCGroupTable';
 import WCCountdown from '@/components/WCCountdown';
@@ -265,7 +266,7 @@ function BracketPreview({ matches }: { matches: Match[] }) {
           {previewMatches.map((m) => {
             const hn = m.homeTeam?.shortName || m.homeTeam?.name || 'TBD';
             const an = m.awayTeam?.shortName || m.awayTeam?.name || 'TBD';
-            const showScore = ['FINISHED','IN_PLAY','PAUSED'].includes(m.status);
+            const md = deriveMatchDisplay(m);
             const roundLabel = m.stage === 'SEMI_FINALS' ? 'SF'
               : m.stage === 'QUARTER_FINALS' ? 'QF'
               : m.stage === 'LAST_16' ? 'R16'
@@ -279,7 +280,7 @@ function BracketPreview({ matches }: { matches: Match[] }) {
                 <span className="text-gray-700 text-xs w-8 shrink-0 font-mono">{roundLabel}</span>
                 <span className="flex-1 text-gray-300 text-sm truncate">{hn}</span>
                 <span className="text-white font-bold tabular-nums text-sm shrink-0 mx-2">
-                  {showScore ? `${m.score.fullTime.home ?? '–'}–${m.score.fullTime.away ?? '–'}` : 'vs'}
+                  {md.showScore ? `${md.homeScore ?? '–'}–${md.awayScore ?? '–'}` : 'vs'}
                 </span>
                 <span className="flex-1 text-gray-300 text-sm truncate text-right">{an}</span>
               </Link>
@@ -312,15 +313,16 @@ function WCStats({ results, upcomingCount }: { results: Match[]; upcomingCount: 
   const played  = results.length;
   const total   = TOTAL_WC_MATCHES;
   const goals   = results.reduce(
-    (s, m) => s + (m.score.fullTime.home ?? 0) + (m.score.fullTime.away ?? 0), 0
+    (s, m) => { const d = deriveMatchDisplay(m); return s + (d.homeScore ?? 0) + (d.awayScore ?? 0); }, 0
   );
   const gpm       = played > 0 ? (goals / played).toFixed(1) : '–';
-  const homeWins  = results.filter((m) => m.score.winner === 'HOME_TEAM').length;
-  const draws     = results.filter((m) => m.score.winner === 'DRAW').length;
-  const awayWins  = results.filter((m) => m.score.winner === 'AWAY_TEAM').length;
-  const cleanSheets = results.filter(
-    (m) => (m.score.fullTime.home ?? 1) === 0 || (m.score.fullTime.away ?? 1) === 0
-  ).length;
+  const homeWins  = results.filter((m) => deriveMatchDisplay(m).winner === 'home').length;
+  const draws     = results.filter((m) => deriveMatchDisplay(m).winner === 'draw').length;
+  const awayWins  = results.filter((m) => deriveMatchDisplay(m).winner === 'away').length;
+  const cleanSheets = results.filter((m) => {
+    const d = deriveMatchDisplay(m);
+    return d.homeScore === 0 || d.awayScore === 0;
+  }).length;
   const pct = Math.round((played / total) * 100);
 
   const statCards = [

@@ -6,7 +6,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getWCAuthorityMatchesV2 } from '@/lib/api';
 import { getLiveMatchIdSet } from '@/lib/wc-live-ssot';
-import type { CanonicalMatch } from '@/lib/canonical-match';
+import { canonicalToMatch, type CanonicalMatch } from '@/lib/canonical-match';
+import { deriveMatchDisplay } from '@/lib/match-display';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCPageNav from '@/components/WCPageNav';
@@ -32,50 +33,16 @@ export const metadata: Metadata = {
 };
 
 // ---------------------------------------------------------------------------
-// Unified render shape — satisfied by both CanonicalMatch and adapted Match
-// ---------------------------------------------------------------------------
-
-interface ResultsEntry {
-  id:        number;
-  homeTeam:  { name: string };
-  awayTeam:  { name: string };
-  score?:    { fullTime?: { home: number | null; away: number | null } | null };
-  state:     'live' | 'finished' | 'scheduled' | 'cancelled';
-  minute?:   number;
-  utcDate:   string;
-  /** Path variant tag for canary telemetry in logs */
-  _path:     'legacy' | 'authority';
-}
-
-// ---------------------------------------------------------------------------
-// Data adapter
-// ---------------------------------------------------------------------------
-
-function fromCanonical(m: CanonicalMatch): ResultsEntry {
-  return {
-    id:       m.id,
-    homeTeam: { name: m.homeTeam.name },
-    awayTeam: { name: m.awayTeam.name },
-    score:    m.score,
-    state:    m.state === 'cancelled' ? 'cancelled' : m.state,
-    minute:   m.minute,
-    utcDate:  m.utcDate,
-    _path:    'authority',
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Render helpers
 // ---------------------------------------------------------------------------
 
-function formatScore(e: ResultsEntry): string {
-  const home = e.score?.fullTime?.home ?? null;
-  const away = e.score?.fullTime?.away ?? null;
-  if (home === null || away === null) return 'vs';
-  return `${home} – ${away}`;
+function formatScore(e: CanonicalMatch): string {
+  const d = deriveMatchDisplay(canonicalToMatch(e));
+  if (d.homeScore === null || d.awayScore === null) return 'vs';
+  return `${d.homeScore} – ${d.awayScore}`;
 }
 
-function statusBadge(e: ResultsEntry): { label: string; cls: string } {
+function statusBadge(e: CanonicalMatch): { label: string; cls: string } {
   if (e.state === 'live')
     return {
       label: e.minute != null ? `${e.minute}'` : 'LIVE',
@@ -101,13 +68,13 @@ export default async function WC2026ResultsPage() {
   // DATA-18B.3E: live is decided ONLY by the live SSOT (liveMatchIds), never by
   // authority `state`. A match the authority cache still marks 'live' but that
   // the SSOT no longer lists has ended → render as finished.
-  const entries: ResultsEntry[] = matches.map(fromCanonical).map((e) => ({
-    ...e,
-    state: (liveMatchIds.has(e.id)
+  const entries: CanonicalMatch[] = matches.map((m) => ({
+    ...m,
+    state: (liveMatchIds.has(m.id)
       ? 'live'
-      : e.state === 'live'
+      : m.state === 'live'
         ? 'finished'
-        : e.state) as ResultsEntry['state'],
+        : m.state) as CanonicalMatch['state'],
   }));
 
   const live     = entries.filter((e) => e.state === 'live');
@@ -118,11 +85,12 @@ export default async function WC2026ResultsPage() {
   // Statistics
   let totalGoals = 0, homeWins = 0, awayWins = 0, draws = 0;
   for (const e of finished) {
-    const h = e.score?.fullTime?.home ?? 0;
-    const a = e.score?.fullTime?.away ?? 0;
-    totalGoals += (h ?? 0) + (a ?? 0);
-    if ((h ?? 0) > (a ?? 0)) homeWins++;
-    else if ((a ?? 0) > (h ?? 0)) awayWins++;
+    const d = deriveMatchDisplay(canonicalToMatch(e));
+    const h = d.homeScore ?? 0;
+    const a = d.awayScore ?? 0;
+    totalGoals += h + a;
+    if (h > a) homeWins++;
+    else if (a > h) awayWins++;
     else draws++;
   }
   const played = finished.length + live.length;

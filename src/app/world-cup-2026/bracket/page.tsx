@@ -7,6 +7,7 @@ import AdSlot from '@/components/AdSlot';
 import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
 import type { Match } from '@/lib/types';
+import { deriveMatchDisplay } from '@/lib/match-display';
 import MatchCard, { MatchCardSkeleton } from '@/components/MatchCard';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCBracket from '@/components/WCBracket';
@@ -190,13 +191,13 @@ function LocalKnockoutRound({ slots }: { slots: WCKnockoutSlot[] }) {
 // ---------------------------------------------------------------------------
 
 function ThirdPlaceCard({ match }: { match: Match }) {
-  const { score, status } = match;
-  const showScore = ['FINISHED', 'IN_PLAY', 'PAUSED'].includes(status);
-  const isLive = status === 'IN_PLAY' || status === 'PAUSED';
-  const hn = match.homeTeam?.shortName || match.homeTeam?.name || 'TBD';
-  const an = match.awayTeam?.shortName || match.awayTeam?.name || 'TBD';
-  const hWins = score.winner === 'HOME_TEAM';
-  const aWins = score.winner === 'AWAY_TEAM';
+  const d      = deriveMatchDisplay(match);
+  const { showScore, winner } = d;
+  const isLive = d.showLiveBadge;
+  const hn     = match.homeTeam?.shortName || match.homeTeam?.name || 'TBD';
+  const an     = match.awayTeam?.shortName || match.awayTeam?.name || 'TBD';
+  const hWins  = winner === 'home';
+  const aWins  = winner === 'away';
 
   return (
     <Link
@@ -228,7 +229,7 @@ function ThirdPlaceCard({ match }: { match: Match }) {
         <div className="text-center">
           {showScore ? (
             <span className="text-2xl font-black text-white tabular-nums">
-              {score.fullTime.home ?? '–'}–{score.fullTime.away ?? '–'}
+              {d.homeScore ?? '–'}–{d.awayScore ?? '–'}
             </span>
           ) : (
             <div>
@@ -236,7 +237,7 @@ function ThirdPlaceCard({ match }: { match: Match }) {
               <p className="text-gray-500 text-xs mt-1">{formatKickoff(match.utcDate)}</p>
             </div>
           )}
-          {status === 'FINISHED' && <p className="text-gray-500 text-xs mt-1">FT</p>}
+          {d.badgeStyle === 'finished' && <p className="text-gray-500 text-xs mt-1">FT</p>}
         </div>
         <div className="text-center">
           {match.awayTeam?.crest && (
@@ -254,13 +255,13 @@ function ThirdPlaceCard({ match }: { match: Match }) {
 // ---------------------------------------------------------------------------
 
 function FinalCard({ match }: { match: Match }) {
-  const { score, status } = match;
-  const showScore = ['FINISHED', 'IN_PLAY', 'PAUSED'].includes(status);
-  const isLive = status === 'IN_PLAY' || status === 'PAUSED';
-  const hn = match.homeTeam?.shortName || match.homeTeam?.name || 'TBD';
-  const an = match.awayTeam?.shortName || match.awayTeam?.name || 'TBD';
-  const hWins = score.winner === 'HOME_TEAM';
-  const aWins = score.winner === 'AWAY_TEAM';
+  const d      = deriveMatchDisplay(match);
+  const { showScore, winner } = d;
+  const isLive = d.showLiveBadge;
+  const hn     = match.homeTeam?.shortName || match.homeTeam?.name || 'TBD';
+  const an     = match.awayTeam?.shortName || match.awayTeam?.name || 'TBD';
+  const hWins  = winner === 'home';
+  const aWins  = winner === 'away';
 
   return (
     <Link
@@ -293,9 +294,9 @@ function FinalCard({ match }: { match: Match }) {
         <div className="text-center">
           {showScore ? (
             <div className="text-3xl font-black text-white tabular-nums">
-              {score.fullTime.home ?? '–'}
+              {d.homeScore ?? '–'}
               <span className="text-gray-600 mx-1">–</span>
-              {score.fullTime.away ?? '–'}
+              {d.awayScore ?? '–'}
             </div>
           ) : (
             <div>
@@ -303,7 +304,7 @@ function FinalCard({ match }: { match: Match }) {
               <p className="text-gray-500 text-xs mt-1">{formatKickoff(match.utcDate)}</p>
             </div>
           )}
-          {status === 'FINISHED' && <p className="text-gray-500 text-xs mt-1">FULL TIME</p>}
+          {d.badgeStyle === 'finished' && <p className="text-gray-500 text-xs mt-1">FULL TIME</p>}
         </div>
         <div className="text-center">
           {match.awayTeam?.crest && (
@@ -530,9 +531,8 @@ async function BracketContent() {
                   {matches.map((m) => {
                     const hn = m.homeTeam?.shortName || m.homeTeam?.name || 'TBD';
                     const an = m.awayTeam?.shortName || m.awayTeam?.name || 'TBD';
-                    const { score, status } = m;
-                    const showScore = ['FINISHED', 'IN_PLAY', 'PAUSED'].includes(status);
-                    const isLive = status === 'IN_PLAY' || status === 'PAUSED';
+                    const md      = deriveMatchDisplay(m);
+                    const isLive  = md.showLiveBadge;
                     return (
                       <Link
                         key={m.id}
@@ -543,7 +543,7 @@ async function BracketContent() {
                           {m.homeTeam?.crest && (
                             <img src={m.homeTeam.crest} alt="" width={18} height={18} className="object-contain shrink-0" />
                           )}
-                          <span className={`text-sm font-medium truncate ${score.winner === 'HOME_TEAM' ? 'text-white' : 'text-gray-300'}`}>
+                          <span className={`text-sm font-medium truncate ${md.winner === 'home' ? 'text-white' : 'text-gray-300'}`}>
                             {hn}
                           </span>
                         </div>
@@ -551,9 +551,9 @@ async function BracketContent() {
                         <div className="mx-4 text-center shrink-0">
                           {isLive ? (
                             <span className="text-red-400 text-xs font-bold">LIVE</span>
-                          ) : showScore ? (
+                          ) : md.showScore ? (
                             <span className="text-white font-black tabular-nums text-sm">
-                              {score.fullTime.home ?? '–'}–{score.fullTime.away ?? '–'}
+                              {md.homeScore ?? '–'}–{md.awayScore ?? '–'}
                             </span>
                           ) : (
                             <span className="text-gray-500 text-xs">{formatKickoff(m.utcDate)}</span>
@@ -561,7 +561,7 @@ async function BracketContent() {
                         </div>
 
                         <div className="flex items-center gap-3 flex-1 min-w-0 justify-end">
-                          <span className={`text-sm font-medium truncate text-right ${score.winner === 'AWAY_TEAM' ? 'text-white' : 'text-gray-300'}`}>
+                          <span className={`text-sm font-medium truncate text-right ${md.winner === 'away' ? 'text-white' : 'text-gray-300'}`}>
                             {an}
                           </span>
                           {m.awayTeam?.crest && (

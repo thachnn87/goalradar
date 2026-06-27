@@ -38,6 +38,7 @@ import {
 } from '@/lib/wc-qualification';
 import { COMPETITIONS } from '@/lib/types';
 import type { TeamDetail, Match, StandingEntry } from '@/lib/types';
+import { deriveMatchDisplay } from '@/lib/match-display';
 import { slugify, teamPath, matchPath, extractTeamId } from '@/lib/url';
 import Breadcrumb from '@/components/Breadcrumb';
 import AnalyticsTracker from '@/components/AnalyticsTracker';
@@ -84,9 +85,9 @@ function formatDate(utcDate: string, includeTime = false): string {
 function outcome(match: Match, teamId: number): 'W' | 'D' | 'L' | null {
   if (match.status !== 'FINISHED') return null;
   const isHome = match.homeTeam.id === teamId;
-  const winner = match.score.winner;
-  if (!winner || winner === 'DRAW') return 'D';
-  return winner === (isHome ? 'HOME_TEAM' : 'AWAY_TEAM') ? 'W' : 'L';
+  const w = deriveMatchDisplay(match).winner;
+  if (!w || w === 'draw') return 'D';
+  return w === (isHome ? 'home' : 'away') ? 'W' : 'L';
 }
 
 // ---------------------------------------------------------------------------
@@ -413,10 +414,9 @@ function RecentResultsCard({
           const isHome   = match.homeTeam.id === teamId;
           const opponent = isHome ? match.awayTeam : match.homeTeam;
           const res      = outcome(match, teamId);
-          const ftHome   = match.score.fullTime.home ?? 0;
-          const ftAway   = match.score.fullTime.away ?? 0;
-          const scored   = isHome ? ftHome : ftAway;
-          const conceded = isHome ? ftAway : ftHome;
+          const md       = deriveMatchDisplay(match);
+          const scored   = isHome ? (md.homeScore ?? 0) : (md.awayScore ?? 0);
+          const conceded = isHome ? (md.awayScore ?? 0) : (md.homeScore ?? 0);
 
           return (
             <Link

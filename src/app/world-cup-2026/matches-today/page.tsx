@@ -10,7 +10,8 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { getWCAuthorityMatchesV2 } from '@/lib/api';
 import { getLiveMatchIdSet } from '@/lib/wc-live-ssot';
-import type { CanonicalMatch } from '@/lib/canonical-match';
+import { canonicalToMatch, type CanonicalMatch } from '@/lib/canonical-match';
+import { deriveMatchDisplay } from '@/lib/match-display';
 import { matchPath } from '@/lib/url';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -74,10 +75,10 @@ function StatusBadge({ state }: { state: CanonicalMatch['state'] }) {
 }
 
 function MatchRow({ match }: { match: CanonicalMatch }) {
-  const href      = matchPath(match.id, match.homeTeam.name, match.awayTeam.name);
-  const showScore = match.state === 'live' || match.state === 'finished';
-  const group     = match.group ? match.group.replace('GROUP_','Group ') : null;
-  const stage     = match.stage?.replace(/_/g,' ') ?? null;
+  const href  = matchPath(match.id, match.homeTeam.name, match.awayTeam.name);
+  const group = match.group ? match.group.replace('GROUP_','Group ') : null;
+  const stage = match.stage?.replace(/_/g,' ') ?? null;
+  const d     = deriveMatchDisplay(canonicalToMatch(match));
 
   return (
     <Link href={href}
@@ -94,8 +95,8 @@ function MatchRow({ match }: { match: CanonicalMatch }) {
         <p className="text-sm font-semibold text-white truncate group-hover:text-yellow-400 transition-colors">
           {match.homeTeam.shortName || match.homeTeam.name}
           {' '}
-          {showScore
-            ? <span className="text-white font-black">{match.score.fullTime.home ?? '–'}–{match.score.fullTime.away ?? '–'}</span>
+          {d.showScore
+            ? <span className="text-white font-black">{d.homeScore ?? '–'}–{d.awayScore ?? '–'}</span>
             : <span className="text-gray-500">vs</span>}
           {' '}
           {match.awayTeam.shortName || match.awayTeam.name}
@@ -112,40 +113,43 @@ function MatchRow({ match }: { match: CanonicalMatch }) {
 // ---------------------------------------------------------------------------
 
 function buildSportsEventSchemas(matches: CanonicalMatch[]) {
-  return matches.map((m) => ({
-    '@context': 'https://schema.org',
-    '@type':    'SportsEvent',
-    name:       `${m.homeTeam.name} vs ${m.awayTeam.name} – FIFA World Cup 2026`,
-    startDate:  m.utcDate,
-    url:        `${BASE_URL}${matchPath(m.id, m.homeTeam.name, m.awayTeam.name)}`,
-    sport:      'Soccer',
-    eventStatus: 'https://schema.org/EventScheduled',
-    location: {
-      '@type':  'StadiumOrArena',
-      name:     'FIFA World Cup 2026 Venue',
-      addressCountry: 'US',
-    },
-    organizer: {
-      '@type': 'SportsOrganization',
-      name:    'FIFA',
-      url:     'https://www.fifa.com',
-    },
-    competitor: [
-      {
-        '@type': 'SportsTeam',
-        name:    m.homeTeam.name,
-        ...(m.homeTeam.crest ? { image: m.homeTeam.crest } : {}),
+  return matches.map((m) => {
+    const md = deriveMatchDisplay(canonicalToMatch(m));
+    return {
+      '@context': 'https://schema.org',
+      '@type':    'SportsEvent',
+      name:       `${m.homeTeam.name} vs ${m.awayTeam.name} – FIFA World Cup 2026`,
+      startDate:  m.utcDate,
+      url:        `${BASE_URL}${matchPath(m.id, m.homeTeam.name, m.awayTeam.name)}`,
+      sport:      'Soccer',
+      eventStatus: 'https://schema.org/EventScheduled',
+      location: {
+        '@type':  'StadiumOrArena',
+        name:     'FIFA World Cup 2026 Venue',
+        addressCountry: 'US',
       },
-      {
-        '@type': 'SportsTeam',
-        name:    m.awayTeam.name,
-        ...(m.awayTeam.crest ? { image: m.awayTeam.crest } : {}),
+      organizer: {
+        '@type': 'SportsOrganization',
+        name:    'FIFA',
+        url:     'https://www.fifa.com',
       },
-    ],
-    ...(m.state === 'finished' && m.score.fullTime.home !== null ? {
-      description: `Final score: ${m.homeTeam.name} ${m.score.fullTime.home}–${m.score.fullTime.away} ${m.awayTeam.name}`,
-    } : {}),
-  }));
+      competitor: [
+        {
+          '@type': 'SportsTeam',
+          name:    m.homeTeam.name,
+          ...(m.homeTeam.crest ? { image: m.homeTeam.crest } : {}),
+        },
+        {
+          '@type': 'SportsTeam',
+          name:    m.awayTeam.name,
+          ...(m.awayTeam.crest ? { image: m.awayTeam.crest } : {}),
+        },
+      ],
+      ...(md.homeScore !== null ? {
+        description: `Final score: ${m.homeTeam.name} ${md.homeScore}–${md.awayScore} ${m.awayTeam.name}`,
+      } : {}),
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -190,6 +194,7 @@ function KickoffTimesSection({ matches }: { matches: CanonicalMatch[] }) {
               {matches.map((m) => {
                 const isFinished = m.state === 'finished';
                 const isLive     = m.state === 'live';
+                const md = deriveMatchDisplay(canonicalToMatch(m));
                 return (
                   <tr key={m.id} className="border-t border-gray-800 hover:bg-gray-800/30 transition-colors">
                     <td className="px-4 py-3">
@@ -200,7 +205,7 @@ function KickoffTimesSection({ matches }: { matches: CanonicalMatch[] }) {
                         {m.homeTeam.shortName || m.homeTeam.name}
                         {' '}
                         {isFinished
-                          ? <span className="font-black">{m.score.fullTime.home}–{m.score.fullTime.away}</span>
+                          ? <span className="font-black">{md.homeScore ?? '–'}–{md.awayScore ?? '–'}</span>
                           : isLive
                           ? <span className="text-red-400 font-bold animate-pulse">LIVE</span>
                           : <span className="text-gray-500">vs</span>}
