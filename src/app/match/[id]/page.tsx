@@ -32,7 +32,12 @@ import type {
   HeadToHead,
   Match,
 } from '@/lib/types';
-import { buildStoryContext, buildStoryReport, type ReportSection } from '@/lib/match-story-engine';
+import { buildStoryContext, buildStoryReport, buildStoryCards, type ReportSection } from '@/lib/match-story-engine';
+import { deriveMatchPageState, type MatchPageState } from '@/lib/match-page-state';
+import { deriveRuntimeState, versionFromTimestamp }  from '@/lib/match-runtime-state';
+import StoryCardStrip from '@/components/StoryCardStrip';
+import MatchTimeline from '@/components/MatchTimeline';
+import RoadToFinal from '@/components/RoadToFinal';
 
 export const revalidate = 60;
 
@@ -1478,28 +1483,9 @@ function WCBottomFunnel({
 // ---------------------------------------------------------------------------
 // Match Page State Machine — ONE VIEW MODEL → MANY STATES
 // ---------------------------------------------------------------------------
-// Each state maps to a distinct visual template. "Missing data" (PROJECTED) is
-// a valid state, not an error. Matches like Round of 32 with TBD teams always
-// render a useful page instead of an error card.
-
-type MatchPageState =
-  | 'PROJECTED'   // knockout, teams TBD (homeTeam.id === 0) — slot labels shown
-  | 'QUALIFIED'   // teams confirmed, >24h to kickoff
-  | 'PRE_MATCH'   // teams confirmed, ≤24h to kickoff
-  | 'LIVE'        // IN_PLAY or PAUSED
-  | 'FINISHED'    // match completed
-  | 'CANCELLED';  // CANCELLED | SUSPENDED | POSTPONED
-
-function deriveMatchPageState(match: MatchDetail): MatchPageState {
-  const { status, homeTeam, awayTeam, utcDate } = match;
-  if (status === 'IN_PLAY' || status === 'PAUSED')                         return 'LIVE';
-  if (status === 'FINISHED')                                                return 'FINISHED';
-  if (status === 'CANCELLED' || status === 'SUSPENDED' || status === 'POSTPONED') return 'CANCELLED';
-  // SCHEDULED / TIMED — TBD check: id === 0 means slot not yet resolved
-  if (!homeTeam?.id || homeTeam.id === 0 || !awayTeam?.id || awayTeam.id === 0) return 'PROJECTED';
-  const msToKO = new Date(utcDate).getTime() - Date.now();
-  return msToKO <= 24 * 60 * 60 * 1000 ? 'PRE_MATCH' : 'QUALIFIED';
-}
+// MatchPageState and deriveMatchPageState are imported from @/lib/match-page-state
+// (DATA-18WC.RUNTIME.TRUTH Phase 2 — moved to shared lib so MatchRuntimeState can import them).
+// The type alias below preserves local usages without renaming every call site.
 
 const STAGE_LABELS: Record<string, string> = {
   LAST_32:        'Round of 32',
@@ -2301,8 +2287,12 @@ export default async function MatchDetailPage({ params }: Params) {
   }
 
   // match is always non-null here (error guard above exits otherwise)
-  const match     = snapshot.match;
-  const pageState = deriveMatchPageState(match);
+  // DATA-18WC.RUNTIME.TRUTH Phase 2: derive MatchRuntimeState once — all sub-components
+  // read version, pageState, storyContext from this object, never re-derive.
+  const runtimeState = deriveRuntimeState(snapshot);
+  const match        = runtimeState.match;
+  const pageState    = runtimeState.pageState;
+  const matchVersion = runtimeState.version;
 
   // ── Data derived from snapshot (score hero, events, report) ─────────────
   const isWC     = match.competition?.code === 'WC';
@@ -2338,7 +2328,10 @@ export default async function MatchDetailPage({ params }: Params) {
         status:      match.status,
       }} />
 
-      <div className="max-w-2xl mx-auto space-y-4 pb-10">
+      {/* data-match-version: Phase 5 runtime version embedding.
+          Allows check-runtime-version.mjs to verify all components show the same version.
+          Value = Unix seconds derived from snapshot.generatedAt. */}
+      <div className="max-w-2xl mx-auto space-y-4 pb-10" data-match-version={matchVersion} data-match-id={match.id}>
         {/* Breadcrumb: Home > WC 2026 > Group A > Match */}
         <Breadcrumb items={buildBreadcrumb(match)} />
 
@@ -2364,6 +2357,7 @@ export default async function MatchDetailPage({ params }: Params) {
                   initialStatus={match.status}
                   initialScore={match.score}
                   initialMinute={match.minute ?? null}
+                  initialVersion={matchVersion}
                 />
               ) : undefined
             }
@@ -2470,16 +2464,30 @@ async function BelowTheFoldDeferred({ matchId }: { matchId: string }) {
   const showStats = ['IN_PLAY', 'PAUSED', 'FINISHED'].includes(match.status);
   const faqs = buildFaqs(match, null);
 
+  // Story cards — pure derivation from match data, no I/O
+  const storyCards = buildStoryCards(match);
+
   return (
     <>
+      {/* ── Story Cards — auto-generated narrative chips ───────────────────── */}
+      {storyCards.length > 0 && (
+        <StoryCardStrip cards={storyCards} />
+      )}
+
       <LazySection>
         {showStats && (
           <MatchSummary match={match} />
         )}
 
+        {/* ── Match Timeline — unified chronological event spine ─────────── */}
+        {hasEvents && <MatchTimeline match={match} />}
+
         {(pageState === 'QUALIFIED' || pageState === 'PRE_MATCH' || pageState === 'LIVE' || pageState === 'FINISHED') && (
           <MatchReport match={match} />
         )}
+
+        {/* ── Road to Final — WC knockout only ────────────────────────────── */}
+        {isWC && <RoadToFinal match={match} />}
 
         {/* ── Mid-content revenue funnel (WC only) ────────────────────────── */}
         {isWC && <WCMidFunnel />}

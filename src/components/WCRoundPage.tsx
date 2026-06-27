@@ -32,6 +32,8 @@ import MatchCard, { MatchCardSkeleton } from '@/components/MatchCard';
 import AdSlot from '@/components/AdSlot';
 import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
+import StoryCardStrip from '@/components/StoryCardStrip';
+import { buildRoundStoryCards } from '@/lib/match-story-engine';
 
 const BASE_URL = 'https://goalradar.org';
 
@@ -215,6 +217,12 @@ async function RoundContent({ slug }: { slug: string }) {
       </nav>
 
       <AdSlot slotId={`round-${round.slug}-top`} variant="banner" />
+
+      {/* Story cards — winner advances / eliminated / penalty drama */}
+      {(() => {
+        const cards = buildRoundStoryCards(matches, round.stage);
+        return cards.length > 0 ? <StoryCardStrip cards={cards} /> : null;
+      })()}
 
       {/* Intro */}
       <p className="text-gray-400 text-sm leading-relaxed max-w-3xl">{round.blurb}</p>

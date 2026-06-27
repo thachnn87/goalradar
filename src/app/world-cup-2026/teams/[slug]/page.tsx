@@ -28,6 +28,7 @@ import {
 } from '@/lib/wc-qualification';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
+import KnockoutJourney from '@/components/KnockoutJourney';
 import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
 import { matchPath } from '@/lib/url';
@@ -377,6 +378,20 @@ export default async function WCTeamPage({
 
   const groupSlug = standingGroupLabel ? `group-${standingGroupLabel.toLowerCase()}` : null;
 
+  // Knockout journey data — filter all team matches to knockout stages
+  const KNOCKOUT_STAGE_SET = new Set(['LAST_32', 'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL', 'THIRD_PLACE']);
+  const knockoutMatches = [...recent, ...upcoming].filter((m) => KNOCKOUT_STAGE_SET.has(m.stage ?? ''));
+  const teamId = standingEntry?.team?.id
+    ?? recent.find((m) => {
+        const n = normName(m.homeTeam?.name);
+        return n.includes(apiNorm) || n === dispNorm;
+      })?.homeTeam?.id
+    ?? recent.find((m) => {
+        const n = normName(m.awayTeam?.name);
+        return n.includes(apiNorm) || n === dispNorm;
+      })?.awayTeam?.id
+    ?? 0;
+
   const jsonLdTeam = {
     '@context': 'https://schema.org',
     '@type': 'SportsTeam',
@@ -558,6 +573,17 @@ export default async function WCTeamPage({
           standingEntry={standingEntry}
           recentMatches={recent}
         />
+
+        {/* Knockout journey — actual match results per stage */}
+        {teamId > 0 && (
+          <section className="mb-8">
+            <KnockoutJourney
+              matches={knockoutMatches}
+              teamId={teamId}
+              teamName={team.displayName}
+            />
+          </section>
+        )}
 
         {/* Recent form */}
         {recentForm.length > 0 && (

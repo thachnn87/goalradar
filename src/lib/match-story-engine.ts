@@ -10,7 +10,8 @@
  *   STANDARD    — league table / three points / campaign (only here)
  */
 
-import type { MatchDetail } from '@/lib/types';
+import type { MatchDetail, Match, StandingEntry } from '@/lib/types';
+import type { QualificationStatus } from '@/lib/wc-qualification';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -29,7 +30,7 @@ type MatchType = 'WC_KNOCKOUT' | 'WC_GROUP' | 'STANDARD';
 type MatchState = 'FINISHED' | 'LIVE' | 'UPCOMING' | 'CANCELLED';
 type Winner = 'HOME' | 'AWAY' | 'DRAW' | null;
 
-interface StoryContext {
+export interface StoryContext {
   home:             string;
   homeS:            string;
   away:             string;
@@ -272,7 +273,7 @@ function buildStandardReport(ctx: StoryContext): ReportSection[] {
   } else if (matchState === 'LIVE') {
     intro =
       `${home} are currently locked in a ${compFull} encounter against ${away}. ` +
-      `The match is live and the score stands at ${ftH}–${ftA}. ` +
+      `The match is live — follow the score above for real-time updates. ` +
       `Both sides are competing hard for a result that could prove significant in the context of their season.`;
   } else {
     intro =
@@ -365,7 +366,7 @@ function buildWCGroupReport(ctx: StoryContext): ReportSection[] {
   } else if (matchState === 'LIVE') {
     intro =
       `${home} and ${away} are currently locked in a${grp} encounter at the FIFA World Cup 2026. ` +
-      `The score stands at ${ftH}–${ftA} and the outcome will have major implications for the ${grpS} standings. ` +
+      `Follow the live score above — the outcome will have major implications for the ${grpS} standings. ` +
       `A win here could prove decisive in the race to qualify for the knockout rounds.`;
   } else {
     intro =
@@ -499,12 +500,12 @@ function buildWCKnockoutReport(ctx: StoryContext): ReportSection[] {
     if (isFinal) {
       intro =
         `${home} and ${away} are facing off in the FIFA World Cup 2026 Final, with the world watching. ` +
-        `The score stands at ${ftH}–${ftA} — one team is playing for the right to be called World Champion. ` +
+        `Follow the live score above — one team is playing for the right to be called World Champion. ` +
         `This is the biggest match in football.`;
     } else {
       intro =
         `${home} and ${away} are locked in a FIFA World Cup 2026 ${stageLabel}, with everything on the line. ` +
-        `The score stands at ${ftH}–${ftA} — the winner advances to the ${nextRound}, the loser is eliminated. ` +
+        `Follow the live score above — the winner advances to the ${nextRound}, the loser is eliminated. ` +
         `This is knockout football at its most intense.`;
     }
 
@@ -654,4 +655,262 @@ export function buildStoryReport(ctx: StoryContext): ReportSection[] {
     case 'WC_KNOCKOUT': return buildWCKnockoutReport(ctx);
     default:           return buildStandardReport(ctx);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Story Cards — DATA-18WC.EXPERIENCE.V2
+//
+// Rule engine: given a MatchDetail, return an array of StoryCard objects.
+// These are pure UI hints — no data fetching, no engine duplication.
+// Each card has a type (drives icon + colour), a headline, and a body.
+//
+// NEVER emit cards for WC knockout if they contain "three points", "table",
+// or "campaign" language. Use STAGE_LABELS and winner/loser framing only.
+// ---------------------------------------------------------------------------
+
+export type StoryCardType =
+  | 'WINNER_ADVANCES'
+  | 'LOSER_ELIMINATED'
+  | 'QUALIFIED'
+  | 'MUST_WIN'
+  | 'CAN_STILL_QUALIFY'
+  | 'HOST_NATION'
+  | 'FIRST_WC_MEETING'
+  | 'FINAL_COUNTDOWN'
+  | 'PENALTY_DRAMA'
+  | 'EXTRA_TIME';
+
+export interface StoryCard {
+  type:     StoryCardType;
+  icon:     string;
+  headline: string;
+  body:     string;
+}
+
+export function buildStoryCards(match: MatchDetail): StoryCard[] {
+  const cards: StoryCard[] = [];
+  const ctx = buildStoryContext(match);
+  const { home, homeS, away, awayS, matchType, stage, stageLabel, matchState, winner } = ctx;
+
+  const isWCKnockout = matchType === 'WC_KNOCKOUT';
+  const isWCGroup    = matchType === 'WC_GROUP';
+  const isFinished   = matchState === 'FINISHED';
+  const isLive       = matchState === 'LIVE';
+  const isUpcoming   = matchState === 'UPCOMING';
+
+  // ── WC Knockout cards ─────────────────────────────────────────────────────
+
+  if (isWCKnockout) {
+    if (isFinished && winner && winner !== 'DRAW') {
+      const adv = winner === 'HOME' ? homeS : awayS;
+      const eli = winner === 'HOME' ? awayS : homeS;
+      const nextLabel = STAGE_NEXT[stage] ?? 'next round';
+
+      cards.push({
+        type: 'WINNER_ADVANCES',
+        icon: '🏆',
+        headline: `${adv} advance`,
+        body: `${adv} are through to the ${nextLabel} of the FIFA World Cup 2026.`,
+      });
+
+      cards.push({
+        type: 'LOSER_ELIMINATED',
+        icon: '💔',
+        headline: `${eli} eliminated`,
+        body: `${eli}'s World Cup 2026 journey is over after this ${stageLabel} exit.`,
+      });
+    }
+
+    if (isFinished && match.score?.duration === 'PENALTY_SHOOTOUT') {
+      cards.push({
+        type: 'PENALTY_DRAMA',
+        icon: '🥅',
+        headline: 'Won on penalties',
+        body: `The ${stageLabel} went all the way to a penalty shootout — the most nerve-shredding finish in football.`,
+      });
+    } else if (isFinished && match.score?.duration === 'EXTRA_TIME') {
+      cards.push({
+        type: 'EXTRA_TIME',
+        icon: '⏱️',
+        headline: 'Decided in extra time',
+        body: `Ninety minutes couldn't separate these sides — a goal in extra time settled this World Cup ${stageLabel}.`,
+      });
+    }
+
+    if (isUpcoming && stage === 'FINAL') {
+      cards.push({
+        type: 'FINAL_COUNTDOWN',
+        icon: '🌍',
+        headline: 'World Cup Final',
+        body: `${home} vs ${away} — one match decides the FIFA World Cup 2026 champion.`,
+      });
+    }
+
+    if ((isUpcoming || isLive) && winner === null) {
+      const nextLabel = STAGE_NEXT[stage] ?? 'next round';
+      cards.push({
+        type: 'WINNER_ADVANCES',
+        icon: '⚡',
+        headline: 'Winner advances',
+        body: `The winner of this ${stageLabel} progresses to the ${nextLabel}. The loser exits the World Cup.`,
+      });
+    }
+  }
+
+  // ── WC Group cards ────────────────────────────────────────────────────────
+
+  if (isWCGroup) {
+    // Host nation card — check if either team is a WC host (USA, Canada, Mexico)
+    const HOST_NAMES = ['United States', 'USA', 'Canada', 'Mexico'];
+    const homeIsHost = HOST_NAMES.some((n) => home.includes(n));
+    const awayIsHost = HOST_NAMES.some((n) => away.includes(n));
+    if (homeIsHost || awayIsHost) {
+      const host = homeIsHost ? homeS : awayS;
+      cards.push({
+        type: 'HOST_NATION',
+        icon: '🏠',
+        headline: `${host} — Host Nation`,
+        body: `${host} are competing on home soil at FIFA World Cup 2026, hosted across the USA, Canada and Mexico.`,
+      });
+    }
+  }
+
+  return cards;
+}
+
+// ---------------------------------------------------------------------------
+// Group-level story cards — derived from standing entries + qual status
+// ---------------------------------------------------------------------------
+
+const HOST_NATIONS = new Set(['United States', 'USA', 'Canada', 'Mexico']);
+
+export function buildGroupStoryCards(
+  tableEntries: StandingEntry[],
+  qualMap:      Map<number, QualificationStatus>,
+): StoryCard[] {
+  const cards: StoryCard[] = [];
+
+  const sorted = [...tableEntries].sort((a, b) => a.position - b.position);
+
+  for (const entry of sorted) {
+    const name  = entry.team.shortName || entry.team.name;
+    const qual  = qualMap.get(entry.team.id);
+
+    if (qual === 'QUALIFIED') {
+      cards.push({
+        type:     'QUALIFIED',
+        icon:     '✅',
+        headline: `${name} qualified`,
+        body:     `${name} have secured their place in the knockout round of FIFA World Cup 2026.`,
+      });
+    }
+
+    if (qual === 'ELIMINATED') {
+      cards.push({
+        type:     'LOSER_ELIMINATED',
+        icon:     '💔',
+        headline: `${name} eliminated`,
+        body:     `${name} are out of FIFA World Cup 2026 and cannot advance to the knockout stage.`,
+      });
+    }
+
+    if (HOST_NATIONS.has(entry.team.name) || HOST_NATIONS.has(entry.team.shortName ?? '')) {
+      cards.push({
+        type:     'HOST_NATION',
+        icon:     '🏠',
+        headline: `${name} — Host Nation`,
+        body:     `${name} are playing on home soil at FIFA World Cup 2026, co-hosted across the USA, Canada and Mexico.`,
+      });
+    }
+  }
+
+  // Leader card — only once all teams have played at least 1 game and nobody is qualified yet
+  const allUndecided = sorted.every((e) => {
+    const q = qualMap.get(e.team.id);
+    return q === 'UNDECIDED' || q === 'THIRD_PLACE_CONTENDER';
+  });
+  const leader = sorted[0];
+  if (allUndecided && leader && leader.playedGames > 0) {
+    const leaderName = leader.team.shortName || leader.team.name;
+    cards.push({
+      type:     'MUST_WIN',
+      icon:     '📊',
+      headline: `${leaderName} lead the group`,
+      body:     `${leaderName} top the group on ${leader.points} point${leader.points !== 1 ? 's' : ''} with ${leader.playedGames} match${leader.playedGames !== 1 ? 'es' : ''} played.`,
+    });
+  }
+
+  return cards;
+}
+
+// ---------------------------------------------------------------------------
+// Round-level story cards — derived from Match[] (knockout round page)
+// ---------------------------------------------------------------------------
+
+export function buildRoundStoryCards(matches: Match[], stage: string): StoryCard[] {
+  const cards: StoryCard[] = [];
+
+  const stageLabel = STAGE_LABELS[stage] ?? 'match';
+  const nextLabel  = STAGE_NEXT[stage]   ?? 'next round';
+
+  for (const m of matches) {
+    if (m.status !== 'FINISHED') continue;
+
+    const winner =
+      m.score?.winner === 'HOME_TEAM' ? m.homeTeam
+      : m.score?.winner === 'AWAY_TEAM' ? m.awayTeam
+      : null;
+
+    const loser = winner
+      ? (m.score?.winner === 'HOME_TEAM' ? m.awayTeam : m.homeTeam)
+      : null;
+
+    if (winner) {
+      const advName = winner.shortName || winner.name;
+      cards.push({
+        type:     'WINNER_ADVANCES',
+        icon:     '🏆',
+        headline: `${advName} advance`,
+        body:     stage === 'FINAL'
+          ? `${advName} are FIFA World Cup 2026 champions.`
+          : `${advName} are through to the ${nextLabel}.`,
+      });
+    }
+
+    if (loser) {
+      const eliName = loser.shortName || loser.name;
+      cards.push({
+        type:     'LOSER_ELIMINATED',
+        icon:     '💔',
+        headline: `${eliName} eliminated`,
+        body:     `${eliName}'s World Cup 2026 campaign ends in the ${stageLabel}.`,
+      });
+    }
+
+    if (m.score?.duration === 'PENALTY_SHOOTOUT') {
+      const h = m.homeTeam?.shortName || m.homeTeam?.name || '?';
+      const a = m.awayTeam?.shortName || m.awayTeam?.name || '?';
+      cards.push({
+        type:     'PENALTY_DRAMA',
+        icon:     '🥅',
+        headline: 'Penalty drama',
+        body:     `${h} vs ${a} required a penalty shootout to separate these sides.`,
+      });
+    }
+  }
+
+  // Upcoming final card
+  const finalMatch = stage === 'FINAL' ? matches.find((m) => m.status !== 'FINISHED') : null;
+  if (finalMatch) {
+    const h = finalMatch.homeTeam?.shortName || finalMatch.homeTeam?.name || 'TBD';
+    const a = finalMatch.awayTeam?.shortName || finalMatch.awayTeam?.name || 'TBD';
+    cards.push({
+      type:     'FINAL_COUNTDOWN',
+      icon:     '🌍',
+      headline: 'World Cup Final',
+      body:     `${h} vs ${a} — the match that crowns the FIFA World Cup 2026 champion.`,
+    });
+  }
+
+  return cards;
 }

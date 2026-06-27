@@ -3,25 +3,29 @@
 // LIVE-1: Client-side live score poller for the match page hero.
 // Renders the status badge + score for IN_PLAY/PAUSED matches and polls
 // /api/live-score/[matchId] every 30s. Auto-stops on terminal status.
+// DATA-18WC.RUNTIME.TRUTH Phase 4: poll interval from runtime-clock.ts (ONE CLOCK).
+// DATA-18WC.RUNTIME.TRUTH Phase 5: tracks live version from API responses.
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Score, MatchStatus } from '@/lib/types';
+import { RUNTIME_POLL_INTERVAL } from '@/lib/runtime-clock';
 
-const POLL_INTERVAL = 30;
 const LIVE_STATUSES: MatchStatus[] = ['IN_PLAY', 'PAUSED'];
 const TERMINAL_STATUSES: MatchStatus[] = ['FINISHED', 'POSTPONED', 'CANCELLED', 'SUSPENDED'];
 
 interface LiveScoreResponse {
-  status: MatchStatus;
-  score: Score;
-  minute?: number | null;
+  status:      MatchStatus;
+  score:       Score;
+  minute?:     number | null;
+  lastUpdated?: string | null;
 }
 
 interface Props {
-  matchId: string;
-  initialStatus: MatchStatus;
-  initialScore: Score;
+  matchId:        string;
+  initialStatus:  MatchStatus;
+  initialScore:   Score;
   initialMinute?: number | null;
+  initialVersion?: number;
 }
 
 function matchProgress(status: MatchStatus, minute: number | null): string | null {
@@ -66,12 +70,13 @@ function StatusBadge({ status, minute }: { status: MatchStatus; minute: number |
   );
 }
 
-export default function MatchLiveZone({ matchId, initialStatus, initialScore, initialMinute }: Props) {
-  const [status, setStatus] = useState<MatchStatus>(initialStatus);
-  const [score, setScore] = useState<Score>(initialScore);
-  const [minute, setMinute] = useState<number | null>(initialMinute ?? null);
-  const [countdown, setCountdown] = useState(POLL_INTERVAL);
-  const [polling, setPolling] = useState(LIVE_STATUSES.includes(initialStatus));
+export default function MatchLiveZone({ matchId, initialStatus, initialScore, initialMinute, initialVersion }: Props) {
+  const [status, setStatus]   = useState<MatchStatus>(initialStatus);
+  const [score, setScore]     = useState<Score>(initialScore);
+  const [minute, setMinute]   = useState<number | null>(initialMinute ?? null);
+  const [liveVersion, setLiveVersion] = useState<number>(initialVersion ?? 0);
+  const [countdown, setCountdown]     = useState(RUNTIME_POLL_INTERVAL);
+  const [polling, setPolling]         = useState(LIVE_STATUSES.includes(initialStatus));
 
   const prevScore = useRef(initialScore);
 
@@ -94,6 +99,11 @@ export default function MatchLiveZone({ matchId, initialStatus, initialScore, in
         prevScore.current = data.score;
       }
       setMinute(data.minute ?? null);
+      // Phase 5: update live version from API response timestamp
+      if (data.lastUpdated) {
+        const v = Math.floor(new Date(data.lastUpdated).getTime() / 1000);
+        if (v > 0) setLiveVersion(v);
+      }
 
       // Phase 4: fire-and-forget telemetry beacon
       fetch('/api/telemetry/live', {
@@ -118,7 +128,7 @@ export default function MatchLiveZone({ matchId, initialStatus, initialScore, in
       setCountdown((prev) => {
         if (prev <= 1) {
           poll();
-          return POLL_INTERVAL;
+          return RUNTIME_POLL_INTERVAL;
         }
         return prev - 1;
       });
@@ -130,7 +140,9 @@ export default function MatchLiveZone({ matchId, initialStatus, initialScore, in
   const showScore = ['IN_PLAY', 'PAUSED', 'FINISHED'].includes(status);
 
   return (
-    <>
+    // data-live-version: Phase 5 — allows check-runtime-version.mjs to compare
+    // this client-side live version with the server-rendered data-match-version.
+    <div data-live-version={liveVersion || undefined}>
       <div className="flex flex-col items-center gap-1 mb-4">
         <StatusBadge status={status} minute={minute} />
         {matchProgress(status, minute) && (
@@ -161,6 +173,6 @@ export default function MatchLiveZone({ matchId, initialStatus, initialScore, in
           Refreshes in {countdown}s
         </div>
       )}
-    </>
+    </div>
   );
 }

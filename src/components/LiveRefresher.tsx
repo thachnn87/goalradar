@@ -1,20 +1,20 @@
 'use client';
 
+// DATA-18WC.RUNTIME.TRUTH Phase 4: interval from runtime-clock.ts (ONE CLOCK).
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-
-const INTERVAL = 30;
+import { RUNTIME_POLL_INTERVAL } from '@/lib/runtime-clock';
 
 export default function LiveRefresher() {
   const router = useRouter();
-  const [countdown, setCountdown] = useState(INTERVAL);
+  const [countdown, setCountdown] = useState(RUNTIME_POLL_INTERVAL);
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
           router.refresh();
-          return INTERVAL;
+          return RUNTIME_POLL_INTERVAL;
         }
         return prev - 1;
       });

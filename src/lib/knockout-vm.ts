@@ -159,6 +159,21 @@ export interface KnockoutViewModel {
  * Always call once per page render — React.cache() deduplicates within a
  * single render tree if multiple server components call this function.
  */
+
+// ---------------------------------------------------------------------------
+// Team knockout path — DATA-18WC.EXPERIENCE.V2
+//
+// Returns all knockout matches that involved a given team (by id), sorted
+// chronologically. Used by KnockoutJourney and RoadToFinal components.
+// Pure function over an existing KnockoutViewModel — no new fetches.
+// ---------------------------------------------------------------------------
+
+export function getTeamKnockoutPath(vm: KnockoutViewModel, teamId: number): Match[] {
+  return vm.matches
+    .filter((m) => m.homeTeam?.id === teamId || m.awayTeam?.id === teamId)
+    .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
+}
+
 export const buildKnockoutViewModel: () => Promise<KnockoutViewModel> = async () => {
   let raw: Match[] = [];
   try {

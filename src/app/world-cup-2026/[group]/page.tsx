@@ -19,6 +19,9 @@ import MatchCard from '@/components/MatchCard';
 import WCGroupTable from '@/components/WCGroupTable';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
+import StoryCardStrip from '@/components/StoryCardStrip';
+import QualSimulator from '@/components/QualSimulator';
+import { buildGroupStoryCards } from '@/lib/match-story-engine';
 
 export const revalidate = 3600;
 
@@ -798,6 +801,12 @@ export default async function WCGroupPage({ params }: Params) {
           )}
         </section>
 
+        {/* Story cards — qualification situation per team */}
+        {(() => {
+          const cards = buildGroupStoryCards(tableEntries, groupQualStatus);
+          return cards.length > 0 ? <StoryCardStrip cards={cards} /> : null;
+        })()}
+
         {/* 2. Qualification summary */}
         <section aria-labelledby="qual-heading">
           <h2 id="qual-heading" className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">
@@ -884,7 +893,15 @@ export default async function WCGroupPage({ params }: Params) {
           )}
         </section>
 
-        {/* 6. Qualification scenarios */}
+        {/* 6. Qualification simulator — interactive, client-side only */}
+        {liveGroupTable && upcoming.length > 0 && (
+          <QualSimulator
+            baseTable={liveGroupTable}
+            remainingMatches={upcoming}
+          />
+        )}
+
+        {/* 7. Qualification scenarios (static explainer) */}
         <QualificationScenarios
           label={label}
           letter={letter}
@@ -893,7 +910,7 @@ export default async function WCGroupPage({ params }: Params) {
           playedMatches={playedMatches}
         />
 
-        {/* 7. FAQ */}
+        {/* 8. FAQ */}
         <GroupFaqSection faqs={faqs} />
 
         {/* Adjacent group navigation */}

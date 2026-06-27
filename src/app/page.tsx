@@ -601,15 +601,10 @@ export default async function HomePage() {
     .filter((m) => m.utcDate.split('T')[0] > today)
     .slice(0, 6);
 
-  const liveStrays = wcAuthorityRaw.filter((m) => m.status === 'IN_PLAY' || m.status === 'PAUSED');
-
-  const dedupById = (arr: Match[]): Match[] => {
-    const seen = new Set<number>();
-    return arr.filter((m) => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
-  };
-
-  // Live: merge live cache with live strays (authority knows IN_PLAY; live cache may lag).
-  const wcLive: Match[] = dedupById([...wcLiveBase, ...liveStrays]);
+  // WC-LIVE-SSOT: live comes exclusively from the live-cache KV (30s TTL).
+  // Do NOT merge authority strays — authority is up to 5min stale, live-cache is 30s.
+  // Merging would cause Home to show more LIVE matches than /live (root cause: DATA-18WC.LIVE.TRUTH).
+  const wcLive: Match[] = wcLiveBase;
 
   // Results: FINISHED from authority set (already merged from recent feed — no separate call).
   const wcResults: Match[] = wcAuthorityRaw

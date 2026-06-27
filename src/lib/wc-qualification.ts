@@ -427,3 +427,58 @@ export function positionToStatus(
   if (position === 3) return 'THIRD_PLACE_CONTENDER';
   return playedGames >= GAMES_PER_TEAM ? 'ELIMINATED' : 'UNDECIDED';
 }
+
+// ---------------------------------------------------------------------------
+// Simulator helper — DATA-18WC.EXPERIENCE.V2
+//
+// Apply a hypothetical match result to a StandingTable and return a new
+// StandingTable with updated points/GD/GF for both teams.
+//
+// Pure function — does NOT mutate the input. Does NOT re-run the engine.
+// The caller re-runs calculateQualificationStatus() on the returned table
+// to get the updated qualification map.
+// ---------------------------------------------------------------------------
+
+export function applyScenarioResult(
+  table:     StandingTable,
+  homeId:    number,
+  awayId:    number,
+  homeGoals: number,
+  awayGoals: number,
+): StandingTable {
+  const delta = (id: number): Partial<StandingEntry> => {
+    const isHome = id === homeId;
+    const gf  = isHome ? homeGoals : awayGoals;
+    const ga  = isHome ? awayGoals : homeGoals;
+    const gd  = gf - ga;
+    const pts = gf > ga ? 3 : gf === ga ? 1 : 0;
+    return { playedGames: 1, goalsFor: gf, goalsAgainst: ga, goalDifference: gd, points: pts,
+             won: gf > ga ? 1 : 0, draw: gf === ga ? 1 : 0, lost: gf < ga ? 1 : 0 };
+  };
+
+  const newTable = table.table.map((e): StandingEntry => {
+    if (e.team.id !== homeId && e.team.id !== awayId) return e;
+    const d = delta(e.team.id);
+    return {
+      ...e,
+      playedGames:   e.playedGames   + (d.playedGames   ?? 0),
+      points:        e.points        + (d.points        ?? 0),
+      won:           e.won           + (d.won           ?? 0),
+      draw:          e.draw          + (d.draw          ?? 0),
+      lost:          e.lost          + (d.lost          ?? 0),
+      goalsFor:      e.goalsFor      + (d.goalsFor      ?? 0),
+      goalsAgainst:  e.goalsAgainst  + (d.goalsAgainst  ?? 0),
+      goalDifference: e.goalDifference + (d.goalDifference ?? 0),
+    };
+  });
+
+  // Re-sort by pts → GD → GF → team name (FIFA tiebreaker approximation)
+  const sorted = [...newTable].sort((a, b) => {
+    if (b.points          !== a.points)          return b.points          - a.points;
+    if (b.goalDifference  !== a.goalDifference)  return b.goalDifference  - a.goalDifference;
+    if (b.goalsFor        !== a.goalsFor)        return b.goalsFor        - a.goalsFor;
+    return a.team.name.localeCompare(b.team.name);
+  }).map((e, i) => ({ ...e, position: i + 1 }));
+
+  return { ...table, table: sorted };
+}

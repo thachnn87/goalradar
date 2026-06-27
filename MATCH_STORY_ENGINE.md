@@ -197,3 +197,26 @@ matchType:
   isWC && isKnockout   → 'WC_KNOCKOUT'
   else                 → 'STANDARD'
 ```
+
+---
+
+## DATA-18WC.MATCH.TRUTH — Phase 7 Audit: LIVE Score Claims
+
+**Finding**: All three templates embed `${ftH}–${ftA}` in their LIVE intro blocks.
+`ftH`/`ftA` come from `snapshot.match.score.fullTime.home/away` (ISR render time).
+`MatchLiveZone` polls every 30s and may show a newer score — creating a divergence.
+
+**Affected lines:**
+
+| Template | Location | Line | Claim |
+|----------|----------|------|-------|
+| STANDARD | `buildStoryReport` | ~276 | `"the score stands at ${ftH}–${ftA}"` |
+| WC_GROUP | `buildWCGroupStoryReport` | ~369 | `"The score stands at ${ftH}–${ftA}"` |
+| WC_KNOCKOUT (Final) | `buildWCKnockoutStoryReport` | ~503 | `"The score stands at ${ftH}–${ftA}"` |
+| WC_KNOCKOUT (other) | `buildWCKnockoutStoryReport` | ~508 | `"The score stands at ${ftH}–${ftA}"` |
+
+**Fix (Phase 8)**: Remove score phrases from LIVE branches. Replace with score-agnostic
+deference text: `"Follow the live score above for real-time updates."` This makes
+MatchLiveZone the sole owner of live score truth — the story provides context only.
+
+**Status**: Fixed in Phase 8 — see `src/lib/match-story-engine.ts`.
