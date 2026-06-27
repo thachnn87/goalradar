@@ -17,7 +17,7 @@
  * Rule: MatchRuntimeState owns version, pageState, storyContext for the render.
  */
 
-import type { MatchDetail, Match, HeadToHead } from '@/lib/types';
+import type { MatchDetail, Match, HeadToHead, Goal } from '@/lib/types';
 import type { MatchSnapshot }                   from '@/lib/match-snapshot';
 import { deriveMatchPageState, type MatchPageState } from '@/lib/match-page-state';
 import { buildStoryContext, type StoryContext }       from '@/lib/match-story-engine';
@@ -85,7 +85,7 @@ export interface MatchRuntimeState {
  *   2. Derived from goals[] (when score object is null/missing)
  *   3. null — no data available
  */
-export function resolveEffectiveScore(match: MatchDetail): EffectiveScore | null {
+export function resolveEffectiveScore(match: Match): EffectiveScore | null {
   const ft = match.score?.fullTime;
 
   // Primary: provider score object is populated
@@ -94,10 +94,12 @@ export function resolveEffectiveScore(match: MatchDetail): EffectiveScore | null
     return { home: ft.home, away: ft.away };
   }
 
-  // Fallback: derive from goal events when score object is null
-  if (match.goals?.length) {
+  // Fallback: derive from goal events when score object is null.
+  // goals[] only exists on MatchDetail — Match (live/KV) has no goals, so fallback is skipped.
+  const goals: Goal[] | undefined = (match as MatchDetail).goals;
+  if (goals?.length) {
     let home = 0, away = 0;
-    for (const g of match.goals) {
+    for (const g of goals) {
       const isOwnGoal = g.type === 'OWN_GOAL' || g.type === 'Own Goal' || g.type === 'OWN';
       const isHomeTeam = g.team?.id === match.homeTeam?.id;
       // Own goal credits the opponent; regular goal credits the scorer's team

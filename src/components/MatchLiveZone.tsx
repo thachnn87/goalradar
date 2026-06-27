@@ -7,25 +7,30 @@
 // DATA-18WC.RUNTIME.TRUTH Phase 5: tracks live version from API responses.
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Score, MatchStatus } from '@/lib/types';
+import type { MatchStatus } from '@/lib/types';
+import type { EffectiveScore } from '@/lib/match-runtime-state';
 import { RUNTIME_POLL_INTERVAL } from '@/lib/runtime-clock';
 
 const LIVE_STATUSES: MatchStatus[] = ['IN_PLAY', 'PAUSED'];
 const TERMINAL_STATUSES: MatchStatus[] = ['FINISHED', 'POSTPONED', 'CANCELLED', 'SUSPENDED'];
 
+// ONE DERIVATION: API layer resolves effectiveScore before it reaches this component.
+// This component never accesses score.fullTime, score.halfTime, goals[], or winner.
 interface LiveScoreResponse {
-  status:      MatchStatus;
-  score:       Score;
-  minute?:     number | null;
-  lastUpdated?: string | null;
+  status:          MatchStatus;
+  minute?:         number | null;
+  effectiveScore:  EffectiveScore | null;
+  isReliableScore: boolean;
+  version?:        number;
+  lastUpdated?:    string | null;
 }
 
 interface Props {
-  matchId:        string;
-  initialStatus:  MatchStatus;
-  initialScore:   Score;
-  initialMinute?: number | null;
-  initialVersion?: number;
+  matchId:               string;
+  initialStatus:         MatchStatus;
+  initialEffectiveScore: EffectiveScore | null;
+  initialMinute?:        number | null;
+  initialVersion?:       number;
 }
 
 function matchProgress(status: MatchStatus, minute: number | null): string | null {
@@ -70,15 +75,16 @@ function StatusBadge({ status, minute }: { status: MatchStatus; minute: number |
   );
 }
 
-export default function MatchLiveZone({ matchId, initialStatus, initialScore, initialMinute, initialVersion }: Props) {
-  const [status, setStatus]   = useState<MatchStatus>(initialStatus);
-  const [score, setScore]     = useState<Score>(initialScore);
-  const [minute, setMinute]   = useState<number | null>(initialMinute ?? null);
-  const [liveVersion, setLiveVersion] = useState<number>(initialVersion ?? 0);
-  const [countdown, setCountdown]     = useState(RUNTIME_POLL_INTERVAL);
-  const [polling, setPolling]         = useState(LIVE_STATUSES.includes(initialStatus));
+export default function MatchLiveZone({ matchId, initialStatus, initialEffectiveScore, initialMinute, initialVersion }: Props) {
+  const [status,          setStatus]          = useState<MatchStatus>(initialStatus);
+  const [effectiveScore,  setEffectiveScore]  = useState<EffectiveScore | null>(initialEffectiveScore);
+  const [isReliableScore, setIsReliableScore] = useState<boolean>(true);
+  const [minute,          setMinute]          = useState<number | null>(initialMinute ?? null);
+  const [liveVersion,     setLiveVersion]     = useState<number>(initialVersion ?? 0);
+  const [countdown,       setCountdown]       = useState(RUNTIME_POLL_INTERVAL);
+  const [polling,         setPolling]         = useState(LIVE_STATUSES.includes(initialStatus));
 
-  const prevScore = useRef(initialScore);
+  const prevEffectiveScore = useRef(initialEffectiveScore);
 
   const poll = useCallback(async () => {
     const t0 = performance.now();
@@ -88,31 +94,27 @@ export default function MatchLiveZone({ matchId, initialStatus, initialScore, in
       const data = (await res.json()) as LiveScoreResponse;
       const latencyMs = Math.round(performance.now() - t0);
 
-      const prev = prevScore.current;
+      const prev = prevEffectiveScore.current;
       const scoreChanged =
-        data.score?.fullTime?.home !== prev?.fullTime?.home ||
-        data.score?.fullTime?.away !== prev?.fullTime?.away;
+        data.effectiveScore?.home !== prev?.home ||
+        data.effectiveScore?.away !== prev?.away;
 
       setStatus(data.status);
-      if (data.score) {
-        setScore(data.score);
-        prevScore.current = data.score;
-      }
+      setEffectiveScore(data.effectiveScore);
+      setIsReliableScore(data.isReliableScore);
+      prevEffectiveScore.current = data.effectiveScore;
       setMinute(data.minute ?? null);
-      // Phase 5: update live version from API response timestamp
-      if (data.lastUpdated) {
-        const v = Math.floor(new Date(data.lastUpdated).getTime() / 1000);
-        if (v > 0) setLiveVersion(v);
-      }
+      // version is pre-computed by the API layer (same formula as server matchVersion)
+      if (data.version && data.version > 0) setLiveVersion(data.version);
 
-      // Phase 4: fire-and-forget telemetry beacon
+      // fire-and-forget telemetry beacon
       fetch('/api/telemetry/live', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ matchId, latencyMs, scoreChanged }),
       }).catch(() => {});
 
-      // Phase 3: auto-stop on terminal status
+      // auto-stop on terminal status
       if (TERMINAL_STATUSES.includes(data.status)) {
         setPolling(false);
       }
@@ -153,14 +155,12 @@ export default function MatchLiveZone({ matchId, initialStatus, initialScore, in
       {showScore ? (
         <>
           <div className="text-4xl sm:text-5xl font-black text-white tabular-nums">
-            {score.fullTime.home ?? '–'}
+            {effectiveScore?.home ?? '–'}
             <span className="text-gray-600 mx-1">–</span>
-            {score.fullTime.away ?? '–'}
+            {effectiveScore?.away ?? '–'}
           </div>
-          {score.halfTime.home !== null && (
-            <p className="text-xs text-gray-500 mt-2">
-              HT {score.halfTime.home} – {score.halfTime.away}
-            </p>
+          {!isReliableScore && effectiveScore === null && (
+            <p className="text-xs text-gray-500 mt-2">Awaiting official score</p>
           )}
         </>
       ) : (

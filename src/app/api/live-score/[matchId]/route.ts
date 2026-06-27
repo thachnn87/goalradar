@@ -1,29 +1,48 @@
 /**
  * GET /api/live-score/[matchId]
  *
- * LIVE-1 Phase 1: lightweight score endpoint for the match page client poller.
+ * ONE DERIVATION: resolveEffectiveScore() is called here (API layer), not in the UI.
+ * MatchLiveZone receives effectiveScore directly — it never touches score.fullTime.
  *
  * Source order:
  *   1. KV live cache direct (goalradar:live:matches) — bypasses L1, cross-instance consistent
  *   2. getLiveMatches() — fallback if KV expired; may trigger a fresh provider fetch
  *   3. Match snapshot (KV-backed, provider only on cold start)
  *
- * LIVE-1A fix: step 1 now reads KV directly via readKVLiveMatches(), bypassing the
- * in-process L1 cache. The L1 is per-instance and can lag up to 30s behind KV after
- * the KV is updated with a new goal — different Vercel instances can diverge. Reading
- * from KV directly guarantees this endpoint returns the same score as any other instance
- * that recently read from KV, eliminating the /live vs /match divergence.
+ * Response shape:
+ *   { matchId, status, minute, effectiveScore, isReliableScore, version, lastUpdated, source }
+ *
+ * isReliableScore = true when score.fullTime is provider-confirmed (not derived from goals[]).
+ * version = Unix-seconds derived from lastUpdated (same formula as server-rendered matchVersion).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { Match } from '@/lib/types';
 import { getLiveMatches } from '@/lib/api';
 import { readKVLiveMatches } from '@/lib/live-cache';
 import { getOrBuildMatchSnapshot } from '@/lib/match-snapshot';
+import { resolveEffectiveScore, versionFromTimestamp } from '@/lib/match-runtime-state';
 import { NotFoundError } from '@/lib/errors';
 
 export const dynamic = 'force-dynamic';
 
 type Params = { params: Promise<{ matchId: string }> };
+
+function buildResponse(match: Match, source: string) {
+  const effectiveScore  = resolveEffectiveScore(match);
+  const isReliableScore = match.score?.fullTime?.home != null && match.score?.fullTime?.away != null;
+  const version         = versionFromTimestamp(match.lastUpdated);
+  return {
+    matchId:        match.id,
+    status:         match.status,
+    minute:         match.minute ?? null,
+    effectiveScore,
+    isReliableScore,
+    version,
+    lastUpdated:    match.lastUpdated ?? null,
+    source,
+  };
+}
 
 export async function GET(_req: NextRequest, { params }: Params) {
   const { matchId } = await params;
@@ -39,14 +58,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     const kvMatches = await readKVLiveMatches();
     const liveMatch = kvMatches?.find((m) => m.id === numericId) ?? null;
     if (liveMatch) {
-      return NextResponse.json({
-        matchId: liveMatch.id,
-        status: liveMatch.status,
-        score: liveMatch.score,
-        minute: liveMatch.minute ?? null,
-        lastUpdated: liveMatch.lastUpdated ?? null,
-        source: 'kv-live',
-      });
+      return NextResponse.json(buildResponse(liveMatch, 'kv-live'));
     }
   } catch {
     // KV unavailable — fall through
@@ -58,14 +70,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     const { matches } = await getLiveMatches();
     const liveMatch = matches.find((m) => m.id === numericId);
     if (liveMatch) {
-      return NextResponse.json({
-        matchId: liveMatch.id,
-        status: liveMatch.status,
-        score: liveMatch.score,
-        minute: liveMatch.minute ?? null,
-        lastUpdated: liveMatch.lastUpdated ?? null,
-        source: 'live',
-      });
+      return NextResponse.json(buildResponse(liveMatch, 'live'));
     }
   } catch {
     // live cache error — fall through to snapshot
@@ -75,15 +80,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   // Covers FINISHED matches and the transition window from IN_PLAY → FINISHED.
   try {
     const snapshot = await getOrBuildMatchSnapshot(String(numericId));
-    const { match } = snapshot;
-    return NextResponse.json({
-      matchId: match.id,
-      status: match.status,
-      score: match.score,
-      minute: match.minute ?? null,
-      lastUpdated: match.lastUpdated ?? null,
-      source: 'snapshot',
-    });
+    return NextResponse.json(buildResponse(snapshot.match, 'snapshot'));
   } catch (err) {
     if (err instanceof NotFoundError) {
       return NextResponse.json({ error: 'match not found' }, { status: 404 });

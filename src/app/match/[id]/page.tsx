@@ -34,7 +34,7 @@ import type {
 } from '@/lib/types';
 import { buildStoryContext, buildStoryReport, buildStoryCards, type ReportSection } from '@/lib/match-story-engine';
 import { deriveMatchPageState, type MatchPageState } from '@/lib/match-page-state';
-import { deriveRuntimeState, versionFromTimestamp, resolveEffectiveScore, type EffectiveScore } from '@/lib/match-runtime-state';
+import { deriveRuntimeState, versionFromTimestamp, type EffectiveScore } from '@/lib/match-runtime-state';
 import StoryCardStrip from '@/components/StoryCardStrip';
 import MatchTimeline from '@/components/MatchTimeline';
 import RoadToFinal from '@/components/RoadToFinal';
@@ -65,7 +65,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     //   • Prewarm seeds goalradar:match:{id} → snapshot KV hit on first user.
     //   • Provider is NEVER called from this path on a warm cache.
     const snapshot = await getOrBuildMatchSnapshot(numericId);
-    const match = snapshot.match;
+    const { match, effectiveScore: es } = deriveRuntimeState(snapshot);
     const home  = match.homeTeam.name ?? 'TBD';
     const away  = match.awayTeam.name ?? 'TBD';
     const comp  = match.competition?.name ?? 'Football';
@@ -75,7 +75,6 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     const isFinished  = match.status === 'FINISHED';
     const isCancelled = match.status === 'CANCELLED' || match.status === 'SUSPENDED';
     const isLive      = match.status === 'IN_PLAY' || match.status === 'PAUSED';
-    const es = resolveEffectiveScore(match);
     const ftH = es?.home ?? null;
     const ftA = es?.away ?? null;
     const hasScore = isFinished && !isCancelled && ftH != null && ftA != null;
@@ -2376,7 +2375,7 @@ export default async function MatchDetailPage({ params }: Params) {
                 <MatchLiveZone
                   matchId={String(match.id)}
                   initialStatus={match.status}
-                  initialScore={match.score}
+                  initialEffectiveScore={effectiveScore}
                   initialMinute={match.minute ?? null}
                   initialVersion={matchVersion}
                 />
