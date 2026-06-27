@@ -228,7 +228,7 @@ function ThirdPlaceCard({ match }: { match: Match }) {
         <div className="text-center">
           {showScore ? (
             <span className="text-2xl font-black text-white tabular-nums">
-              {score.fullTime.home ?? 0}–{score.fullTime.away ?? 0}
+              {score.fullTime.home ?? '–'}–{score.fullTime.away ?? '–'}
             </span>
           ) : (
             <div>
@@ -293,9 +293,9 @@ function FinalCard({ match }: { match: Match }) {
         <div className="text-center">
           {showScore ? (
             <div className="text-3xl font-black text-white tabular-nums">
-              {score.fullTime.home ?? 0}
+              {score.fullTime.home ?? '–'}
               <span className="text-gray-600 mx-1">–</span>
-              {score.fullTime.away ?? 0}
+              {score.fullTime.away ?? '–'}
             </div>
           ) : (
             <div>
@@ -553,7 +553,7 @@ async function BracketContent() {
                             <span className="text-red-400 text-xs font-bold">LIVE</span>
                           ) : showScore ? (
                             <span className="text-white font-black tabular-nums text-sm">
-                              {score.fullTime.home ?? 0}–{score.fullTime.away ?? 0}
+                              {score.fullTime.home ?? '–'}–{score.fullTime.away ?? '–'}
                             </span>
                           ) : (
                             <span className="text-gray-500 text-xs">{formatKickoff(m.utcDate)}</span>

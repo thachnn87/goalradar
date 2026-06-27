@@ -61,8 +61,9 @@ function opponent(match: Match, teamId: number): string {
 
 function scoreFor(match: Match, teamId: number): string {
   const isHome = match.homeTeam?.id === teamId;
-  const h = match.score.fullTime.home ?? 0;
-  const a = match.score.fullTime.away ?? 0;
+  const h = match.score.fullTime.home;
+  const a = match.score.fullTime.away;
+  if (h === null || a === null) return '–';
   return isHome ? `${h}–${a}` : `${a}–${h}`;
 }
 

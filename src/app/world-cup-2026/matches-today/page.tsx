@@ -95,7 +95,7 @@ function MatchRow({ match }: { match: CanonicalMatch }) {
           {match.homeTeam.shortName || match.homeTeam.name}
           {' '}
           {showScore
-            ? <span className="text-white font-black">{match.score.fullTime.home ?? 0}–{match.score.fullTime.away ?? 0}</span>
+            ? <span className="text-white font-black">{match.score.fullTime.home ?? '–'}–{match.score.fullTime.away ?? '–'}</span>
             : <span className="text-gray-500">vs</span>}
           {' '}
           {match.awayTeam.shortName || match.awayTeam.name}

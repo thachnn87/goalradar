@@ -1,20 +1,24 @@
 /**
  * match-runtime-state.ts
  * DATA-18WC.RUNTIME.TRUTH — Phase 2: ONE MATCHSTATE
+ * DATA-18WC.RUNTIME UNIFICATION — ONE DERIVATION
  *
  * MatchRuntimeState is the single runtime object that every component reads from.
  * It wraps MatchSnapshot and adds runtime-derived fields:
- *   - version:      monotonic integer derived from snapshot.generatedAt
- *   - timestamp:    ISO string of when this state was derived
- *   - pageState:    pre-derived page render state (no per-component re-derivation)
- *   - storyContext: pre-derived story context (no per-call re-computation)
+ *   - version:        monotonic integer derived from snapshot.generatedAt
+ *   - pageState:      pre-derived page render state (no per-component re-derivation)
+ *   - storyContext:   pre-derived story context (no per-call re-computation)
+ *   - effectiveScore: resolved final score (provider → goals[] fallback → null)
+ *   - isReliableScore: true when score.fullTime is provider-confirmed
  *
  * Flow:
- *   MatchSnapshot → deriveRuntimeState() → MatchRuntimeState → components
+ *   MatchSnapshot → deriveRuntimeState() → MatchRuntimeState → components / API
  *
- * Rule: Every component reads from MatchRuntimeState.
- * Rule: No component calls deriveMatchPageState() or buildStoryContext() directly.
- * Rule: MatchRuntimeState owns version, pageState, storyContext for the render.
+ * ONE DERIVATION rule:
+ *   resolveEffectiveScore() is private — called only by deriveRuntimeState().
+ *   No component, route, or page may call it directly.
+ *   To derive score for a live match in the API layer: call deriveRuntimeState()
+ *   with a minimal snapshot, then read runtimeState.effectiveScore.
  */
 
 import type { MatchDetail, Match, HeadToHead, Goal } from '@/lib/types';
@@ -58,6 +62,11 @@ export interface MatchRuntimeState {
    *  null = score unavailable (pre-match, cancelled, or no data). */
   effectiveScore: EffectiveScore | null;
 
+  /** true when score.fullTime is provider-confirmed (not derived from goals[]).
+   *  false = score was inferred from goal events or is unavailable.
+   *  Consumers may show "Awaiting official score" when false and effectiveScore is null. */
+  isReliableScore: boolean;
+
   /** Related match data — passed through from MatchSnapshot */
   headToHead:     HeadToHead | null;
   standings:      MatchSnapshot['standings'];
@@ -69,40 +78,33 @@ export interface MatchRuntimeState {
 }
 
 // ---------------------------------------------------------------------------
-// Derivation
+// Private derivation — called only by deriveRuntimeState()
 // ---------------------------------------------------------------------------
 
 /**
  * Resolve the authoritative final score for a match.
- *
- * Provider score objects can lag or return null during/after live matches.
- * Goal events are often populated before the score object is updated.
- * This function reconciles both sources so every display consumer gets
- * ONE consistent score — never a null-masked 0.
+ * PRIVATE — not exported. Only deriveRuntimeState() may call this.
  *
  * Priority:
  *   1. score.fullTime from provider (both home + away non-null)
- *   2. Derived from goals[] (when score object is null/missing)
+ *   2. Derived from goals[] (MatchDetail only — Match/KV has no goals)
  *   3. null — no data available
  */
-export function resolveEffectiveScore(match: Match): EffectiveScore | null {
+function resolveEffectiveScore(match: Match): EffectiveScore | null {
   const ft = match.score?.fullTime;
 
-  // Primary: provider score object is populated
   if (ft?.home !== null && ft?.home !== undefined &&
       ft?.away !== null && ft?.away !== undefined) {
     return { home: ft.home, away: ft.away };
   }
 
-  // Fallback: derive from goal events when score object is null.
-  // goals[] only exists on MatchDetail — Match (live/KV) has no goals, so fallback is skipped.
+  // goals[] only exists on MatchDetail — Match (live/KV) has no goals
   const goals: Goal[] | undefined = (match as MatchDetail).goals;
   if (goals?.length) {
     let home = 0, away = 0;
     for (const g of goals) {
       const isOwnGoal = g.type === 'OWN_GOAL' || g.type === 'Own Goal' || g.type === 'OWN';
       const isHomeTeam = g.team?.id === match.homeTeam?.id;
-      // Own goal credits the opponent; regular goal credits the scorer's team
       if (isOwnGoal ? !isHomeTeam : isHomeTeam) home++;
       else away++;
     }
@@ -112,19 +114,32 @@ export function resolveEffectiveScore(match: Match): EffectiveScore | null {
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
 /**
  * Derive a MatchRuntimeState from a MatchSnapshot.
- * Call exactly ONCE per request, at the top of the page component.
- * Pass the result to all sub-components via props.
+ *
+ * This is the SINGLE entry point for all runtime data:
+ *   - resolveEffectiveScore() is called here and nowhere else.
+ *   - All derived fields (effectiveScore, isReliableScore, version, pageState,
+ *     storyContext) are computed once and passed via props to every consumer.
+ *
+ * Call exactly ONCE per request, at the top of the page component OR in the
+ * API route (wrapping a minimal snapshot).
  */
 export function deriveRuntimeState(snapshot: MatchSnapshot): MatchRuntimeState {
   const { match, headToHead, standings, wcGroupMatches, wcAllMatches, generatedAt } = snapshot;
 
-  const version      = Math.floor(generatedAt / 1000);
-  const timestamp    = generatedAt;
-  const pageState    = deriveMatchPageState(match);
-  const storyContext = buildStoryContext(match);
+  const version        = Math.floor(generatedAt / 1000);
+  const timestamp      = generatedAt;
+  const pageState      = deriveMatchPageState(match);
+  const storyContext   = buildStoryContext(match);
   const effectiveScore = resolveEffectiveScore(match);
+  const isReliableScore =
+    match.score?.fullTime?.home != null &&
+    match.score?.fullTime?.away != null;
 
   return {
     match,
@@ -133,6 +148,7 @@ export function deriveRuntimeState(snapshot: MatchSnapshot): MatchRuntimeState {
     pageState,
     storyContext,
     effectiveScore,
+    isReliableScore,
     headToHead,
     standings,
     wcGroupMatches: wcGroupMatches ?? null,
@@ -145,11 +161,6 @@ export function deriveRuntimeState(snapshot: MatchSnapshot): MatchRuntimeState {
 // Version utilities
 // ---------------------------------------------------------------------------
 
-/**
- * Derive a version number from an ISO timestamp string.
- * Used by both the server (snapshot.generatedAt) and the client
- * (/api/live-score response lastUpdated field).
- */
 export function versionFromTimestamp(isoStringOrMs: string | number | null | undefined): number {
   if (!isoStringOrMs) return 0;
   const ms = typeof isoStringOrMs === 'number' ? isoStringOrMs : new Date(isoStringOrMs).getTime();

@@ -279,7 +279,7 @@ function BracketPreview({ matches }: { matches: Match[] }) {
                 <span className="text-gray-700 text-xs w-8 shrink-0 font-mono">{roundLabel}</span>
                 <span className="flex-1 text-gray-300 text-sm truncate">{hn}</span>
                 <span className="text-white font-bold tabular-nums text-sm shrink-0 mx-2">
-                  {showScore ? `${m.score.fullTime.home ?? 0}–${m.score.fullTime.away ?? 0}` : 'vs'}
+                  {showScore ? `${m.score.fullTime.home ?? '–'}–${m.score.fullTime.away ?? '–'}` : 'vs'}
                 </span>
                 <span className="flex-1 text-gray-300 text-sm truncate text-right">{an}</span>
               </Link>

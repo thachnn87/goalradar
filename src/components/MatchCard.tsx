@@ -188,7 +188,7 @@ export default function MatchCard({
             </span>
           </div>
           <span className={`text-xs font-bold tabular-nums ml-1 ${hWins ? 'text-white' : 'text-gray-500'}`}>
-            {showScore ? (score.fullTime.home ?? 0) : '–'}
+            {showScore ? (score.fullTime.home ?? '–') : '–'}
           </span>
         </div>
 
@@ -213,7 +213,7 @@ export default function MatchCard({
             </span>
           </div>
           <span className={`text-xs font-bold tabular-nums ml-1 ${aWins ? 'text-white' : 'text-gray-500'}`}>
-            {showScore ? (score.fullTime.away ?? 0) : '–'}
+            {showScore ? (score.fullTime.away ?? '–') : '–'}
           </span>
         </div>
       </>

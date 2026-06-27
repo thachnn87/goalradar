@@ -194,6 +194,12 @@ function goalSuffix(type: string): string {
   return '';
 }
 
+function displayMatchScore(match: Match): string {
+  const h = match.score?.fullTime?.home;
+  const a = match.score?.fullTime?.away;
+  return h != null && a != null ? `${h} – ${a}` : '–';
+}
+
 function GoalScorers({ match, effectiveScore }: { match: MatchDetail; effectiveScore: EffectiveScore | null }) {
   const goals = [...(match.goals ?? [])].sort((a, b) => a.minute - b.minute);
   if (!goals.length) return null;
@@ -915,7 +921,7 @@ function HeadToHeadSection({
                     {m.homeTeam.shortName || m.homeTeam.name}
                     {' '}
                     <span className="text-white font-bold">
-                      {m.score.fullTime.home ?? '–'} – {m.score.fullTime.away ?? '–'}
+                      {displayMatchScore(m)}
                     </span>
                     {' '}
                     {m.awayTeam.shortName || m.awayTeam.name}
@@ -1260,9 +1266,7 @@ function NextPrevNav({
         </span>
         <span className="text-gray-300 text-xs truncate font-medium">{hn} vs {an}</span>
         <span className="text-gray-500 text-xs">
-          {showScore
-            ? `${m.score.fullTime.home ?? '–'} – ${m.score.fullTime.away ?? '–'} · FT`
-            : date}
+          {showScore ? `${displayMatchScore(m)} · FT` : date}
         </span>
       </Link>
     );
