@@ -5,12 +5,12 @@
  * Targets: "world cup 2026 stadiums", "world cup 2026 venues", "wc 2026 host cities"
  */
 
-import Link from 'next/link';
 import type { Metadata } from 'next';
-import { WC_VENUES, WC_VENUE_SLUGS } from '@/lib/wc-venues';
+import { WC_VENUES, WC_VENUE_SLUGS, getVenueFixtures } from '@/lib/wc-venues';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
+import WCVenueCard from '@/components/WCVenueCard';
 import AdSlot from '@/components/AdSlot';
 
 export const revalidate = 86400;
@@ -38,19 +38,20 @@ export const metadata: Metadata = {
 };
 
 // Group venues by country
-const COUNTRY_ORDER = ['USA', 'Mexico', 'Canada'];
+const COUNTRY_ORDER = ['United States', 'Mexico', 'Canada'];
 
 export default function VenuesHubPage() {
   const allVenues = WC_VENUE_SLUGS.map((s) => WC_VENUES[s]);
 
   const byCountry = COUNTRY_ORDER.map((country) => ({
     country,
+    label: country === 'United States' ? 'USA' : country,
     venues: allVenues.filter((v) => v.country === country),
   }));
 
   const totalCapacity = allVenues.reduce((sum, v) => sum + v.capacity, 0);
   const totalMatches = allVenues.reduce(
-    (sum, v) => sum + v.matchInfo.reduce((s, m) => s + m.matchCount, 0),
+    (sum, v) => sum + getVenueFixtures(v.slug).length,
     0,
   );
 
@@ -139,52 +140,20 @@ export default function VenuesHubPage() {
         <AdSlot slotId="venues-hub-top" variant="banner" />
 
         {/* Venue cards by country */}
-        {byCountry.map(({ country, venues }) => {
+        {byCountry.map(({ country, label, venues }) => {
           if (venues.length === 0) return null;
-          const flag = country === 'USA' ? '🇺🇸' : country === 'Mexico' ? '🇲🇽' : '🇨🇦';
+          const flag = country === 'United States' ? '🇺🇸' : country === 'Mexico' ? '🇲🇽' : '🇨🇦';
           return (
             <section key={country} className="mb-10">
               <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                 <span>{flag}</span>
-                <span>{country}</span>
+                <span>{label}</span>
                 <span className="text-gray-600 text-sm font-normal">({venues.length} venues)</span>
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {venues.map((v) => {
-                  const vMatches = v.matchInfo.reduce((s, m) => s + m.matchCount, 0);
-                  return (
-                    <Link
-                      key={v.slug}
-                      href={`/world-cup-2026/venues/${v.slug}`}
-                      className="group bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-yellow-700/40 rounded-2xl p-4 transition-all"
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <h3 className="text-white font-bold text-sm leading-tight group-hover:text-yellow-400 transition-colors">
-                          {v.name}
-                        </h3>
-                        <span className="shrink-0 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 text-xs font-bold px-2 py-0.5 rounded-full">
-                          {vMatches}M
-                        </span>
-                      </div>
-                      <p className="text-gray-500 text-xs mb-3">
-                        {v.city}, {v.stateOrRegion}
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        <span className="bg-white/5 text-gray-400 text-[10px] px-2 py-0.5 rounded-full border border-white/10">
-                          {v.capacity.toLocaleString()} cap.
-                        </span>
-                        <span className="bg-white/5 text-gray-400 text-[10px] px-2 py-0.5 rounded-full border border-white/10">
-                          {v.surfaceType}
-                        </span>
-                        {v.roofType === 'Retractable' || v.roofType === 'Fully covered' ? (
-                          <span className="bg-blue-500/10 text-blue-400 text-[10px] px-2 py-0.5 rounded-full border border-blue-500/20">
-                            Indoor-capable
-                          </span>
-                        ) : null}
-                      </div>
-                    </Link>
-                  );
-                })}
+                {venues.map((venue) => (
+                  <WCVenueCard key={venue.slug} venue={venue} />
+                ))}
               </div>
             </section>
           );

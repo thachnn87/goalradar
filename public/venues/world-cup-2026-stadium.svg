@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-labelledby="title desc">
+  <title id="title">World Cup 2026 stadium illustration</title>
+  <desc id="desc">Dark stadium bowl under floodlights with a green football pitch.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#101827"/>
+      <stop offset="0.58" stop-color="#172033"/>
+      <stop offset="1" stop-color="#07111f"/>
+    </linearGradient>
+    <linearGradient id="pitch" x1="0" x2="1">
+      <stop offset="0" stop-color="#126a42"/>
+      <stop offset="0.5" stop-color="#1b8a54"/>
+      <stop offset="1" stop-color="#126a42"/>
+    </linearGradient>
+    <radialGradient id="light" cx="50%" cy="0%" r="70%">
+      <stop offset="0" stop-color="#fde68a" stop-opacity="0.8"/>
+      <stop offset="0.45" stop-color="#facc15" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#facc15" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="675" fill="url(#sky)"/>
+  <ellipse cx="600" cy="250" rx="500" ry="190" fill="url(#light)"/>
+  <g fill="none" stroke="#facc15" stroke-linecap="round" opacity="0.42">
+    <path d="M162 116 308 350"/>
+    <path d="M1038 116 892 350"/>
+    <path d="M320 82 418 330"/>
+    <path d="M880 82 782 330"/>
+  </g>
+  <g fill="#e5e7eb">
+    <circle cx="162" cy="116" r="11"/>
+    <circle cx="320" cy="82" r="9"/>
+    <circle cx="880" cy="82" r="9"/>
+    <circle cx="1038" cy="116" r="11"/>
+  </g>
+  <path d="M130 382c87-130 252-206 470-206s383 76 470 206v130H130V382Z" fill="#111827"/>
+  <path d="M166 390c80-100 232-160 434-160s354 60 434 160" fill="none" stroke="#475569" stroke-width="18" stroke-linecap="round"/>
+  <path d="M190 430c77-78 220-124 410-124s333 46 410 124" fill="none" stroke="#334155" stroke-width="32" stroke-linecap="round"/>
+  <path d="M120 508h960v74H120z" fill="#0f172a"/>
+  <path d="M260 528c67-54 180-84 340-84s273 30 340 84v66H260v-66Z" fill="url(#pitch)"/>
+  <path d="M388 538h424M600 448v146" stroke="#d9f99d" stroke-width="4" opacity="0.65"/>
+  <circle cx="600" cy="538" r="48" fill="none" stroke="#d9f99d" stroke-width="4" opacity="0.65"/>
+  <g fill="#f8fafc" opacity="0.7">
+    <circle cx="236" cy="384" r="3"/>
+    <circle cx="288" cy="358" r="3"/>
+    <circle cx="348" cy="336" r="3"/>
+    <circle cx="852" cy="336" r="3"/>
+    <circle cx="912" cy="358" r="3"/>
+    <circle cx="964" cy="384" r="3"/>
+    <circle cx="452" cy="312" r="3"/>
+    <circle cx="748" cy="312" r="3"/>
+  </g>
+</svg>

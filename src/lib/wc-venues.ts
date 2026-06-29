@@ -5,6 +5,14 @@
  * Routes: /world-cup-2026/venues/[venue]
  */
 
+import {
+  STATIC_FIXTURES,
+  getTeamBySlug,
+  type StaticFixture,
+  type StaticGroupFixture,
+  type StaticKnockoutFixture,
+} from '@/data/worldcup/loader';
+
 export interface VenueTransport {
   mode: string;
   icon: string;
@@ -20,6 +28,17 @@ export interface VenueMatchInfo {
 export interface VenueFaq {
   q: string;
   a: string;
+}
+
+export interface VenueFixtureSummary {
+  id: string;
+  stage: string;
+  roundLabel: string;
+  date: string;
+  localTime: string;
+  homeLabel: string;
+  awayLabel: string;
+  venueCity: string;
 }
 
 export interface WCVenue {
@@ -1034,4 +1053,80 @@ export const WC_VENUE_SLUGS = Object.keys(WC_VENUES);
 
 export function getVenue(slug: string): WCVenue | null {
   return WC_VENUES[slug] ?? null;
+}
+
+function isGroupFixture(fixture: StaticFixture): fixture is StaticGroupFixture {
+  return fixture.stage === 'GROUP_STAGE';
+}
+
+function isKnockoutFixture(fixture: StaticFixture): fixture is StaticKnockoutFixture {
+  return fixture.stage !== 'GROUP_STAGE';
+}
+
+function roundLabelForFixture(fixture: StaticFixture): string {
+  if (isGroupFixture(fixture)) {
+    return `Group ${fixture.group}, Matchday ${fixture.matchday}`;
+  }
+
+  const labels: Record<string, string> = {
+    LAST_32: 'Round of 32',
+    LAST_16: 'Round of 16',
+    QUARTER_FINALS: 'Quarter-final',
+    SEMI_FINALS: 'Semi-final',
+    THIRD_PLACE: 'Third-place play-off',
+    FINAL: 'Final',
+  };
+
+  if (isKnockoutFixture(fixture)) {
+    return labels[fixture.stage] ?? fixture.stage.replaceAll('_', ' ');
+  }
+
+  return 'World Cup Match';
+}
+
+export function getVenueFixtures(slug: string): VenueFixtureSummary[] {
+  return STATIC_FIXTURES
+    .filter((fixture) => fixture.venue === slug)
+    .map((fixture) => {
+      let homeLabel: string;
+      let awayLabel: string;
+
+      if (isGroupFixture(fixture)) {
+        homeLabel = getTeamBySlug(fixture.homeTeam)?.name ?? fixture.homeTeam;
+        awayLabel = getTeamBySlug(fixture.awayTeam)?.name ?? fixture.awayTeam;
+      } else {
+        homeLabel = fixture.homeSlot;
+        awayLabel = fixture.awaySlot;
+      }
+
+      return {
+        id: fixture.id,
+        stage: fixture.stage,
+        roundLabel: roundLabelForFixture(fixture),
+        date: fixture.date,
+        localTime: fixture.localTime,
+        homeLabel,
+        awayLabel,
+        venueCity: fixture.venueCity,
+      };
+    })
+    .sort((a, b) => `${a.date}T${a.localTime}`.localeCompare(`${b.date}T${b.localTime}`));
+}
+
+export function getRelatedVenueSlugs(slug: string, limit = 4): string[] {
+  const venue = getVenue(slug);
+  if (!venue) return [];
+
+  const sameCountry = WC_VENUE_SLUGS.filter((candidate) => (
+    candidate !== slug && WC_VENUES[candidate].country === venue.country
+  ));
+  const remaining = WC_VENUE_SLUGS.filter((candidate) => (
+    candidate !== slug && WC_VENUES[candidate].country !== venue.country
+  ));
+
+  return [...sameCountry, ...remaining].slice(0, limit);
+}
+
+export function getVenueImageSrc(_slug: string): string {
+  return '/venues/world-cup-2026-stadium.svg';
 }

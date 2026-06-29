@@ -6,9 +6,16 @@
  */
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
-import { WC_VENUE_SLUGS, getVenue } from '@/lib/wc-venues';
+import {
+  WC_VENUE_SLUGS,
+  getRelatedVenueSlugs,
+  getVenue,
+  getVenueFixtures,
+  getVenueImageSrc,
+} from '@/lib/wc-venues';
 import type { VenueTransport, VenueMatchInfo } from '@/lib/wc-venues';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -54,7 +61,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
       <p className="text-gray-500 text-[10px] uppercase tracking-wider mb-1">{label}</p>
-      <p className="text-white font-bold text-sm leading-tight">{value}</p>
+      <p className="text-white font-bold text-sm leading-tight break-words">{value}</p>
     </div>
   );
 }
@@ -85,6 +92,15 @@ function MatchInfoRow({ info }: { info: VenueMatchInfo }) {
   );
 }
 
+function formatFixtureDate(date: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(`${date}T12:00:00Z`));
+}
+
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
@@ -99,7 +115,22 @@ export default async function VenuePage({
   if (!venue) notFound();
 
   const canonicalUrl = `${BASE_URL}/world-cup-2026/venues/${slug}`;
-  const totalMatches  = venue.matchInfo.reduce((sum, m) => sum + m.matchCount, 0);
+  const venueFixtures = getVenueFixtures(slug);
+  const totalMatches = venueFixtures.length || venue.matchInfo.reduce((sum, m) => sum + m.matchCount, 0);
+  const relatedVenueSlugs = getRelatedVenueSlugs(slug);
+  const visitorTips = [
+    `Use official match-day transport guidance for ${venue.city}; arrival windows and drop-off zones can change by fixture.`,
+    `${venue.nearestAirport} is the practical airport starting point for most visiting fans.`,
+    /open-air|no roof/i.test(venue.roofType)
+      ? 'Prepare for sun, heat or rain because this is primarily an open-air venue.'
+      : 'Covered or retractable-roof seating makes weather less disruptive, but security queues still happen outdoors.',
+    'Book refundable hotels early and confirm transit options again after FIFA publishes final match operations.',
+  ];
+  const interestingFacts = [
+    `${venue.name} opened in ${venue.openedYear} and will host ${totalMatches} World Cup 2026 matches.`,
+    `The venue capacity is listed at ${venue.capacity.toLocaleString()} for major events before FIFA match configuration.`,
+    venue.architecturalNote,
+  ];
 
   const jsonLdFaq = {
     '@context': 'https://schema.org',
@@ -136,11 +167,40 @@ export default async function VenuePage({
     maximumAttendeeCapacity: venue.capacity,
   };
 
+  const jsonLdEvents = {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: `World Cup 2026 matches at ${venue.name}`,
+    itemListElement: venueFixtures.map((fixture, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      item: {
+        '@type': 'SportsEvent',
+        name: `${fixture.homeLabel} vs ${fixture.awayLabel}`,
+        startDate: `${fixture.date}T${fixture.localTime}:00`,
+        eventStatus: 'https://schema.org/EventScheduled',
+        sport: 'Football (Soccer)',
+        url: `${canonicalUrl}#matches`,
+        location: {
+          '@type': 'SportsActivityLocation',
+          name: venue.name,
+          address: {
+            '@type': 'PostalAddress',
+            addressLocality: venue.city,
+            addressRegion: venue.stateOrRegion,
+            addressCountry: venue.country,
+          },
+        },
+      },
+    })),
+  };
+
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdFaq) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdBreadcrumb) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdSportsActivityLocation) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdEvents) }} />
 
       <div className="max-w-3xl mx-auto pb-16">
         <Breadcrumb items={[
@@ -154,6 +214,16 @@ export default async function VenuePage({
 
         {/* Hero */}
         <div className="mt-6 mb-8">
+          <div className="relative mb-5 aspect-[16/9] overflow-hidden rounded-xl border border-gray-800 bg-gray-950">
+            <Image
+              src={getVenueImageSrc(slug)}
+              alt={`${venue.name} FIFA World Cup 2026 venue`}
+              fill
+              priority
+              sizes="(min-width: 768px) 768px, 100vw"
+              className="object-cover"
+            />
+          </div>
           <div className="flex items-center gap-2 mb-3">
             <span className="text-yellow-400 text-xs font-semibold uppercase tracking-wider">
               {venue.countryFlag} World Cup 2026 Venue
@@ -195,6 +265,20 @@ export default async function VenuePage({
           <p className="text-gray-600 text-xs mt-3 italic">{venue.architecturalNote}</p>
         </section>
 
+        <section className="mb-8">
+          <h2 className="text-xl font-bold text-white mb-3">Venue History</h2>
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+            <p className="text-sm leading-relaxed text-gray-400">
+              {venue.architecturalNote}
+            </p>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <StatCard label="Opened" value={String(venue.openedYear)} />
+              <StatCard label="Home Team" value={venue.primaryTenant} />
+              <StatCard label="Surface" value={venue.surfaceType} />
+            </div>
+          </div>
+        </section>
+
         {/* Matches at this venue */}
         <section id="matches" className="mb-8">
           <h2 className="text-xl font-bold text-white mb-4">World Cup 2026 Matches at {venue.shortName}</h2>
@@ -207,7 +291,32 @@ export default async function VenuePage({
               {venue.matchInfo.map((info) => <MatchInfoRow key={info.round} info={info} />)}
             </div>
           </div>
-          <Link href="/schedule?competition=WC"
+          {venueFixtures.length > 0 ? (
+            <div className="mt-4 bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+              <div className="px-5 py-3 border-b border-gray-800">
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Fixture List</p>
+              </div>
+              <div className="divide-y divide-gray-800">
+                {venueFixtures.slice(0, 10).map((fixture) => (
+                  <div key={fixture.id} className="px-5 py-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-bold text-white">
+                        {fixture.homeLabel} vs {fixture.awayLabel}
+                      </p>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-gray-300">
+                        {fixture.roundLabel}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {formatFixtureDate(fixture.date)} at {fixture.localTime} local time
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <Link href="/world-cup-2026-schedule"
             className="inline-block mt-3 text-xs text-yellow-500 hover:text-yellow-300 transition-colors">
             View full fixture schedule →
           </Link>
@@ -256,6 +365,18 @@ export default async function VenuePage({
               </div>
             </div>
           </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+              <p className="mb-2 text-xs font-bold uppercase tracking-widest text-gray-500">Nearby Airports</p>
+              <p className="text-sm leading-relaxed text-gray-300">{venue.nearestAirport}</p>
+            </div>
+            <div className="rounded-xl border border-dashed border-gray-700 bg-gray-950 p-4">
+              <p className="mb-2 text-xs font-bold uppercase tracking-widest text-gray-500">Map Placeholder</p>
+              <p className="text-sm leading-relaxed text-gray-400">
+                Interactive map embed reserved for {venue.name}, {venue.city}. Static-first page keeps Core Web Vitals light until map data is needed.
+              </p>
+            </div>
+          </div>
         </section>
 
         {/* Getting there */}
@@ -263,6 +384,29 @@ export default async function VenuePage({
           <h2 className="text-xl font-bold text-white mb-4">Getting to {venue.shortName}</h2>
           <div className="space-y-3">
             {venue.transport.map((t) => <TransportCard key={t.mode} t={t} />)}
+          </div>
+        </section>
+
+        <section className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+            <h2 className="mb-3 text-lg font-bold text-white">Visitor Tips</h2>
+            <ul className="space-y-2">
+              {visitorTips.map((tip) => (
+                <li key={tip} className="text-sm leading-relaxed text-gray-400">
+                  {tip}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+            <h2 className="mb-3 text-lg font-bold text-white">Interesting Facts</h2>
+            <ul className="space-y-2">
+              {interestingFacts.map((fact) => (
+                <li key={fact} className="text-sm leading-relaxed text-gray-400">
+                  {fact}
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
 
@@ -304,11 +448,11 @@ export default async function VenuePage({
         {/* Ad: bottom */}
         <AdSlot slotId={`venue-${slug}-bottom`} variant="banner" />
 
-        {/* Other venues */}
+        {/* Related venues */}
         <section className="mb-8">
-          <h2 className="text-base font-bold text-white mb-3">Other World Cup 2026 Venues</h2>
+          <h2 className="text-base font-bold text-white mb-3">Related World Cup 2026 Venues</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {WC_VENUE_SLUGS.filter((s) => s !== slug).map((s) => {
+            {relatedVenueSlugs.map((s) => {
               const v = getVenue(s);
               if (!v) return null;
               return (
