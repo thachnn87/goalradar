@@ -45,6 +45,32 @@ const config: Config = {
           '0%':   { transform: 'translateY(100%)', opacity: '0' },
           '100%': { transform: 'translateY(0)',     opacity: '1' },
         },
+        'exp-rank-up': {
+          '0%':   { transform: 'translateY(12px)', opacity: '0' },
+          '60%':  { transform: 'translateY(-2px)' },
+          '100%': { transform: 'translateY(0)',    opacity: '1' },
+        },
+        'exp-rank-down': {
+          '0%':   { transform: 'translateY(-12px)', opacity: '0' },
+          '60%':  { transform: 'translateY(2px)' },
+          '100%': { transform: 'translateY(0)',     opacity: '1' },
+        },
+        'exp-story-in': {
+          '0%':   { opacity: '0', transform: 'translateY(6px) scale(0.98)' },
+          '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
+        },
+        'exp-momentum-in': {
+          '0%':   { opacity: '0', transform: 'translateX(-16px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
+        },
+        'exp-highlight-pulse': {
+          '0%, 100%': { boxShadow: '0 0 0 1px rgba(245,158,11,0.45)' },
+          '50%':      { boxShadow: '0 0 0 3px rgba(245,158,11,0.75), 0 0 20px rgba(245,158,11,0.2)' },
+        },
+        'exp-path-draw': {
+          '0%':   { strokeDashoffset: '100%' },
+          '100%': { strokeDashoffset: '0%' },
+        },
       },
       animation: {
         'wc-shimmer':   'shimmer 1.5s linear infinite',
@@ -52,6 +78,12 @@ const config: Config = {
         'wc-reveal':    'cardReveal 300ms ease-out forwards',
         'wc-connector': 'drawConnector 300ms ease-out forwards',
         'wc-slide-up':  'slideUp 200ms ease-out',
+        'exp-rank-up':         'exp-rank-up 350ms cubic-bezier(0.34,1.56,0.64,1) forwards',
+        'exp-rank-down':       'exp-rank-down 350ms cubic-bezier(0.34,1.56,0.64,1) forwards',
+        'exp-story-in':        'exp-story-in 300ms ease-out forwards',
+        'exp-momentum-in':     'exp-momentum-in 250ms ease-out forwards',
+        'exp-highlight-pulse': 'exp-highlight-pulse 1.5s ease-in-out infinite',
+        'exp-path-draw':       'exp-path-draw 400ms ease-out forwards',
       },
     },
   },
