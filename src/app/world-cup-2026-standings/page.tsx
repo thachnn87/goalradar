@@ -13,6 +13,7 @@ import { getStandingsCached } from '@/lib/api';
 import type { StandingTable, StandingEntry } from '@/lib/types';
 import {
   calculateQualificationStatus,
+  positionToStatus,
   QUAL_BADGE_STYLES,
   type TeamQualification,
 } from '@/lib/wc-qualification';
@@ -106,9 +107,12 @@ function GroupTable({
           <tbody>
             {table.map((row, i) => {
               const qual   = qualMap.get(row.team?.id ?? -1);
-              const style  = qual
-                ? QUAL_BADGE_STYLES[qual.qualificationStatus]
-                : QUAL_BADGE_STYLES[i < 2 ? 'QUALIFIED' : i === 2 ? 'THIRD_PLACE_CONTENDER' : 'UNDECIDED'];
+              // Same positionToStatus() fallback as WCGroupTable/[group] page —
+              // a team missing from the engine's qualMap (e.g. a static-skeleton
+              // id=0 row) must never show a position-only "Qualified" guess that
+              // ignores the actual math-safe/best-8 determination.
+              const status = qual?.qualificationStatus ?? positionToStatus(row.position || (i + 1), row.playedGames);
+              const style  = QUAL_BADGE_STYLES[status];
               return (
                 <tr key={row.team?.id ?? i}
                   className={`border-b border-white/5 last:border-0 border-l-2 ${style.borderColor} ${style.bgColor}`}>
@@ -123,11 +127,9 @@ function GroupTable({
                   </td>
                   <td className="pr-2 pl-2 py-2.5 text-white font-black text-center">{row.points}</td>
                   <td className="pr-4 pl-2 py-2.5 text-center hidden sm:table-cell">
-                    {qual && (
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${style.badgeClass}`}>
-                        {style.label}
-                      </span>
-                    )}
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${style.badgeClass}`}>
+                      {style.label}
+                    </span>
                   </td>
                 </tr>
               );

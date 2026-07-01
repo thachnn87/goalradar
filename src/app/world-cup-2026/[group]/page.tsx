@@ -11,6 +11,7 @@ import type { StandingEntry } from '@/lib/types';
 import type { CanonicalMatch } from '@/lib/canonical-match';
 import {
   calculateQualificationStatus,
+  positionToStatus,
   QUAL_BADGE_STYLES,
   type TeamQualification,
   type QualificationStatus,
@@ -207,9 +208,11 @@ function TeamCard({
   const slug     = wcTeamSlug(team.name);
   const href     = slug ? `/world-cup-2026/teams/${slug}` : `/teams/${team.id}`;
 
+  // Fallback mirrors WCGroupTable's (same wc-qualification.ts helper) so a team
+  // missing from the engine's qualMap (e.g. a static-skeleton id=0 entry) never
+  // shows a different status here than it does in the group standings table.
   const status: QualificationStatus =
-    qual?.qualificationStatus ??
-    (rank <= 2 ? 'UNDECIDED' : rank === 3 ? 'THIRD_PLACE_CONTENDER' : 'UNDECIDED');
+    qual?.qualificationStatus ?? positionToStatus(rank, entry.playedGames);
   const style = QUAL_BADGE_STYLES[status];
 
   return (
@@ -285,10 +288,12 @@ function QualificationSummary({
       {started && table.length > 0 && (
         <div className="space-y-1.5 pt-1">
           {table.map((entry, i) => {
-            const qual   = groupQuals.get(entry.team.id);
-            const status = qual?.qualificationStatus;
-            const style  = status ? QUAL_BADGE_STYLES[status] : null;
             const posNum = i + 1;
+            const qual   = groupQuals.get(entry.team.id);
+            // Same positionToStatus() fallback as WCGroupTable/TeamCard — never
+            // silently drop the badge when a team is missing from the qualMap.
+            const status = qual?.qualificationStatus ?? positionToStatus(posNum, entry.playedGames);
+            const style  = QUAL_BADGE_STYLES[status];
             const posColors = [
               'bg-green-500/20 text-green-400',
               'bg-green-500/20 text-green-400',

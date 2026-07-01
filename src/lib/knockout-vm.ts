@@ -115,6 +115,11 @@ export const BRACKET_TREE_STAGES = new Set<KnockoutStage>([
   'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL',
 ]);
 
+/** All 5 rounds the WCBracket component's own column layout expects (R32 → Final, no THIRD_PLACE). */
+export const FULL_BRACKET_TREE_STAGES = new Set<KnockoutStage>([
+  'LAST_32', 'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL',
+]);
+
 /** All knockout stages in chronological order. */
 export const ALL_KNOCKOUT_STAGES: KnockoutStage[] = [
   'LAST_32', 'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'THIRD_PLACE', 'FINAL',
@@ -137,6 +142,8 @@ export interface KnockoutViewModel {
   final: Match[];
   /** R16→Final matches for the WCBracket tree component (excludes R32 + THIRD_PLACE). */
   bracketMatches: Match[];
+  /** R32→Final matches for standalone WCBracket usage with no separate R32 list (excludes THIRD_PLACE). */
+  fullBracketMatches: Match[];
   /** true when the API returned at least one match; false when operating from static fallback. */
   hasApiData: boolean;
   /** Get enriched matches for any stage string. */
@@ -219,6 +226,7 @@ export const buildKnockoutViewModel: () => Promise<KnockoutViewModel> = async ()
     thirdPlace:     byStage('THIRD_PLACE'),
     final:          byStage('FINAL'),
     bracketMatches: matches.filter((m) => BRACKET_TREE_STAGES.has(m.stage as KnockoutStage)),
+    fullBracketMatches: matches.filter((m) => FULL_BRACKET_TREE_STAGES.has(m.stage as KnockoutStage)),
     hasApiData:     knockoutRaw.length > 0,
     byStage,
   };

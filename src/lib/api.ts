@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { Match, MatchDetail, HeadToHead, StandingTable, TeamDetail } from './types';
 import { withCache, TTL } from './cache';
 import { withKVCache, SWR, readKVOnly } from './kv-cache';
@@ -500,8 +501,14 @@ async function computeWCStandingsFromAuthority(builtAt: string): Promise<Standin
 /**
  * Page-safe standings.
  * Falls back to authority-derived standings, then static WC group tables for WC; empty for leagues.
+ *
+ * Wrapped with React.cache() below: within a single render, every caller that
+ * passes the same `competition` shares one execution instead of each of the
+ * ~15 call sites (page, knockout-vm, WCTeamPageContent, match-snapshot, etc.)
+ * re-running the async body. Matches the dedup pattern already used by
+ * getOrBuildMatchSnapshot (match-snapshot.ts) and getTeamCached (teams/[slug]).
  */
-export async function getStandingsCached(competition: string): Promise<{
+async function getStandingsCachedImpl(competition: string): Promise<{
   standings:   StandingTable[];
   competition: { name: string; emblem: string };
 }> {
@@ -562,6 +569,9 @@ export async function getStandingsCached(competition: string): Promise<{
     return empty;
   }
 }
+
+/** React.cache()-memoised: one execution per (competition) per render — see getStandingsCachedImpl. */
+export const getStandingsCached = cache(getStandingsCachedImpl);
 
 /**
  * DATA-18WC.CONSOLIDATE: getWCKnockoutMatchesCached() removed.

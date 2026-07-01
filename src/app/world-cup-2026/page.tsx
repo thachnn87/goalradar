@@ -355,7 +355,7 @@ export default async function WorldCup2026Page() {
 
   // Bracket preview: R16→Final tree from single KnockoutViewModel
   const bracketMatches: Match[] =
-    vmResult.status === 'fulfilled' ? vmResult.value.bracketMatches : [];
+    vmResult.status === 'fulfilled' ? vmResult.value.fullBracketMatches : [];
 
   // DATA-18WC.13: static knockout slot fallback for upcoming section.
   // Used when authority cache has no upcoming matches (group stage finished,
