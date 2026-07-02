@@ -1,36 +1,47 @@
-# AI Handoff Template
+# AI Handoff
 
-Use this file when switching between Claude Code, Codex, ChatGPT Web, or another coding agent.
+Status: Current
+Owner: Project maintainer
+Last Reviewed: 2026-06-29
+Update Trigger: Update when handing current work to another agent or leaving meaningful incomplete work.
+Authority: Live handoff state only. Lower authority than `.ai/CURRENT_SPRINT.md`.
 
 ## Completed
 
-- Added `CLAUDE.md` and `AGENTS.md` as root-level AI entry points.
-- Kept project context and AI rules centralized in `docs/` and `.ai/`.
-- Enhanced existing `/world-cup-2026/venues` and `/world-cup-2026/venues/[venue]` pages for venue SEO.
-- Added fixture-derived venue match counts and SportsEvent schema without adding API routes or runtime fetches.
-- Fixed USA venue grouping on the hub and corrected total matches to the static 104-fixture dataset.
+- Audited the existing AI workspace and documentation authority model.
+- Identified duplicated sprint, decision, handoff, and historical-report authority risks.
 
 ## Working On
 
-World Cup 2026 venue page production readiness.
+Implementing the approved AI documentation architecture.
 
 ## Files Modified
 
-- `src/app/world-cup-2026/venues/page.tsx`
-- `src/app/world-cup-2026/venues/[venue]/page.tsx`
-- `src/components/WCVenueCard.tsx`
-- `src/lib/wc-venues.ts`
-- `public/venues/world-cup-2026-stadium.svg`
+- `docs/INDEX.md`
+- `docs/analysis/INDEX.md`
+- `docs/worldcup/INDEX.md`
+- `docs/architecture/DECISIONS.md`
+- `docs/seo/CANONICAL_MAP.md`
+- `docs/deployment/OPERATIONS.md`
+- `docs/business/REVENUE_READINESS.md`
+- `docs/PROJECT_CONTEXT.md`
+- `.ai/AI_RULES.md`
 - `.ai/CURRENT_SPRINT.md`
-- `.ai/CHANGELOG.md`
 - `.ai/HANDOFF.md`
+- `.ai/HANDOFF_TEMPLATE.md`
+- `.ai/DECISIONS.md`
+- `.ai/SESSION_START.md`
+- `.ai/BACKLOG.md`
+- `.ai/CHANGELOG.md`
+- `CLAUDE.md`
+- `AGENTS.md`
+- `docs/MIGRATION_SUMMARY.md`
 
 ## Known Issues
 
 - Existing unrelated dirty/untracked files remain in the worktree.
-- `npm run build` passes, but build output still logs pre-existing duplicate WC standings API audit warnings and live-provider network fallbacks.
-- Dev server served the new SVG but venue page HTTP requests timed out under Turbopack; production build prerendered venue artifacts successfully.
+- Some historical reports still contain "canonical", "source of truth", or "final verdict" language and need gradual review.
 
 ## Next Recommended Action
 
-- Validate final venue transport/editorial details against official FIFA host city operations when available.
+- Review the documentation-only diff, then commit the AI workspace refactor if approved.

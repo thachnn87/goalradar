@@ -1,29 +1,32 @@
 # Current Sprint
 
-## Current Sprint
+Status: Current
+Owner: Project maintainer
+Last Reviewed: 2026-06-29
+Update Trigger: Update when the active sprint objective, tasks, blockers, next action, or review date changes.
+Authority: Live sprint state only. Lower authority than `docs/architecture/DECISIONS.md`.
 
-World Cup 2026 venue SEO and reliability.
+## Objective
 
-## Current Objective
-
-Ship production-ready FIFA World Cup 2026 venue pages while preserving the existing `/world-cup-2026` route architecture and static-first data model.
+Make the AI documentation workspace production-ready, reduce authority drift, and preserve existing project knowledge without changing application behavior.
 
 ## Active Tasks
 
-- Keep `docs/PROJECT_CONTEXT.md` current as the canonical project brain.
-- Preserve the reorganized documentation structure under `docs/`.
-- Maintain AI handoff hygiene through `.ai/` files.
-- Use `CLAUDE.md` and `AGENTS.md` as lightweight entry points into the shared documentation set.
-- Continue prioritizing World Cup 2026 SEO, cache reliability, analytics visibility, and revenue readiness.
-- Verify venue pages use existing static World Cup fixture/stadium data where available.
+- Create documentation indexes for `docs/`, `docs/analysis/`, and `docs/worldcup/`.
+- Move durable decisions into `docs/architecture/DECISIONS.md`.
+- Create current-state docs for SEO canonicals, deployment operations, and revenue readiness.
+- Refactor `.ai` workspace files to separate rules, sprint state, handoff state, and templates.
+- Trim volatile sprint/backlog content from `docs/PROJECT_CONTEXT.md`.
 
 ## Blockers
 
-- Admin dashboards are MVP and unauthenticated by current product decision.
-- Provider/API quota and KV freshness remain operational risks during full builds.
-- Local dev route rendering may hang under Turbopack even when production build and static artifacts succeed.
-- Some audit documents are historical and may require manual review before being treated as current truth.
+- Historical reports contain old "canonical" and "source of truth" language that needs gradual manual review.
+- Existing unrelated dirty/generated files are present in the worktree and should not be touched by this documentation refactor.
 
-## Next Task
+## Next Action
 
-Review remaining venue editorial accuracy against official FIFA venue operations when final match-day transport guidance is published.
+- Verify documentation-only diff and summarize created, updated, deprecated, and manual-review items.
+
+## Review Date
+
+2026-07-06

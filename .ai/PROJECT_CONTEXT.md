@@ -1,5 +1,11 @@
 # AI Project Context
 
+Status: Current
+Owner: Project maintainer
+Last Reviewed: 2026-06-29
+Update Trigger: Update only if the canonical context path changes.
+Authority: Pointer only. `docs/PROJECT_CONTEXT.md` is authoritative.
+
 Canonical project documentation:
 
 `docs/PROJECT_CONTEXT.md`

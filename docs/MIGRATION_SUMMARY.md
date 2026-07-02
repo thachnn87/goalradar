@@ -1,8 +1,60 @@
 ﻿# Documentation Migration Summary
 
 Generated: 2026-06-29
+Status: Current
+Owner: Project maintainer
+Last Reviewed: 2026-06-29
+Update Trigger: Append documentation migration summaries after major docs organization changes.
+Authority: Historical migration record. Not current project authority.
 
 This was a documentation-only repository organization pass. No application source code, imports, tests, package files, or configuration files were intentionally modified.
+
+## 2026-06-29 AI Workspace Authority Refactor
+
+### Files Created
+
+- `docs/INDEX.md`
+- `docs/analysis/INDEX.md`
+- `docs/worldcup/INDEX.md`
+- `docs/architecture/DECISIONS.md`
+- `docs/seo/CANONICAL_MAP.md`
+- `docs/deployment/OPERATIONS.md`
+- `docs/business/REVENUE_READINESS.md`
+- `.ai/HANDOFF_TEMPLATE.md`
+
+### Files Updated
+
+- `docs/PROJECT_CONTEXT.md`
+- `.ai/AI_RULES.md`
+- `.ai/CURRENT_SPRINT.md`
+- `.ai/HANDOFF.md`
+- `.ai/DECISIONS.md`
+- `.ai/SESSION_START.md`
+- `.ai/PROJECT_CONTEXT.md`
+- `.ai/BACKLOG.md`
+- `.ai/CHANGELOG.md`
+- `CLAUDE.md`
+- `AGENTS.md`
+- `docs/MIGRATION_SUMMARY.md`
+
+### Files Deprecated
+
+- `.ai/DECISIONS.md` is now a compatibility pointer. The authoritative decision log is `docs/architecture/DECISIONS.md`.
+
+### Duplicated Content Removed
+
+- Live sprint and next-sprint content was removed from `docs/PROJECT_CONTEXT.md` and kept in `.ai/CURRENT_SPRINT.md`.
+- Durable architecture decisions were moved from `.ai/DECISIONS.md` into `docs/architecture/DECISIONS.md`.
+- Handoff template content was split from live handoff state into `.ai/HANDOFF_TEMPLATE.md`.
+- Revenue readiness details were moved to `docs/business/REVENUE_READINESS.md`.
+- Canonical, sitemap, robots, noindex, and internal-linking rules were centralized in `docs/seo/CANONICAL_MAP.md`.
+- Deployment, KV, cache, cron, and provider operations were centralized in `docs/deployment/OPERATIONS.md`.
+
+### Remaining Manual Review Items
+
+- Historical reports under `docs/analysis/`, `docs/worldcup/`, `docs/seo/`, `docs/deployment/`, `docs/business/`, and `docs/features/` may still contain stale "canonical", "source of truth", "final verdict", or "never" language.
+- Promote still-current facts from historical reports into the appropriate authoritative document as needed.
+- Do not delete historical reports unless a separate archival policy is approved.
 
 ## Folders Created
 

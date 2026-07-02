@@ -1,6 +1,11 @@
 # GoalRadar Project Context Pack
 
+Status: Current
+Owner: Project maintainer
 Last updated: 2026-06-29
+Last Reviewed: 2026-06-29
+Update Trigger: Update when stable product, architecture, data, SEO, revenue, or project-state knowledge changes. Do not use this file for live sprint state, temporary TODOs, or last-session handoff notes.
+Authority: Canonical stable project context.
 
 This document is the shared project brain for GoalRadar. It summarizes the current product, architecture, data flow, SEO/revenue state, known risks, and roadmap so future Codex, Claude Code, and ChatGPT sessions can start with the same context.
 
@@ -146,7 +151,7 @@ public/
   OneSignalSDKWorker.js
 ```
 
-Documentation/report files are extensive at repository root. Treat root-level `DATA*`, `WC_*`, `PERF*`, `SEO*`, `OPS*`, and similar Markdown files as audit history and evidence, not primary runtime documentation.
+Documentation/report files have been reorganized under `docs/`. Treat historical `DATA*`, `WC_*`, `PERF*`, `SEO*`, `OPS*`, and similar Markdown reports as evidence, not primary runtime documentation. Use `docs/INDEX.md` and folder indexes to distinguish current authoritative documents from historical reports.
 
 ## 5. Important Files
 
@@ -359,8 +364,8 @@ SEO risks:
 - There are many overlapping WC route clusters: flat SEO pages plus nested utility pages. Canonical and internal-link discipline must remain strict to prevent cannibalization.
 - Several route families are generated from dynamic data or static lists; stale or missing KV data can reduce match/team sitemap coverage.
 - Public pages must continue using cached/page-safe functions where available; direct provider calls from crawled pages can create rate-limit risk.
-- `og:image` is identified as missing site-wide in the admin SEO checklist.
-- Root contains many audit files; avoid exposing them through static hosting unless intentionally public. Current public folder looks limited, but keep an eye on accidental moves.
+- Current canonical, sitemap, robots, noindex, schema, and internal-linking rules live in `docs/seo/CANONICAL_MAP.md`.
+- Historical SEO reports under `docs/seo/` are evidence, not current authority, unless promoted by `docs/seo/CANONICAL_MAP.md`.
 
 ## 11. Revenue Status
 
@@ -376,13 +381,11 @@ Implemented:
 - Push notification opt-in infrastructure exists.
 - GA4 tracking and custom events exist.
 
-Revenue risks/pending:
+Revenue readiness:
 
-- AdSense only serves when env vars and real slot IDs are configured.
-- Affiliate URLs/offers must be audited for real destinations and compliance.
-- Admin pages are not authenticated by requirement; do not expose revenue/admin links publicly.
-- GA4 reporting requires server-side service account env vars; otherwise summary returns `null`.
-- Newsletter full persistence requires Postgres and migration; fallback KV capture exists.
+- Current analytics, AdSense, affiliate, SEO revenue, and blocker status live in `docs/business/REVENUE_READINESS.md`.
+- Revenue integrations should remain environment-driven and degrade gracefully when disabled.
+- Admin pages are not authenticated by current product decision; do not expose revenue/admin links publicly.
 
 ## 12. Current Features
 
@@ -438,96 +441,33 @@ Monetization/retention:
 - OneSignal web push opt-in and stats.
 - GA4 page and custom event tracking.
 
-## 13. Pending Features
+## 13. Current Documentation Authorities
 
-High priority:
+Use these files for current operational and planning context:
 
-- Configure or restore `vercel.json` crons for orchestrator/prewarm/health jobs if production depends on them.
-- Decide final canonical strategy for overlapping WC flat vs nested pages.
-- Configure production GA4 reporting service account env vars.
-- Configure AdSense production env vars and real ad unit slot IDs.
-- Audit all affiliate CTAs and replace placeholder links.
-- Add/verify site-wide `og:image`.
-- Ensure page-safe cached functions are used on all high-traffic pages.
-- Verify Search Console sitemap submission and index coverage.
+- `.ai/CURRENT_SPRINT.md`: current objective, active tasks, blockers, next action, and review date.
+- `.ai/BACKLOG.md`: backlog parking lot when maintained.
+- `docs/architecture/DECISIONS.md`: durable architecture and product decisions.
+- `docs/seo/CANONICAL_MAP.md`: current canonical, sitemap, robots, indexability, and internal-linking rules.
+- `docs/deployment/OPERATIONS.md`: current deployment, Vercel, KV, cache, cron, provider, and operational-risk summary.
+- `docs/business/REVENUE_READINESS.md`: current analytics, AdSense, affiliate, SEO revenue, and blocker status.
+- `docs/INDEX.md`: documentation map and historical-report policy.
 
-Medium priority:
+## 14. Durable Risks
 
-- Add authentication or at least secret gating to admin dashboards if they should not be public.
-- Add richer page-view/event storage if GA4 is insufficient or unavailable.
-- Expand automated tests around provider failover, sitemap generation, canonical URL generation, and static WC fallback.
-- Add stronger monitoring for KV freshness and provider rate-limit exhaustion.
-- Improve admin dashboard source-of-truth clarity: in-process counters vs KV endpoint freshness vs GA4.
+Long-lived project risks:
 
-Nice-to-have:
-
-- Editorial CMS or data entry flow for content updates.
-- Better visual assets/OG images per page cluster.
-- More granular ad placement experiments.
-- A/B testing for affiliate/newsletter/push CTA copy.
-
-## 14. Known Bugs / Risks
-
-Current known risks:
-
-- `vercel.json` is currently `{}`; cron endpoints exist but are not scheduled from this file.
-- `/admin/performance` and `/admin/seo` are intentionally unauthenticated MVP pages. They are `noindex` and blocked by robots, but still accessible by URL.
-- Many debug endpoints exist. Some may require secrets; confirm before exposing production logs or links.
 - External provider rate limits remain a core operational risk.
 - `api-football` free tier is limited; failover can exhaust quickly if overused.
-- Page-safe cached variants return static/empty fallback for some cases; this is intentional but can show incomplete data when KV is cold.
+- KV freshness and availability affect cache quality, sitemap coverage, and live-data resilience.
 - Static World Cup data is useful for structure, but live scores/results/standings require provider/KV freshness.
-- There are duplicate/legacy route families, including `/team/[id]`, `/teams/[slug]`, `/world-cup-2026/team/[slug]`, and `/world-cup-2026/teams/[slug]`; redirects/canonicals must stay correct.
-- Root directory contains many audit/report files and generated artifacts; maintainers should avoid confusing audit history with runtime source.
-- Some PowerShell output displays mojibake for icons/dashes; confirm actual file encoding before doing broad text rewrites.
+- Page-safe cached variants may intentionally return static or empty fallback data when KV is cold.
+- Duplicate/legacy route families exist, including `/team/[id]`, `/teams/[slug]`, `/world-cup-2026/team/[slug]`, and `/world-cup-2026/teams/[slug]`; redirects, canonicals, and internal links must stay disciplined.
+- Admin dashboards are MVP tools and are intentionally unauthenticated unless a future decision changes that.
+- Debug and operational endpoints should not be exposed through public navigation or indexable pages.
+- Historical reports may contain stale "canonical" or "source of truth" language; use current authority documents first.
 
-## 15. Current Sprint
-
-Current sprint theme:
-
-- Stabilize GoalRadar for World Cup 2026 traffic.
-- Preserve crawlability and indexability under provider/API pressure.
-- Improve admin visibility for SEO, performance, cache, KV, and analytics.
-- Continue hardening the provider/cache/authority stack.
-
-Current sprint workstreams:
-
-- SEO readiness dashboard and sitemap validation.
-- Performance dashboard and KV freshness visibility.
-- Provider failover and cache disaster recovery.
-- Static WC dataset and authority-derived fallbacks.
-- Analytics, newsletter, push, and monetization readiness.
-
-## 16. Next Sprint
-
-Recommended next sprint:
-
-1. Cron and cache operations
-   - Rebuild `vercel.json` cron schedule deliberately.
-   - Confirm cron endpoints are protected and idempotent.
-   - Validate KV freshness in production.
-
-2. Search and canonical cleanup
-   - Finalize canonical map for WC flat/nested pages.
-   - Run sitemap crawl and Search Console submission.
-   - Add site-wide OG images.
-
-3. Revenue readiness
-   - Configure AdSense production env vars.
-   - Audit all `AdSlot` slot IDs.
-   - Replace placeholder affiliate links.
-   - Validate privacy/terms/affiliate disclosure paths.
-
-4. Analytics reliability
-   - Configure GA4 reporting env vars.
-   - Validate `/api/analytics/summary`.
-   - Ensure custom events are registered as GA4 custom dimensions where needed.
-
-5. Admin/security
-   - Decide whether unauthenticated admin remains acceptable.
-   - If not, add secret-gated access or lightweight auth.
-
-## 17. Future Roadmap
+## 15. Future Roadmap
 
 World Cup tournament phase:
 
@@ -559,9 +499,9 @@ Reliability:
 - Incident history and self-healing workflows.
 - SLO dashboards tied to business impact.
 
-## 18. Important Decisions
+## 16. Durable Decisions Summary
 
-Decisions already reflected in the codebase:
+Durable decisions already reflected in the codebase:
 
 - GoalRadar is optimized around World Cup 2026 organic search growth.
 - Next.js App Router is the application foundation.
@@ -581,16 +521,14 @@ Decisions already reflected in the codebase:
 - Newsletter should support Postgres primary storage and KV fallback.
 - OneSignal is optional and environment-driven.
 
+Authoritative decision records live in `docs/architecture/DECISIONS.md`.
+
 ## Quick Start for Future AI Agents
 
-Before making changes:
+Before making changes, read `.ai/AI_RULES.md`, `.ai/CURRENT_SPRINT.md`, and the relevant current authority document from `docs/INDEX.md`.
 
-1. Read this file.
-2. Check `git status --short`.
-3. Inspect the exact route/component/lib involved.
-4. Avoid touching root audit reports unless the task is documentation/audit cleanup.
-5. For data changes, check `src/lib/api.ts`, `src/lib/kv-cache.ts`, and `src/lib/providers/*`.
-6. For SEO changes, check `src/app/sitemap.ts`, `src/app/robots.ts`, page metadata, and admin SEO assumptions.
-7. For revenue changes, check `src/components/ads/AdSlot.tsx`, legal pages, `public/ads.txt`, affiliate blocks, and env-driven activation.
-8. For admin/debug changes, preserve `noindex` and avoid adding public nav links unless explicitly requested.
+For SEO changes, check `docs/seo/CANONICAL_MAP.md`.
 
+For deployment, cache, KV, cron, or provider changes, check `docs/deployment/OPERATIONS.md`.
+
+For analytics, ads, affiliate, newsletter, or monetization changes, check `docs/business/REVENUE_READINESS.md`.

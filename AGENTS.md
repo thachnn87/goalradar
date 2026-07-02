@@ -1,5 +1,11 @@
 # AI Agents Entry Point
 
+Status: Current
+Owner: Project maintainer
+Last Reviewed: 2026-06-29
+Update Trigger: Update only when generic agent onboarding changes.
+Authority: Entry point only. Does not override `docs/PROJECT_CONTEXT.md` or `.ai/AI_RULES.md`.
+
 This file is the shared entry point for Codex, ChatGPT Web, and future coding agents working on GoalRadar.
 
 Before doing any work, read these files in order:
@@ -15,7 +21,7 @@ Project truth lives in one place only:
 - Canonical context: `docs/PROJECT_CONTEXT.md`
 - AI rules: `.ai/AI_RULES.md`
 - Sprint state: `.ai/CURRENT_SPRINT.md`
-- Decisions: `.ai/DECISIONS.md`
+- Decisions: `docs/architecture/DECISIONS.md`
 - Handoff state: `.ai/HANDOFF.md`
 - Changelog: `.ai/CHANGELOG.md`
 
@@ -24,4 +30,3 @@ Do not create agent-specific copies of the same rules or project context.
 Prefer additive, scoped changes. Preserve existing architecture, folder structure, SEO behavior, provider/cache strategy, and revenue surfaces unless explicitly instructed otherwise.
 
 For documentation-only tasks, do not modify application source code, package files, tests, imports, or configuration.
-
