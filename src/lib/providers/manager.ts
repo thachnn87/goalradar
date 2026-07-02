@@ -40,6 +40,7 @@ import type {
   ProvidersDebugResponse,
 } from './types';
 import { recordDataSource } from '../data-source-tracker';
+import { formatLog } from '../tracing';
 
 // ---------------------------------------------------------------------------
 // Config checks (read once at module load time)
@@ -67,10 +68,10 @@ const AF_KEY_CONFIGURED = typeof process.env.API_FOOTBALL_KEY === 'string' &&
 const API_FOOTBALL_ENABLED = process.env.ENABLE_API_FOOTBALL !== 'false';
 
 // Startup log — emitted once when the module is first imported.
-console.log(
+console.log(formatLog(
   `[PROVIDER] football-data: ${FD_KEY_CONFIGURED ? 'enabled (FOOTBALL_API_KEY set)' : 'DISABLED — FOOTBALL_API_KEY missing'}`,
-);
-console.log(
+));
+console.log(formatLog(
   `[PROVIDER] api-football: ${
     !API_FOOTBALL_ENABLED
       ? 'DISABLED — ENABLE_API_FOOTBALL=false (emergency-only)'
@@ -78,7 +79,7 @@ console.log(
         ? 'enabled (API_FOOTBALL_KEY set)'
         : 'disabled — API_FOOTBALL_KEY not set (failover unavailable)'
   }`,
-);
+));
 
 // ---------------------------------------------------------------------------
 // Provider singletons
@@ -138,9 +139,9 @@ function recordSuccess(provider: ProviderName, endpoint: string): void {
     failbackLog.push(event);
     if (failbackLog.length > MAX_LOG_SIZE) failbackLog.shift();
 
-    console.log(
+    console.log(formatLog(
       `[FAILBACK] api-football -> football-data | endpoint: ${endpoint} | recovered after ${prevErrors} error(s) | ts: ${new Date(event.timestamp).toISOString()}`,
-    );
+    ));
   }
 }
 
@@ -166,7 +167,7 @@ function isFailoverTrigger(err: unknown): err is ApiUnavailableError {
 const FORCE_PROVIDER = (process.env.FORCE_PROVIDER ?? '') as ProviderName | '';
 
 if (FORCE_PROVIDER) {
-  console.warn(`[PROVIDER] FORCE_PROVIDER=${FORCE_PROVIDER} — primary provider bypassed`);
+  console.warn(formatLog(`[PROVIDER] FORCE_PROVIDER=${FORCE_PROVIDER} — primary provider bypassed`));
 }
 
 // ---------------------------------------------------------------------------
@@ -181,7 +182,7 @@ async function withFailover<T>(
   // ── FORCE_PROVIDER override ───────────────────────────────────────────────
   if (FORCE_PROVIDER === 'api-football') {
     stats['api-football'].requestCount++;
-    console.log(`[PROVIDER_CALL] provider=api-football | endpoint=${endpoint} | forced`);
+    console.log(formatLog(`[PROVIDER_CALL] provider=api-football | endpoint=${endpoint} | forced`));
     recordDataSource('api-football');
     try {
       const result = await secondaryFn();
@@ -195,7 +196,7 @@ async function withFailover<T>(
 
   // ── 1. Try primary ────────────────────────────────────────────────────────
   stats['football-data'].requestCount++;
-  console.log(`[PROVIDER_CALL] provider=football-data | endpoint=${endpoint}`);
+  console.log(formatLog(`[PROVIDER_CALL] provider=football-data | endpoint=${endpoint}`));
   recordDataSource('football-data');
   try {
     const result = await primaryFn();
@@ -206,10 +207,10 @@ async function withFailover<T>(
 
     // 403 disabled — account/key blocked; log prominently before failing over.
     if (primaryErr instanceof ApiUnavailableError && primaryErr.reason === 'disabled') {
-      console.error(
+      console.error(formatLog(
         `[PROVIDER_DISABLED] football-data | account/key blocked (403)` +
         ` | failing over to api-football | endpoint=${endpoint}`,
-      );
+      ));
     }
 
     if (!isFailoverTrigger(primaryErr)) {
@@ -220,11 +221,11 @@ async function withFailover<T>(
     // ── 2. Check feature flag before attempting failover ─────────────────
     if (!API_FOOTBALL_ENABLED) {
       const reason = primaryErr.reason ?? 'unknown';
-      console.warn(
+      console.warn(formatLog(
         `[PROVIDER] api-football disabled (ENABLE_API_FOOTBALL=false)` +
         ` | skipping failover | reason=${reason} | endpoint=${endpoint}` +
         ` | KV disaster-recovery key is next fallback`,
-      );
+      ));
       throw primaryErr; // propagate to withKVCache → disaster-recovery path
     }
 
@@ -239,13 +240,13 @@ async function withFailover<T>(
     };
     pushFailoverEvent(event);
 
-    console.log(
+    console.log(formatLog(
       `[FAILOVER] football-data -> api-football | reason: ${reason} | endpoint: ${endpoint} | ts: ${new Date(event.timestamp).toISOString()}`,
-    );
+    ));
 
     // ── 3. Try secondary ──────────────────────────────────────────────────
     stats['api-football'].requestCount++;
-    console.log(`[PROVIDER_CALL] provider=api-football | endpoint=${endpoint}`);
+    console.log(formatLog(`[PROVIDER_CALL] provider=api-football | endpoint=${endpoint}`));
     recordDataSource('api-football');
     try {
       const result = await secondaryFn();
@@ -254,9 +255,9 @@ async function withFailover<T>(
     } catch (secondaryErr) {
       recordError('api-football', secondaryErr);
 
-      console.error(
+      console.error(formatLog(
         `[FAILOVER] api-football also failed | endpoint: ${endpoint} | err: ${secondaryErr instanceof Error ? secondaryErr.message : String(secondaryErr)}`,
-      );
+      ));
 
       // Both providers failed — throw the secondary error as the final result.
       throw secondaryErr;

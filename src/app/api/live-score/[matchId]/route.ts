@@ -26,6 +26,7 @@ import { readKVLiveMatches } from '@/lib/live-cache';
 import { getOrBuildMatchSnapshot } from '@/lib/match-snapshot';
 import { deriveRuntimeState } from '@/lib/match-runtime-state';
 import { NotFoundError } from '@/lib/errors';
+import { generateTraceId, generateCorrelationId, runWithTrace, isTracingEnabled } from '@/lib/tracing';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,47 +67,55 @@ export async function GET(_req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'invalid matchId' }, { status: 400 });
   }
 
-  // Step 1: KV live cache — bypasses in-process L1, cross-instance consistent.
-  try {
-    const kvMatches = await readKVLiveMatches();
-    const liveMatch = kvMatches?.find((m) => m.id === numericId) ?? null;
-    if (liveMatch) {
-      return NextResponse.json(buildResponse(liveMatch, 'kv-live'));
-    }
-  } catch {
-    // KV unavailable — fall through
-  }
+  // LIVE-21 Phase 1: wrap request in trace context
+  const shouldTrace = isTracingEnabled();
+  const traceId = shouldTrace ? generateTraceId() : 'untraced';
+  const utcDate = new Date().toISOString();
+  const correlationId = generateCorrelationId(numericId, utcDate);
 
-  // Step 2: getLiveMatches() — L1 fallback + provider fetch if KV expired.
-  try {
-    const { matches } = await getLiveMatches();
-    const liveMatch = matches.find((m) => m.id === numericId);
-    if (liveMatch) {
-      return NextResponse.json(buildResponse(liveMatch, 'live'));
+  return runWithTrace(traceId, correlationId, async () => {
+    // Step 1: KV live cache — bypasses in-process L1, cross-instance consistent.
+    try {
+      const kvMatches = await readKVLiveMatches();
+      const liveMatch = kvMatches?.find((m) => m.id === numericId) ?? null;
+      if (liveMatch) {
+        return NextResponse.json(buildResponse(liveMatch, 'kv-live'));
+      }
+    } catch {
+      // KV unavailable — fall through
     }
-  } catch {
-    // live cache error — fall through to snapshot
-  }
 
-  // Step 3: snapshot (KV → provider as last resort).
-  // deriveRuntimeState() runs on the full MatchSnapshot here — goals[] fallback is available.
-  try {
-    const snapshot = await getOrBuildMatchSnapshot(String(numericId));
-    const { effectiveScore, isReliableScore, version, match } = deriveRuntimeState(snapshot);
-    return NextResponse.json({
-      matchId:        match.id,
-      status:         match.status,
-      minute:         match.minute ?? null,
-      effectiveScore,
-      isReliableScore,
-      version,
-      lastUpdated:    match.lastUpdated ?? null,
-      source:         'snapshot',
-    });
-  } catch (err) {
-    if (err instanceof NotFoundError) {
-      return NextResponse.json({ error: 'match not found' }, { status: 404 });
+    // Step 2: getLiveMatches() — L1 fallback + provider fetch if KV expired.
+    try {
+      const { matches } = await getLiveMatches();
+      const liveMatch = matches.find((m) => m.id === numericId);
+      if (liveMatch) {
+        return NextResponse.json(buildResponse(liveMatch, 'live'));
+      }
+    } catch {
+      // live cache error — fall through to snapshot
     }
-    return NextResponse.json({ error: 'unavailable' }, { status: 503 });
-  }
+
+    // Step 3: snapshot (KV → provider as last resort).
+    // deriveRuntimeState() runs on the full MatchSnapshot here — goals[] fallback is available.
+    try {
+      const snapshot = await getOrBuildMatchSnapshot(String(numericId));
+      const { effectiveScore, isReliableScore, version, match } = deriveRuntimeState(snapshot);
+      return NextResponse.json({
+        matchId:        match.id,
+        status:         match.status,
+        minute:         match.minute ?? null,
+        effectiveScore,
+        isReliableScore,
+        version,
+        lastUpdated:    match.lastUpdated ?? null,
+        source:         'snapshot',
+      });
+    } catch (err) {
+      if (err instanceof NotFoundError) {
+        return NextResponse.json({ error: 'match not found' }, { status: 404 });
+      }
+      return NextResponse.json({ error: 'unavailable' }, { status: 503 });
+    }
+  });
 }

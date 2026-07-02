@@ -35,6 +35,7 @@
 
 import { kv } from '@vercel/kv';
 import type { Match } from './types';
+import { formatLog } from './tracing';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -92,10 +93,9 @@ async function kvGet(key: string): Promise<KVEntry | null> {
   try {
     return await kv.get<KVEntry>(key);
   } catch (err) {
-    console.error(
-      `[LIVE CACHE] KV read error on ${key}:`,
-      err instanceof Error ? err.message : String(err),
-    );
+    console.error(formatLog(
+      `[LIVE CACHE] KV read error on ${key}: ${err instanceof Error ? err.message : String(err)}`,
+    ));
     return null;
   }
 }
@@ -104,10 +104,9 @@ function kvSet(key: string, matches: Match[]): void {
   if (!KV_ENABLED) return;
   const entry: KVEntry = { matches, fetchedAt: Date.now() };
   kv.set(key, entry, { ex: LIVE_TTL_SEC }).catch((err) =>
-    console.error(
-      `[LIVE CACHE] KV write error on ${key}:`,
-      err instanceof Error ? err.message : String(err),
-    ),
+    console.error(formatLog(
+      `[LIVE CACHE] KV write error on ${key}: ${err instanceof Error ? err.message : String(err)}`,
+    )),
   );
 }
 
@@ -116,10 +115,9 @@ function kvSetDR(key: string, matches: Match[]): void {
   if (!KV_ENABLED) return;
   const entry: KVEntry = { matches, fetchedAt: Date.now() };
   kv.set(key, entry, { ex: 7 * 24 * 3_600 }).catch((err) =>
-    console.error(
-      `[LIVE CACHE] DR write error on ${key}:`,
-      err instanceof Error ? err.message : String(err),
-    ),
+    console.error(formatLog(
+      `[LIVE CACHE] DR write error on ${key}: ${err instanceof Error ? err.message : String(err)}`,
+    )),
   );
 }
 
@@ -140,7 +138,7 @@ async function fetchLiveCached(
   // ── 1. L1 hit ─────────────────────────────────────────────────────────────
   const l1 = l1Get(KV_KEY);
   if (l1) {
-    console.log(`[LIVE CACHE] hit  | live-matches | L1 in-memory`);
+    console.log(formatLog(`[LIVE CACHE] hit  | live-matches | L1 in-memory`));
     return l1;
   }
 
@@ -150,16 +148,16 @@ async function fetchLiveCached(
     const ageMs = Date.now() - kvEntry.fetchedAt;
     if (ageMs < LIVE_TTL_SEC * 1000) {
       const ageSec = Math.ceil(ageMs / 1000);
-      console.log(`[LIVE CACHE] hit  | live-matches | KV age ${ageSec}s`);
+      console.log(formatLog(`[LIVE CACHE] hit  | live-matches | KV age ${ageSec}s`));
       l1Set(KV_KEY, kvEntry.matches); // warm L1 for subsequent requests in this instance
       return kvEntry.matches;
     }
     // KV entry exists but is stale — fetch fresh
-    console.log(`[LIVE CACHE] stale KV entry for live-matches — fetching fresh`);
+    console.log(formatLog(`[LIVE CACHE] stale KV entry for live-matches — fetching fresh`));
   }
 
   // ── 3. API fetch ──────────────────────────────────────────────────────────
-  console.log(`[LIVE CACHE] miss | live-matches | fetching from API`);
+  console.log(formatLog(`[LIVE CACHE] miss | live-matches | fetching from API`));
 
   try {
     const { matches } = await fetcher();
@@ -167,32 +165,32 @@ async function fetchLiveCached(
     l1Set(KV_KEY, matches);
     kvSet(KV_KEY, matches);
     kvSetDR(DR_KEY, matches); // update disaster-recovery key on every successful fetch
-    console.log(`[LIVE CACHE] set  | live-matches | ttl=${LIVE_TTL_SEC}s | count=${matches.length}`);
+    console.log(formatLog(`[LIVE CACHE] set  | live-matches | ttl=${LIVE_TTL_SEC}s | count=${matches.length}`));
 
     return matches;
 
   } catch (fetchErr) {
     // ── 4. Stale fallback — disaster-recovery key (7-day TTL) ───────────────
-    console.error(
+    console.error(formatLog(
       `[API] FALLBACK live-matches | fetch failed: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)} | checking disaster-recovery key`,
-    );
+    ));
     if (KV_ENABLED) {
       try {
         const dr = await kv.get<KVEntry>(DR_KEY);
         if (dr) {
           const ageSec = Math.ceil((Date.now() - dr.fetchedAt) / 1000);
-          console.warn(`[API] FALLBACK live-matches | serving ${ageSec}s old disaster-recovery data | count=${dr.matches.length}`);
+          console.warn(formatLog(`[API] FALLBACK live-matches | serving ${ageSec}s old disaster-recovery data | count=${dr.matches.length}`));
           l1Set(KV_KEY, dr.matches); // warm L1 to avoid re-reading KV on next request
           return dr.matches;
         }
       } catch (drErr) {
-        console.error(`[API] FALLBACK live-matches | disaster-recovery read failed:`, drErr instanceof Error ? drErr.message : String(drErr));
+        console.error(formatLog(`[API] FALLBACK live-matches | disaster-recovery read failed: ${drErr instanceof Error ? drErr.message : String(drErr)}`));
       }
     }
     // No stale data at all — return empty rather than throwing.
     // Live match data is best-effort; an empty list renders "no live matches"
     // which is far better than an error page.
-    console.warn(`[STALE] EXPIRED live-matches | no stale data available — returning empty`);
+    console.warn(formatLog(`[STALE] EXPIRED live-matches | no stale data available — returning empty`));
     return [];
   }
 }

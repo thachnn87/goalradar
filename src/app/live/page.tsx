@@ -7,6 +7,7 @@ import AdSlot from '@/components/AdSlot';
 import { Match } from '@/lib/types';
 // PERF-8 Phase 3: seed KV snapshots for the first visible matches on idle
 import SnapshotPrewarmHints from '@/components/SnapshotPrewarmHints';
+import { generateTraceId, generateCorrelationId, runWithTrace, isTracingEnabled } from '@/lib/tracing';
 
 export const revalidate = 30;
 
@@ -30,12 +31,21 @@ export const metadata: Metadata = {
 };
 
 export default async function LivePage() {
+  // LIVE-21 Phase 1: wrap request in trace context
+  const shouldTrace = isTracingEnabled();
+  const traceId = shouldTrace ? generateTraceId() : 'untraced';
+  const utcDate = new Date().toISOString();
+  const correlationId = generateCorrelationId(0, utcDate); // 0 = live page (no specific match)
+
   let matches: Match[] = [];
   let error = false;
 
   try {
-    const data = await getLiveMatches();
-    matches = data.matches;
+    const { matches: data } = await runWithTrace(traceId, correlationId, async () => {
+      const result = await getLiveMatches();
+      return result;
+    });
+    matches = data;
   } catch {
     error = true;
   }
