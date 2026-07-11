@@ -1,4 +1,5 @@
 import type { Match } from '@/lib/types';
+import { deriveMatchDisplay } from '@/lib/match-display';
 import MatchCard from '@/components/MatchCard';
 
 // ---------------------------------------------------------------------------
@@ -31,19 +32,131 @@ const ROUND_MATCH_COUNT: Record<AllRoundKey, number> = {
   THIRD_PLACE: 1,
 };
 
+const emptyRounds = (): Record<RoundKey, Match[]> => ({
+  LAST_32: [], LAST_16: [], QUARTER_FINALS: [], SEMI_FINALS: [], FINAL: [],
+});
+
 // ---------------------------------------------------------------------------
-// Helpers
+// Layout helpers
 // ---------------------------------------------------------------------------
 
 // Each round's matches are distributed evenly over the full bracket height, so
 // match i of a round sits exactly between its two feeder matches (2i, 2i+1) of
-// the previous round — independent of which round the bracket starts from.
+// the previous round — provided each round is ordered by bracket geography
+// (see orderRoundsByFeeders), not by date or match id.
 function matchCenterY(roundKey: RoundKey, matchIndex: number, totalH: number): number {
   return (matchIndex + 0.5) * (totalH / ROUND_MATCH_COUNT[roundKey]);
 }
 
 function cardTop(roundKey: RoundKey, matchIndex: number, totalH: number): number {
   return matchCenterY(roundKey, matchIndex, totalH) - CARD_H / 2;
+}
+
+// ---------------------------------------------------------------------------
+// Bracket-geometry ordering
+//
+// The authority (football-data.org) numbers knockout matches in schedule order,
+// which is NOT the same as their top-to-bottom position in the bracket tree: a
+// semi-final pairs the winners of two quarter-finals that may be non-adjacent by
+// id. Ordering rounds by id (or date) therefore draws feeder lines to the wrong
+// pair of matches.
+//
+// We instead reconstruct the real tree from each match's feeder linkage:
+//   • a played feeder is matched by winning team id;
+//   • an upcoming feeder is matched by its "Winner R16 M5" / "Winner QF2" label.
+// A depth-first walk from the final produces the correct base-round leaf order;
+// every earlier-round match is then ordered by the first leaf of its subtree, so
+// each match's two feeders land in the adjacent (2i, 2i+1) slots the connectors
+// assume. Falls back to canonical id order if the linkage is incomplete.
+// ---------------------------------------------------------------------------
+
+function winnerTeamId(m: Match): number | null {
+  const w = deriveMatchDisplay(m).winner;
+  if (w === 'home') return m.homeTeam?.id ?? null;
+  if (w === 'away') return m.awayTeam?.id ?? null;
+  return null;
+}
+
+/** Trailing integer of a slot label ("Winner R16 M5" → 5, "Winner QF2" → 2). */
+function feederNumber(label: string | undefined): number | null {
+  const mm = (label ?? '').match(/(\d+)\s*$/);
+  return mm ? parseInt(mm[1], 10) : null;
+}
+
+function orderRoundsByFeeders(
+  canon: Record<RoundKey, Match[]>,
+  rounds: RoundKey[],
+): Record<RoundKey, Match[]> {
+  const roundIndex = new Map<string, number>(rounds.map((r, i) => [r, i]));
+
+  // Per-round winning-team → match, so a played feeder resolves by team id.
+  const winnerMap = new Map<RoundKey, Map<number, Match>>();
+  for (const r of rounds) {
+    const w = new Map<number, Match>();
+    for (const m of canon[r]) {
+      const id = winnerTeamId(m);
+      if (id) w.set(id, m);
+    }
+    winnerMap.set(r, w);
+  }
+
+  const feeder = (m: Match, side: 'home' | 'away'): Match | null => {
+    const ri = roundIndex.get(m.stage);
+    if (ri == null || ri <= 0) return null;
+    const prev = rounds[ri - 1];
+    const team = side === 'home' ? m.homeTeam : m.awayTeam;
+    if (team?.id) {
+      const played = winnerMap.get(prev)?.get(team.id);
+      if (played) return played;
+    }
+    // Upcoming match — resolve via the "Winner <round> M<n>" placeholder. n is the
+    // authority match number, i.e. the n-th match of prev round by ascending id.
+    const n = feederNumber(team?.name);
+    if (n != null && canon[prev][n - 1]) return canon[prev][n - 1];
+    return null;
+  };
+
+  const leavesMemo = new Map<number, Match[]>();
+  const leaves = (m: Match): Match[] => {
+    const ri = roundIndex.get(m.stage) ?? 0;
+    if (ri === 0) return [m];
+    const cached = leavesMemo.get(m.id);
+    if (cached) return cached;
+    const fh = feeder(m, 'home');
+    const fa = feeder(m, 'away');
+    const res = [...(fh ? leaves(fh) : []), ...(fa ? leaves(fa) : [])];
+    leavesMemo.set(m.id, res);
+    return res;
+  };
+
+  const baseKey = rounds[0];
+  const topKey = rounds[rounds.length - 1];
+
+  // Base-round order = leaves in the order the tree visits them from the top.
+  const baseOrder = canon[topKey].flatMap((m) => leaves(m));
+
+  // Only trust the reconstruction when it covers every base match exactly once;
+  // otherwise the linkage was incomplete — keep the authority's id order.
+  const baseAll = canon[baseKey];
+  const complete =
+    baseOrder.length === baseAll.length &&
+    new Set(baseOrder.map((m) => m.id)).size === baseAll.length;
+  if (!complete) return { ...canon };
+
+  const baseIndex = new Map<number, number>(baseOrder.map((m, i) => [m.id, i]));
+  const firstLeaf = (m: Match): number => {
+    const ls = leaves(m);
+    return ls.length ? Math.min(...ls.map((l) => baseIndex.get(l.id) ?? 0)) : Number.MAX_SAFE_INTEGER;
+  };
+
+  const out = emptyRounds();
+  for (const r of rounds) {
+    out[r] =
+      r === baseKey
+        ? baseOrder
+        : [...canon[r]].sort((a, b) => firstLeaf(a) - firstLeaf(b) || (a.id ?? 0) - (b.id ?? 0));
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,19 +213,18 @@ export default function WCBracket({
   const rounds = ROUND_KEYS.slice(startIdx) as RoundKey[];
   const totalH = ROUND_MATCH_COUNT[startStage] * SLOT_H;
 
-  const byStage = rounds.reduce<Record<RoundKey, Match[]>>(
-    (acc, key) => {
-      acc[key] = matches
-        .filter((m) => m.stage === key)
-        .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
-      return acc;
-    },
-    { LAST_32: [], LAST_16: [], QUARTER_FINALS: [], SEMI_FINALS: [], FINAL: [] }
-  );
+  // Canonical (authority id) order per round, then reorder by bracket geometry.
+  const canon = emptyRounds();
+  for (const key of rounds) {
+    canon[key] = matches
+      .filter((m) => m.stage === key)
+      .sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+  }
+  const byStage = orderRoundsByFeeders(canon, rounds);
 
   const thirdPlaceMatches = matches
     .filter((m) => m.stage === 'THIRD_PLACE')
-    .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
+    .sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
 
   return (
     <div className="w-full overflow-x-auto pb-2">
