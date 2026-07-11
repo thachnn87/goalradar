@@ -11,6 +11,7 @@
 
 import { getWCAuthorityMatchesV2, getStandingsCached } from './api';
 import type { Match } from './types';
+import { deriveMatchDisplay } from './match-display';
 import { canonicalToMatch } from './canonical-match';
 import type { CanonicalMatch } from './canonical-match';
 import { injectKnockoutSlotLabels } from './wc-fixtures';
@@ -231,3 +232,256 @@ export const buildKnockoutViewModel: () => Promise<KnockoutViewModel> = async ()
     byStage,
   };
 };
+
+// ===========================================================================
+// Knockout bracket GRAPH — explicit directed acyclic graph (source of truth)
+// ---------------------------------------------------------------------------
+//
+// WHY THIS EXISTS
+// The authority feed (football-data.org) gives each knockout match its ACTUAL
+// participants (real teams once known, or "Winner R16 M5" placeholders before)
+// plus its stage — but NO explicit parent-match linkage. It also numbers matches
+// in SCHEDULE order, which is not their top-to-bottom position in the bracket
+// tree. Rendering the tree by match id / date / array index therefore draws a
+// match between the wrong pair of parents.
+//
+// This module reconstructs the true bracket as an explicit DAG. Every node
+// carries `leftParentMatchId` / `rightParentMatchId`, resolved ONLY from:
+//   • the winning team's identity in the previous round (played matches), or
+//   • the "Winner <round> M<n>" placeholder label (upcoming matches).
+// Never from array index, position, sort order, or fixture order. Slot geometry
+// is then a pure consequence of the parent links (a DFS from the final), so a
+// node always sits between its two real parents. A validation pass asserts that
+// every participant originates only from that node's two parents.
+// ===========================================================================
+
+/** Bracket rounds, leftmost → final (THIRD_PLACE is a standalone playoff, excluded). */
+export const BRACKET_ROUND_ORDER: KnockoutStage[] = [
+  'LAST_32', 'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL',
+];
+
+export type ParentSource = 'winner-identity' | 'placeholder-label' | 'unresolved';
+
+export interface BracketNode {
+  matchId: number;
+  stage: KnockoutStage;
+  /** 0-based top-to-bottom position within the round, derived from parent links. */
+  slot: number;
+  /** Authority match number = 1-based rank of the match id within its round. */
+  matchNumber: number;
+  /** Parent feeding the top half of this node (smaller parent slot). */
+  leftParentMatchId: number | null;
+  /** Parent feeding the bottom half of this node (larger parent slot). */
+  rightParentMatchId: number | null;
+  leftParentSource: ParentSource;
+  rightParentSource: ParentSource;
+  homeTeam: string;
+  awayTeam: string;
+  homeTeamId: number;
+  awayTeamId: number;
+  winner: 'home' | 'away' | null;
+  winnerTeamId: number | null;
+  winnerTeam: string | null;
+}
+
+export interface BracketIssue {
+  matchId: number;
+  stage: string;
+  slot: number;
+  code: 'PARENT_UNRESOLVED' | 'PARENT_WRONG_ROUND' | 'PARTICIPANT_MISMATCH';
+  message: string;
+}
+
+export interface KnockoutGraph {
+  rounds: KnockoutStage[];
+  /** Nodes per stage, ordered by slot (bracket geometry). */
+  nodes: Record<string, BracketNode[]>;
+  /** matchIds per stage in slot order — the ONLY ordering a renderer should use. */
+  order: Record<string, number[]>;
+  /** true when the parent linkage fully reconstructs the base round (no gaps). */
+  complete: boolean;
+  issues: BracketIssue[];
+  valid: boolean;
+}
+
+function winnerOf(m: Match): { side: 'home' | 'away' | null; teamId: number | null; teamName: string | null } {
+  const w = deriveMatchDisplay(m).winner;
+  if (w === 'home') return { side: 'home', teamId: m.homeTeam?.id ?? null, teamName: m.homeTeam?.name ?? null };
+  if (w === 'away') return { side: 'away', teamId: m.awayTeam?.id ?? null, teamName: m.awayTeam?.name ?? null };
+  return { side: null, teamId: null, teamName: null };
+}
+
+/** Trailing integer of a slot label ("Winner R16 M5" → 5, "Winner QF2" → 2). */
+function trailingNumber(label: string | undefined): number | null {
+  const mm = (label ?? '').match(/(\d+)\s*$/);
+  return mm ? parseInt(mm[1], 10) : null;
+}
+
+/**
+ * Build the explicit knockout DAG from a flat match list.
+ *
+ * @param matches raw knockout matches (any order — id/date irrelevant)
+ * @param rounds  the contiguous rounds to include, leftmost → final
+ */
+export function buildKnockoutGraph(
+  matches: Match[],
+  rounds: KnockoutStage[] = BRACKET_ROUND_ORDER,
+): KnockoutGraph {
+  // Canonical id order per round (authority match-number order). Used ONLY to
+  // resolve "Winner <round> M<n>" placeholder labels — n is the authority match
+  // number, i.e. the n-th match of that round by ascending id. Never used to
+  // position a match in the tree.
+  const canon: Record<string, Match[]> = {};
+  for (const r of rounds) {
+    canon[r] = matches.filter((m) => m.stage === r).sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+  }
+
+  const roundIndex = new Map<string, number>(rounds.map((r, i) => [r, i]));
+
+  // Per-round: winning team id → the match that team won. This is the primary
+  // (and only authoritative) parent signal for a played round.
+  const winnerByRound = new Map<string, Map<number, Match>>();
+  for (const r of rounds) {
+    const w = new Map<number, Match>();
+    for (const m of canon[r]) {
+      const wi = winnerOf(m);
+      if (wi.teamId) w.set(wi.teamId, m);
+    }
+    winnerByRound.set(r, w);
+  }
+
+  const resolveParent = (m: Match, side: 'home' | 'away'): { match: Match | null; source: ParentSource } => {
+    const ri = roundIndex.get(m.stage);
+    if (ri == null || ri <= 0) return { match: null, source: 'unresolved' };
+    const prev = rounds[ri - 1];
+    const team = side === 'home' ? m.homeTeam : m.awayTeam;
+    // Primary: this side's team won a specific match in the previous round.
+    if (team?.id) {
+      const played = winnerByRound.get(prev)?.get(team.id);
+      if (played) return { match: played, source: 'winner-identity' };
+    }
+    // Fallback (upcoming match): "Winner <round> M<n>" → n-th match of prev round.
+    const n = trailingNumber(team?.name);
+    if (n != null && canon[prev][n - 1]) return { match: canon[prev][n - 1], source: 'placeholder-label' };
+    return { match: null, source: 'unresolved' };
+  };
+
+  // Leaves under a node — a DFS through parent links. Determines slot geometry.
+  const leavesMemo = new Map<number, Match[]>();
+  const leaves = (m: Match): Match[] => {
+    const ri = roundIndex.get(m.stage) ?? 0;
+    if (ri === 0) return [m];
+    const cached = leavesMemo.get(m.id);
+    if (cached) return cached;
+    const l = resolveParent(m, 'home').match;
+    const r = resolveParent(m, 'away').match;
+    const res = [...(l ? leaves(l) : []), ...(r ? leaves(r) : [])];
+    leavesMemo.set(m.id, res);
+    return res;
+  };
+
+  const baseKey = rounds[0];
+  const topKey = rounds[rounds.length - 1];
+  const baseOrder = (canon[topKey] ?? []).flatMap((m) => leaves(m));
+  const baseAll = canon[baseKey] ?? [];
+  const complete =
+    baseAll.length > 0 &&
+    baseOrder.length === baseAll.length &&
+    new Set(baseOrder.map((m) => m.id)).size === baseAll.length;
+
+  const baseIndex = new Map<number, number>(baseOrder.map((m, i) => [m.id, i]));
+  const orderRound = (r: KnockoutStage): Match[] => {
+    if (!complete) return canon[r]; // honest fallback: authority id order
+    if (r === baseKey) return baseOrder;
+    return [...canon[r]].sort((a, b) => {
+      const fa = Math.min(...leaves(a).map((l) => baseIndex.get(l.id) ?? 0));
+      const fb = Math.min(...leaves(b).map((l) => baseIndex.get(l.id) ?? 0));
+      return fa - fb || (a.id ?? 0) - (b.id ?? 0);
+    });
+  };
+
+  const matchNumberOf = (m: Match): number => (canon[m.stage]?.findIndex((x) => x.id === m.id) ?? -1) + 1;
+
+  // ── Build nodes round by round (previous round's slots are known first) ────
+  const nodes: Record<string, BracketNode[]> = {};
+  const order: Record<string, number[]> = {};
+  const slotOf = new Map<number, number>(); // matchId → slot (for parent ordering)
+
+  for (const r of rounds) {
+    const ordered = orderRound(r);
+    nodes[r] = ordered.map((m, slot) => {
+      slotOf.set(m.id, slot);
+      const fh = resolveParent(m, 'home');
+      const fa = resolveParent(m, 'away');
+      // Order parents top→bottom by their slot in the previous round.
+      let left = fh, right = fa;
+      if (fh.match && fa.match) {
+        const sh = slotOf.get(fh.match.id) ?? 0;
+        const sa = slotOf.get(fa.match.id) ?? 0;
+        if (sa < sh) { left = fa; right = fh; }
+      }
+      const wi = winnerOf(m);
+      return {
+        matchId: m.id,
+        stage: r,
+        slot,
+        matchNumber: matchNumberOf(m),
+        leftParentMatchId: left.match?.id ?? null,
+        rightParentMatchId: right.match?.id ?? null,
+        leftParentSource: left.source,
+        rightParentSource: right.source,
+        homeTeam: m.homeTeam?.name ?? 'TBD',
+        awayTeam: m.awayTeam?.name ?? 'TBD',
+        homeTeamId: m.homeTeam?.id ?? 0,
+        awayTeamId: m.awayTeam?.id ?? 0,
+        winner: wi.side,
+        winnerTeamId: wi.teamId,
+        winnerTeam: wi.teamName,
+      };
+    });
+    order[r] = nodes[r].map((n) => n.matchId);
+  }
+
+  // ── Validation: every participant must originate from this node's parents ──
+  const nodeById = new Map<number, BracketNode>();
+  for (const r of rounds) for (const n of nodes[r]) nodeById.set(n.matchId, n);
+
+  const issues: BracketIssue[] = [];
+  for (let ri = 1; ri < rounds.length; ri++) {
+    const prev = rounds[ri - 1];
+    for (const n of nodes[rounds[ri]]) {
+      if (n.leftParentMatchId == null || n.rightParentMatchId == null) {
+        issues.push({
+          matchId: n.matchId, stage: n.stage, slot: n.slot, code: 'PARENT_UNRESOLVED',
+          message: `slot ${n.slot} (${n.homeTeam} vs ${n.awayTeam}) has no explicit parent for one/both sides`,
+        });
+        continue;
+      }
+      const L = nodeById.get(n.leftParentMatchId);
+      const R = nodeById.get(n.rightParentMatchId);
+      if (!L || !R || L.stage !== prev || R.stage !== prev) {
+        issues.push({
+          matchId: n.matchId, stage: n.stage, slot: n.slot, code: 'PARENT_WRONG_ROUND',
+          message: `parents must both be ${prev}; got ${L?.stage ?? '?'} / ${R?.stage ?? '?'}`,
+        });
+        continue;
+      }
+      // When both parents are decided and both participants are real teams, the
+      // two participants MUST be exactly the two parent winners.
+      const expected = [L.winnerTeamId, R.winnerTeamId].filter((x): x is number => !!x);
+      const actual = [n.homeTeamId, n.awayTeamId].filter((x) => x > 0);
+      if (expected.length === 2 && actual.length === 2) {
+        const exp = new Set(expected);
+        if (!actual.every((t) => exp.has(t))) {
+          issues.push({
+            matchId: n.matchId, stage: n.stage, slot: n.slot, code: 'PARTICIPANT_MISMATCH',
+            message: `${n.homeTeam} vs ${n.awayTeam} are not the winners of parents ` +
+              `[${L.winnerTeam ?? '—'} @M${L.matchId}] / [${R.winnerTeam ?? '—'} @M${R.matchId}]`,
+          });
+        }
+      }
+    }
+  }
+
+  return { rounds, nodes, order, complete, issues, valid: issues.length === 0 };
+}
