@@ -34,6 +34,22 @@ This index tells AI agents and maintainers which GoalRadar documents are current
 
 - `docs/analysis/INDEX.md`: historical analysis and audit reports.
 - `docs/worldcup/INDEX.md`: World Cup 2026 current references and historical reports.
+- `docs/deployment/INDEX.md`: deployment/operations state, incident records, and operational runbooks.
+
+## Operational Runbooks (Production Operations Package)
+
+Procedures created from incident `WC-BRACKET-2026-07-11` so production incidents do not require re-running a long forensic investigation. Runbooks are procedures, not authority — they are subordinate to `docs/deployment/OPERATIONS.md` and `docs/architecture/DECISIONS.md`.
+
+- `docs/deployment/OPERATIONS_ARCHITECTURE.md`: the five truths (Repository / Deployment / Production / Runtime / Cache) and the deploy pipeline model.
+- `docs/deployment/RELEASE_RUNBOOK.md`: feature branch → production, per-step owner/evidence/rollback.
+- `docs/deployment/PRODUCTION_READINESS_CHECKLIST.md`: mandatory YES/NO release gate.
+- `docs/deployment/INCIDENT_RESPONSE_PLAYBOOK.md`: canonical "production looks wrong" workflow.
+- `docs/deployment/DEPLOYMENT_FORENSICS_RUNBOOK.md`: obtain each deployment fact without guessing.
+- `docs/worldcup/BRACKET_VALIDATION_RUNBOOK.md`: validate the WC knockout bracket end-to-end.
+- `docs/deployment/WC_BRACKET_POSTMORTEM_2026-07-11.md`: incident postmortem (OPEN until closure criteria met).
+
+Automation roadmap (planning; design only, not approved decisions):
+- `docs/deployment/OPERATIONS_MATURITY_ASSESSMENT.md`, `docs/deployment/ROADMAP_AUTOMATION.md`, `docs/deployment/PRODUCTION_VERIFICATION_AUTOMATION.md`, `docs/deployment/CI_CD_PIPELINE_BLUEPRINT.md`, `docs/deployment/POST_DEPLOY_SMOKE_TEST_SPEC.md`, `docs/deployment/OBSERVABILITY_GAP_ANALYSIS.md`.
 
 ## Historical Report Areas
 

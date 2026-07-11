@@ -18,6 +18,13 @@ Use these documents for current work:
 - `docs/architecture/DECISIONS.md`: current architecture decisions.
 - `.ai/CURRENT_SPRINT.md`: active World Cup sprint tasks, if any.
 
+## Current Runbooks & Reports
+
+- `docs/worldcup/BRACKET_VALIDATION_RUNBOOK.md`: how to validate the knockout bracket end-to-end (parent graph, winner propagation, geometry, tests, smoke). Current procedure.
+- `docs/worldcup/WC_KNOCKOUT_GRAPH_AUDIT.md`: bracket source-of-truth integrity report (explicit DAG, `buildKnockoutGraph`).
+- Incident postmortem: `docs/deployment/WC_BRACKET_POSTMORTEM_2026-07-11.md` (WC knockout bracket misrendering; OPEN).
+- Deployment/operations runbooks: see `docs/deployment/INDEX.md`.
+
 ## Historical Reports
 
 Files such as `WC_*.md`, `DATA18WC*.md`, and `*_FINAL_VERDICT.md` are historical evidence. They may include useful validation detail, but they are not the current source of truth unless referenced from an authoritative document.
