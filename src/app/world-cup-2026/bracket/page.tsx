@@ -433,7 +433,7 @@ async function BracketContent() {
           </h2>
         </div>
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 sm:p-6">
-          <WCBracket matches={bracketMatches} />
+          <WCBracket matches={bracketMatches} startStage="LAST_16" />
           <p className="text-xs text-gray-500 mt-4 text-center">
             Each card links to the full match detail page · Scroll horizontally on small screens
           </p>

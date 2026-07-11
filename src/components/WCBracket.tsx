@@ -4,21 +4,10 @@ import MatchCard from '@/components/MatchCard';
 // ---------------------------------------------------------------------------
 // Layout constants  (all in px, used for both HTML and inline SVG)
 // ---------------------------------------------------------------------------
-const SLOT_H = 88;   // height of one R16 slot — 8 slots = total bracket height
+const SLOT_H = 88;   // height of one base-round slot
 const CARD_W = 168;  // width of each match card
 const CARD_H = 68;   // height of each match card
 const CONN_W = 36;   // width of the SVG connector strip between columns
-
-const NUM_L32_SLOTS = 16;
-const TOTAL_H = NUM_L32_SLOTS * SLOT_H; // 1408 px
-
-const SLOTS_PER_MATCH: Record<string, number> = {
-  LAST_32: 1,
-  LAST_16: 2,
-  QUARTER_FINALS: 4,
-  SEMI_FINALS: 8,
-  FINAL: 16,
-};
 
 const ROUND_KEYS = ['LAST_32', 'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL'] as const;
 type RoundKey = (typeof ROUND_KEYS)[number];
@@ -46,38 +35,44 @@ const ROUND_MATCH_COUNT: Record<AllRoundKey, number> = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function matchCenterY(roundKey: RoundKey, matchIndex: number): number {
-  const slotsPerMatch = SLOTS_PER_MATCH[roundKey];
-  return (matchIndex * slotsPerMatch + slotsPerMatch / 2) * SLOT_H;
+// Each round's matches are distributed evenly over the full bracket height, so
+// match i of a round sits exactly between its two feeder matches (2i, 2i+1) of
+// the previous round — independent of which round the bracket starts from.
+function matchCenterY(roundKey: RoundKey, matchIndex: number, totalH: number): number {
+  return (matchIndex + 0.5) * (totalH / ROUND_MATCH_COUNT[roundKey]);
 }
 
-function cardTop(roundKey: RoundKey, matchIndex: number): number {
-  return matchCenterY(roundKey, matchIndex) - CARD_H / 2;
+function cardTop(roundKey: RoundKey, matchIndex: number, totalH: number): number {
+  return matchCenterY(roundKey, matchIndex, totalH) - CARD_H / 2;
 }
 
 // ---------------------------------------------------------------------------
 // SVG bracket connector between two adjacent rounds
 // ---------------------------------------------------------------------------
 
-function BracketConnector({ fromRound, toRound }: { fromRound: RoundKey; toRound: RoundKey }) {
-  const fromCount = ROUND_MATCH_COUNT[fromRound];
-  const toCount = ROUND_MATCH_COUNT[toRound];
-  const pairs = toCount;
+function BracketConnector({
+  fromRound,
+  toRound,
+  totalH,
+}: {
+  fromRound: RoundKey;
+  toRound: RoundKey;
+  totalH: number;
+}) {
+  const pairs = ROUND_MATCH_COUNT[toRound];
 
   const paths: string[] = [];
   for (let i = 0; i < pairs; i++) {
-    const y1 = matchCenterY(fromRound, i * 2);
-    const y2 = matchCenterY(fromRound, i * 2 + 1);
+    const y1 = matchCenterY(fromRound, i * 2, totalH);
+    const y2 = matchCenterY(fromRound, i * 2 + 1, totalH);
     const midY = (y1 + y2) / 2;
     paths.push(`M 0 ${y1} H ${CONN_W / 2} V ${midY}`);
     paths.push(`M 0 ${y2} H ${CONN_W / 2} V ${midY}`);
     paths.push(`M ${CONN_W / 2} ${midY} H ${CONN_W}`);
   }
 
-  void fromCount;
-
   return (
-    <svg width={CONN_W} height={TOTAL_H} className="shrink-0" aria-hidden="true">
+    <svg width={CONN_W} height={totalH} className="shrink-0" aria-hidden="true">
       {paths.map((d, i) => (
         <path key={i} d={d} stroke="#374151" strokeWidth="1.5" fill="none" />
       ))}
@@ -87,10 +82,25 @@ function BracketConnector({ fromRound, toRound }: { fromRound: RoundKey; toRound
 
 // ---------------------------------------------------------------------------
 // Public component — accepts raw knockout matches, no data fetching
+//
+// `startStage` selects the leftmost column so the same tree renders either the
+// full R32→Final bracket (hub page) or the R16→Final tree (bracket page, where
+// R32 is already shown separately above). The bracket height scales to the
+// starting round's match count, keeping the tree compact and correctly paired.
 // ---------------------------------------------------------------------------
 
-export default function WCBracket({ matches }: { matches: Match[] }) {
-  const byStage = ROUND_KEYS.reduce<Record<RoundKey, Match[]>>(
+export default function WCBracket({
+  matches,
+  startStage = 'LAST_32',
+}: {
+  matches: Match[];
+  startStage?: RoundKey;
+}) {
+  const startIdx = ROUND_KEYS.indexOf(startStage);
+  const rounds = ROUND_KEYS.slice(startIdx) as RoundKey[];
+  const totalH = ROUND_MATCH_COUNT[startStage] * SLOT_H;
+
+  const byStage = rounds.reduce<Record<RoundKey, Match[]>>(
     (acc, key) => {
       acc[key] = matches
         .filter((m) => m.stage === key)
@@ -109,7 +119,7 @@ export default function WCBracket({ matches }: { matches: Match[] }) {
       <div className="min-w-max">
         {/* Column headers row */}
         <div className="flex">
-          {ROUND_KEYS.map((key, ri) => (
+          {rounds.map((key, ri) => (
             <div key={key} className="flex items-start">
               {ri > 0 && <div style={{ width: CONN_W + 8 }} />}
               <div className="text-center shrink-0" style={{ width: CARD_W }}>
@@ -126,20 +136,20 @@ export default function WCBracket({ matches }: { matches: Match[] }) {
 
         {/* Bracket body */}
         <div className="flex mt-2">
-          {ROUND_KEYS.map((key, ri) => (
+          {rounds.map((key, ri) => (
             <div key={key} className="flex items-start">
               {ri > 0 && (
                 <div className="mt-0" style={{ marginRight: 8 }}>
-                  <BracketConnector fromRound={ROUND_KEYS[ri - 1]} toRound={key} />
+                  <BracketConnector fromRound={rounds[ri - 1]} toRound={key} totalH={totalH} />
                 </div>
               )}
-              <div className="shrink-0 relative" style={{ width: CARD_W, height: TOTAL_H }}>
+              <div className="shrink-0 relative" style={{ width: CARD_W, height: totalH }}>
                 {byStage[key].length > 0
                   ? byStage[key].map((match, i) => (
                       <div
                         key={match.id}
                         className="absolute"
-                        style={{ top: cardTop(key, i), left: 0, width: CARD_W }}
+                        style={{ top: cardTop(key, i, totalH), left: 0, width: CARD_W }}
                       >
                         <MatchCard
                           variant="bracket"
@@ -152,7 +162,7 @@ export default function WCBracket({ matches }: { matches: Match[] }) {
                       <div
                         key={i}
                         className="absolute rounded-lg border border-gray-800 border-dashed bg-gray-900/30 flex items-center justify-center"
-                        style={{ top: cardTop(key, i), left: 0, width: CARD_W, height: CARD_H }}
+                        style={{ top: cardTop(key, i, totalH), left: 0, width: CARD_W, height: CARD_H }}
                       >
                         <span className="text-gray-500 text-xs">TBD</span>
                       </div>
