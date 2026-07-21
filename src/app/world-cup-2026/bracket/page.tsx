@@ -12,6 +12,7 @@ import MatchCard, { MatchCardSkeleton } from '@/components/MatchCard';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCBracket from '@/components/WCBracket';
 import { WC_KNOCKOUT_SLOTS, type WCKnockoutSlot } from '@/lib/wc-fixtures';
+import { getRoundDateRange } from '@/lib/wc-rounds';
 import { buildKnockoutViewModel } from '@/lib/knockout-vm';
 
 export const revalidate = 900; // 15 min — bracket scores update during active knockout rounds
@@ -368,6 +369,14 @@ async function BracketContent() {
     return { ...r, total: ms.length, played };
   });
 
+  // Date/venue labels derived from the knockout schedule SSOT (WC_KNOCKOUT_SLOTS)
+  // via getRoundDateRange — never hardcoded, so official-schedule fixes cannot drift.
+  const r32DateRange   = getRoundDateRange('LAST_32');
+  const thirdDateRange = getRoundDateRange('THIRD_PLACE');
+  const finalDateRange = getRoundDateRange('FINAL');
+  const thirdVenue =
+    WC_KNOCKOUT_SLOTS.find((s) => s.round === 'THIRD_PLACE')?.venueCity ?? 'Miami Gardens, FL';
+
   return (
     <>
       <JsonLd knockoutMatches={vm.matches} />
@@ -407,7 +416,7 @@ async function BracketContent() {
               Round of 32 →
             </Link>
           </h2>
-          <span className="text-gray-500 text-xs">16 matches · 2–9 July 2026</span>
+          <span className="text-gray-500 text-xs">16 matches · {r32DateRange}</span>
         </div>
         {r32Matches.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -468,7 +477,7 @@ async function BracketContent() {
           <h2 id="third-heading" className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
             Third Place Play-off
           </h2>
-          <span className="text-gray-500 text-xs">25 July 2026 · MetLife Stadium</span>
+          <span className="text-gray-500 text-xs">{thirdDateRange} · {thirdVenue}</span>
         </div>
         {thirdMatches.length > 0 ? (
           <ThirdPlaceCard match={thirdMatches[0]} />
@@ -485,7 +494,7 @@ async function BracketContent() {
           <h2 id="final-heading" className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
             The Final
           </h2>
-          <span className="text-gray-500 text-xs">26 July 2026 · MetLife Stadium</span>
+          <span className="text-gray-500 text-xs">{finalDateRange} · MetLife Stadium</span>
         </div>
         {finalMatches.length > 0 ? (
           <FinalCard match={finalMatches[0]} />
