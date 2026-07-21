@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 
 import { getWCAuthorityMatchesV2 } from '@/lib/api';
 import { enrichKnockoutSlots } from '@/lib/knockout-vm';
+import { getRoundIsoRange } from '@/lib/wc-rounds';
 import { classifyMatchState } from '@/lib/match-classify';
 import type { CanonicalMatch } from '@/lib/canonical-match';
 import { canonicalToMatch } from '@/lib/canonical-match';
@@ -256,6 +257,10 @@ export default async function WCFixturesPage() {
   const resultsByDate  = groupByDate(results);
   const resultsDates   = Object.keys(resultsByDate).sort().reverse(); // newest first
 
+  // R32 start date derived from the knockout schedule SSOT (no hardcoded drift).
+  const r32Start = new Date(getRoundIsoRange('LAST_32').start)
+    .toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+
   return (
     <>
       <JsonLd matches={upcoming.length > 0 ? upcoming : results} />
@@ -277,7 +282,7 @@ export default async function WCFixturesPage() {
               </h1>
             </div>
             <p className="text-gray-500 text-sm">
-              FIFA World Cup 2026 · Group stage results{upcoming.length > 0 ? ' & upcoming matches' : ' · Knockout bracket starts 2 July'}
+              FIFA World Cup 2026 · Group stage results{upcoming.length > 0 ? ' & upcoming matches' : ` · Knockout bracket starts ${r32Start}`}
             </p>
           </div>
           <Link href="/world-cup-2026" className="text-xs text-yellow-500 hover:text-yellow-300 transition-colors font-medium shrink-0 mt-1">
@@ -310,7 +315,7 @@ export default async function WCFixturesPage() {
                 <div className="text-center sm:text-left">
                   <p className="text-white font-semibold text-base mb-1">Group stage complete — knockout round next</p>
                   <p className="text-gray-400 text-sm mb-4">
-                    All group stage matches have been played. The Round of 32 begins on <strong className="text-white">2 July 2026</strong>.
+                    All group stage matches have been played. The Round of 32 begins on <strong className="text-white">{r32Start} 2026</strong>.
                     View confirmed matchups and kick-off times in the knockout bracket.
                   </p>
                   <Link
