@@ -533,8 +533,22 @@ async function getStandingsCachedImpl(competition: string): Promise<{
             data.standings.filter(s => s.type === 'TOTAL').map(s => [toGroupKey(s.group), s]),
           );
           const staticTables = getStaticWCGroupTables();
+          // Structural integrity guard: a WC 2026 group has EXACTLY 4 teams. A live
+          // TOTAL table with any other count is malformed (observed in production: a
+          // stale standings snapshot rendered Group A with 5 rows incl. a phantom team
+          // and Group G with 3). Reject the malformed table and fall back to the static
+          // skeleton for that group (real team names, zero stats — never a fabricated
+          // result) so a broken snapshot can never render an impossible group size.
+          const WC_TEAMS_PER_GROUP = 4;
           const merged: StandingTable[] = staticTables.map(staticEntry => {
             const live = liveByGroup.get(staticEntry.group ?? '');
+            if (live && live.table.length !== WC_TEAMS_PER_GROUP) {
+              console.warn(
+                `[Standings] WC ${staticEntry.group}: live table has ${live.table.length} team(s), ` +
+                `expected ${WC_TEAMS_PER_GROUP} — rejecting malformed snapshot, using static skeleton`,
+              );
+              return staticEntry;
+            }
             // Return live stats but keep the canonical "GROUP_A" key for all callers.
             return live ? { ...live, group: staticEntry.group } : staticEntry;
           });
