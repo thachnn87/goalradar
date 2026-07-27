@@ -255,7 +255,7 @@ export default async function WC2026ResultsPage() {
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-10 text-center mb-8">
             <p className="text-4xl mb-3">📊</p>
             <p className="text-gray-300 font-semibold">No results yet</p>
-            <p className="text-gray-500 text-sm mt-1">Check back after the first matches on 11 June 2026</p>
+            <p className="text-gray-500 text-sm mt-1">Results are currently unavailable — please check back soon</p>
           </div>
         )}
 
