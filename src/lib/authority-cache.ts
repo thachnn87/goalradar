@@ -348,7 +348,32 @@ async function coldRebuild(builtAt: string): Promise<CanonicalMatch[]> {
           byId.set(m.id, m);
         }
       }
-      const fdMatches = [...byId.values()];
+      let fdMatches = [...byId.values()];
+
+      // A2: outage resilience — when EVERY provider feed is empty (FD/AF down +
+      // cold KV, no DR), seed the canonical tournament STRUCTURE from bundled
+      // static data so structural surfaces (fixtures, bracket, hub) stay populated
+      // instead of collapsing to blank. Structure only: static matches are
+      // SCHEDULED with null scores and non-linkable negative ids, so NO result is
+      // ever fabricated. Skipped whenever the provider returned any match, so this
+      // is behavior-preserving except in a total outage.
+      // NOTE (WS-B): getStaticKnockoutMatches currently lives in knockout-vm; a
+      // clean layering would relocate the static builders to a low-level data
+      // module. Deferred — not a recovery concern.
+      if (fdMatches.length === 0) {
+        const [{ getStaticGroupMatches }, { getStaticKnockoutMatches }] = await Promise.all([
+          import('../data/worldcup/loader'),
+          import('./knockout-vm'),
+        ]);
+        const seed = [...getStaticGroupMatches(), ...getStaticKnockoutMatches()];
+        if (seed.length > 0) {
+          fdMatches = seed;
+          console.warn(
+            `[Authority] STATIC-SEED | all provider feeds empty — seeded ${seed.length} ` +
+            `canonical fixtures from bundled static data (structure only, no results)`,
+          );
+        }
+      }
 
       // Build live map (live cache is separate — IN_PLAY/PAUSED only).
       const liveMap = new Map<number, LiveEntry>();
