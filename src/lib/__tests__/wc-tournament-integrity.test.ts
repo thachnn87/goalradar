@@ -20,6 +20,8 @@
  */
 
 import { WC_ALL_TEAMS } from '../wc-all-teams';
+import { WC_TEAMS } from '../wc-teams';
+import { WC_KNOCKOUT_SLOTS } from '../wc-fixtures';
 import teamsData from '../../data/worldcup/teams.json';
 import groupsData from '../../data/worldcup/groups.json';
 import fixturesData from '../../data/worldcup/fixtures.json';
@@ -161,6 +163,82 @@ describe('fixtures.json schedule', () => {
       const members = slugByGroup.get(f.group!)!;
       expect(members.has(f.homeTeam!)).toBe(true);
       expect(members.has(f.awayTeam!)).toBe(true);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WC_TEAMS (featured 6) ⟷ canonical roster   [Workstream B — Phase 1 guard]
+//
+// Locks the featured-team editorial layer to the canonical roster on identity
+// fields. fifaRanking is intentionally NOT asserted: it currently diverges
+// (usa 13 vs 11, england 4 vs 5, canada 47 vs 40 between WC_ALL_TEAMS and
+// WC_TEAMS) and is tracked as a separate WS-B data-reconciliation item — this
+// guard locks what is consistent today without turning that finding into a
+// red build.
+// ---------------------------------------------------------------------------
+
+describe('WC_TEAMS featured subset ⟷ canonical roster', () => {
+  const canonicalSlugs = new Set(teams.map((t) => t.slug));
+  const rosterBySlug = new Map(WC_ALL_TEAMS.map((t) => [t.slug, t]));
+
+  it('every featured team is a real canonical slug', () => {
+    for (const slug of Object.keys(WC_TEAMS)) {
+      expect(canonicalSlugs.has(slug)).toBe(true);
+    }
+  });
+
+  it('each entry key matches its own slug field', () => {
+    for (const [key, t] of Object.entries(WC_TEAMS)) {
+      expect(t.slug).toBe(key);
+    }
+  });
+
+  it('shares identity (apiName + flag) with WC_ALL_TEAMS', () => {
+    for (const [slug, t] of Object.entries(WC_TEAMS)) {
+      const roster = rosterBySlug.get(slug);
+      expect(roster).toBeDefined();
+      expect(t.apiName).toBe(roster!.apiName);
+      expect(t.flag).toBe(roster!.flag);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WC_KNOCKOUT_SLOTS ⟷ fixtures.json knockout structure   [WS-B Phase 1 guard]
+//
+// The two hardcoded knockout sources (WC_KNOCKOUT_SLOTS + fixtures.json's
+// knockout rows) are a known duplication (WS-B deletion candidate). Until one
+// is derived from the other, lock them to the SAME structural shape so they
+// cannot silently diverge.
+// ---------------------------------------------------------------------------
+
+describe('WC_KNOCKOUT_SLOTS ⟷ fixtures.json knockout structure', () => {
+  const KO_STAGES = ['LAST_32', 'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'THIRD_PLACE', 'FINAL'] as const;
+  const EXPECTED: Record<string, number> = {
+    LAST_32: 16, LAST_16: 8, QUARTER_FINALS: 4, SEMI_FINALS: 2, THIRD_PLACE: 1, FINAL: 1,
+  };
+  const countBy = (arr: string[]) =>
+    arr.reduce<Record<string, number>>((o, r) => ((o[r] = (o[r] ?? 0) + 1), o), {});
+
+  it('has the canonical 32-slot distribution', () => {
+    expect(WC_KNOCKOUT_SLOTS).toHaveLength(32);
+    const dist = countBy(WC_KNOCKOUT_SLOTS.map((s) => s.round));
+    for (const st of KO_STAGES) expect(dist[st]).toBe(EXPECTED[st]);
+  });
+
+  it('matches the fixtures.json knockout distribution exactly', () => {
+    const fxKo = countBy(fixtures.filter((f) => f.stage !== 'GROUP_STAGE').map((f) => f.stage));
+    const slotKo = countBy(WC_KNOCKOUT_SLOTS.map((s) => s.round));
+    expect(slotKo).toEqual(fxKo);
+  });
+
+  it('numbers matches 1..N contiguously within each round', () => {
+    for (const st of KO_STAGES) {
+      const nums = WC_KNOCKOUT_SLOTS.filter((s) => s.round === st)
+        .map((s) => s.matchNumber)
+        .sort((a, b) => a - b);
+      expect(nums).toEqual(nums.map((_, i) => i + 1));
     }
   });
 });
