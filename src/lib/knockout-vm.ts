@@ -10,11 +10,52 @@
  */
 
 import { getWCAuthorityMatchesV2, getStandingsCached } from './api';
-import type { Match } from './types';
+import type { Match, Competition, Score } from './types';
 import { deriveMatchDisplay } from './match-display';
 import { canonicalToMatch } from './canonical-match';
 import type { CanonicalMatch } from './canonical-match';
-import { injectKnockoutSlotLabels } from './wc-fixtures';
+import { injectKnockoutSlotLabels, WC_KNOCKOUT_SLOTS } from './wc-fixtures';
+
+// ---------------------------------------------------------------------------
+// Static knockout structure — outage-safe fallback for the bracket tree
+// ---------------------------------------------------------------------------
+
+const WC_COMPETITION: Competition = {
+  id: 2000, name: 'FIFA World Cup', code: 'WC', type: 'CUP', emblem: '',
+  area: { id: 0, name: 'World', code: 'WLD', flag: null },
+};
+const EMPTY_SCORE: Score = {
+  winner: null, duration: 'REGULAR',
+  fullTime: { home: null, away: null }, halfTime: { home: null, away: null },
+};
+
+/**
+ * Canonical knockout bracket as synthetic Match[], derived from the schedule
+ * SSOT (WC_KNOCKOUT_SLOTS). Teams carry the deterministic slot labels
+ * ("1st Group E", "Winner R32 M1", …) — the exact placeholder shape the
+ * authority pipeline itself emits pre-tournament via injectKnockoutSlotLabels,
+ * so downstream consumers (buildKnockoutGraph / WCBracket) treat both identically.
+ *
+ * Purpose: keep the knockout bracket TREE structurally present when the
+ * authority cache is empty (provider outage / cold KV) instead of collapsing to
+ * blank "TBD" columns. Ids are negative (matchPath renders them non-linkable),
+ * scores null, status SCHEDULED — no fabricated results, structure only.
+ */
+export function getStaticKnockoutMatches(): Match[] {
+  return WC_KNOCKOUT_SLOTS.map((s) => ({
+    id:          -s.localId,          // negative synthetic id → non-linkable, no collision
+    utcDate:     s.utcDate,
+    status:      'SCHEDULED' as const,
+    matchday:    null,
+    stage:       s.round,
+    group:       null,
+    lastUpdated: '2026-06-08T00:00:00Z',
+    competition: WC_COMPETITION,
+    homeTeam: { id: 0, name: s.homeLabel, shortName: s.homeLabel, tla: '', crest: '' },
+    awayTeam: { id: 0, name: s.awayLabel, shortName: s.awayLabel, tla: '', crest: '' },
+    score: EMPTY_SCORE,
+  }));
+}
 
 // ---------------------------------------------------------------------------
 // Group-position map — teamId → editorial slot label ("1st Group A")

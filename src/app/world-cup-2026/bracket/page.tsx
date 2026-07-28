@@ -13,7 +13,7 @@ import Breadcrumb from '@/components/Breadcrumb';
 import WCBracket from '@/components/WCBracket';
 import { WC_KNOCKOUT_SLOTS, type WCKnockoutSlot } from '@/lib/wc-fixtures';
 import { getRoundDateRange } from '@/lib/wc-rounds';
-import { buildKnockoutViewModel } from '@/lib/knockout-vm';
+import { buildKnockoutViewModel, getStaticKnockoutMatches, BRACKET_TREE_STAGES, type KnockoutStage } from '@/lib/knockout-vm';
 
 export const revalidate = 900; // 15 min — bracket scores update during active knockout rounds
 
@@ -360,6 +360,14 @@ async function BracketContent() {
   const { r32: r32Matches, thirdPlace: thirdMatches, final: finalMatches, bracketMatches } = vm;
 
   const useLocalSlots = !vm.hasApiData;
+
+  // Visual tree (R16 → Final): when the authority cache is empty (provider
+  // outage / cold KV) bracketMatches is [], which would collapse the tree to
+  // blank "TBD" columns. Feed the canonical static structure instead so the
+  // bracket tree stays present. Same SSOT as the R32/3rd/Final local rows below.
+  const treeMatches = bracketMatches.length > 0
+    ? bracketMatches
+    : getStaticKnockoutMatches().filter((m) => BRACKET_TREE_STAGES.has(m.stage as KnockoutStage));
   const localSlots = (round: WCKnockoutSlot['round']) =>
     useLocalSlots ? WC_KNOCKOUT_SLOTS.filter((s) => s.round === round) : [];
 
@@ -442,7 +450,7 @@ async function BracketContent() {
           </h2>
         </div>
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 sm:p-6">
-          <WCBracket matches={bracketMatches} startStage="LAST_16" />
+          <WCBracket matches={treeMatches} startStage="LAST_16" />
           <p className="text-xs text-gray-500 mt-4 text-center">
             Each card links to the full match detail page · Scroll horizontally on small screens
           </p>
