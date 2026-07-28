@@ -734,19 +734,6 @@ export const GOLDEN_BOOT_PREDICTIONS: GoldenBootPrediction[] = [
   },
   {
     rank: 9,
-    name: 'Erling Haaland',
-    country: 'Norway',
-    countrySlug: 'norway',
-    countryFlag: '🇳🇴',
-    club: 'Manchester City',
-    age: 25,
-    worldCupGoals: 0,
-    probability: '7%',
-    reasoning:
-      'The most ruthless finisher in world football heads to his first ever World Cup. Haaland averages over a goal per game for club and country and his combination of pace, power and positioning is unmatched. If Norway reach the knockout rounds he has the capacity to score 6–8 goals in a tournament and run away with the Golden Boot.',
-  },
-  {
-    rank: 10,
     name: 'Jude Bellingham',
     country: 'England',
     countrySlug: 'england',
@@ -759,7 +746,7 @@ export const GOLDEN_BOOT_PREDICTIONS: GoldenBootPrediction[] = [
       'Bellingham defies position — he plays as a box-to-box midfielder yet scores at the rate of a striker, netting 23 goals in his debut Real Madrid season. England will rely on him to create and score throughout the tournament. At 22 in his prime, a deep England run could see him accumulate goals from midfield and challenge the traditional striker picks.',
   },
   {
-    rank: 11,
+    rank: 10,
     name: 'Julián Álvarez',
     country: 'Argentina',
     countrySlug: 'argentina',
