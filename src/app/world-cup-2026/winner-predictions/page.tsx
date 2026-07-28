@@ -564,7 +564,7 @@ export default function WinnerPredictionsPage() {
           { href: '/world-cup-2026',                          icon: '🏆', label: 'WC 2026 Hub',              desc: 'Full tournament overview — fixtures, groups, bracket' },
           { href: '/world-cup-2026/groups',                   icon: '🗂️', label: 'Group Stage',              desc: 'All 12 groups with standings and predictions' },
           { href: '/world-cup-2026/bracket',                  icon: '🔗', label: 'Knockout Bracket',          desc: 'Round of 32 path from group exit to the Final' },
-          { href: '/world-cup-2026/golden-boot-predictions',  icon: '👟', label: 'Golden Boot Predictions',   desc: 'Top scorer forecast — Mbappé, Haaland, Vinicius Jr' },
+          { href: '/world-cup-2026/golden-boot-predictions',  icon: '👟', label: 'Golden Boot Predictions',   desc: 'Top scorer forecast — Mbappé, Vinicius Jr and more' },
           { href: '/world-cup-2026/predictions',              icon: '🔮', label: 'All Predictions',           desc: 'Winner, Golden Boot and all 8 group predictions' },
           { href: '/world-cup-2026/fixtures',                 icon: '📅', label: 'Fixtures',                  desc: 'Full schedule with kick-off times for all 104 matches' },
           { href: '/teams/france',                            icon: '🇫🇷', label: 'France Team Profile',       desc: 'Squad, fixtures and group stage info' },

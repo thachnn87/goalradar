@@ -499,7 +499,7 @@ export default async function WC2026PredictionsPage() {
         <WCRelatedLinks links={[
           { href: '/world-cup-2026/predictions',          icon: '🏆', label: 'Winner Predictions Hub',    desc: 'Expert winner odds, Golden Boot picks and knockout forecasts' },
           { href: '/world-cup-2026/winner-predictions',   icon: '🥇', label: 'Who Will Win?',             desc: 'Full contender analysis — France, Brazil, England, Argentina' },
-          { href: '/world-cup-2026/golden-boot-predictions', icon: '👟', label: 'Golden Boot Predictions', desc: 'Top scorer forecast — Mbappé, Haaland, Vinicius Jr and more' },
+          { href: '/world-cup-2026/golden-boot-predictions', icon: '👟', label: 'Golden Boot Predictions', desc: 'Top scorer forecast — Mbappé, Vinicius Jr and more' },
           { href: '/world-cup-2026-schedule',             icon: '📅', label: 'Full Schedule',             desc: 'All 104 fixtures with kickoff times and venues' },
           { href: '/world-cup-2026-results',              icon: '🏁', label: 'Live Results',              desc: 'Scores for every completed World Cup 2026 match' },
           { href: '/world-cup-2026-standings',            icon: '📊', label: 'Group Standings',           desc: 'Live points tables for all 12 groups' },

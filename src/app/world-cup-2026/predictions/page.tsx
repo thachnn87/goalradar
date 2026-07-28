@@ -83,7 +83,7 @@ function JsonLd() {
         name: 'Who will win the Golden Boot at World Cup 2026?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'Kylian Mbappé is the leading Golden Boot prediction at World Cup 2026, having already scored in two previous World Cups. Erling Haaland, Vinicius Jr and Harry Kane are also strong contenders.',
+          text: 'Kylian Mbappé is the leading Golden Boot prediction at World Cup 2026, having already scored in two previous World Cups. Vinicius Jr, Harry Kane and Julián Álvarez are also strong contenders.',
         },
       },
       {
@@ -429,7 +429,7 @@ export default function WCPredictionsHubPage() {
               },
               {
                 q: 'Who will win the Golden Boot at World Cup 2026?',
-                a: 'Kylian Mbappé is the leading Golden Boot prediction, having scored in two previous World Cups. Erling Haaland, Vinicius Jr and Harry Kane are strong challengers.',
+                a: 'Kylian Mbappé is the leading Golden Boot prediction, having scored in two previous World Cups. Vinicius Jr, Harry Kane and Julián Álvarez are strong challengers.',
               },
               {
                 q: 'Which teams are dark horses at the 2026 World Cup?',
@@ -466,7 +466,7 @@ export default function WCPredictionsHubPage() {
 
         <WCRelatedLinks links={[
           { href: '/world-cup-2026/winner-predictions',      icon: '🏆', label: 'Winner Predictions',      desc: 'Full contender analysis — who lifts the trophy in July 2026?' },
-          { href: '/world-cup-2026/golden-boot-predictions', icon: '👟', label: 'Golden Boot Predictions',  desc: 'Top scorers forecast — Mbappé, Haaland, Vinicius Jr and more' },
+          { href: '/world-cup-2026/golden-boot-predictions', icon: '👟', label: 'Golden Boot Predictions',  desc: 'Top scorers forecast — Mbappé, Vinicius Jr and more' },
           { href: '/world-cup-2026/group-a-predictions',     icon: '🗂️', label: 'Group A Predictions',      desc: 'France, USA, Japan, Switzerland — who advances?' },
           { href: '/world-cup-2026/fixtures',                icon: '📅', label: 'WC 2026 Fixtures',         desc: 'Full schedule with kick-off times for all 104 matches' },
           { href: '/world-cup-2026-standings',               icon: '📊', label: 'Group Standings',          desc: 'Live points tables for all 12 groups' },

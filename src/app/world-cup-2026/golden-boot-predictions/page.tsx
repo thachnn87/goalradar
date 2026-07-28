@@ -25,7 +25,7 @@ const PAGE_URL = `${BASE_URL}/world-cup-2026/golden-boot-predictions`;
 export const metadata: Metadata = {
   title: 'World Cup 2026 Golden Boot Predictions | GoalRadar',
   description:
-    'Expert World Cup 2026 Golden Boot predictions. Who will be the top scorer — Mbappé, Haaland, Vinicius Jr, Bellingham, Kane, Julián Álvarez or Yamal? Full odds, player cards and historical winners.',
+    'Expert World Cup 2026 Golden Boot predictions. Who will be the top scorer — Mbappé, Vinicius Jr, Bellingham, Kane, Julián Álvarez or Yamal? Full odds, player cards and historical winners.',
   alternates: { canonical: PAGE_URL },
   openGraph: {
     title: 'World Cup 2026 Golden Boot Predictions | GoalRadar',
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'World Cup 2026 Golden Boot Predictions | GoalRadar',
     description:
-      'Full Golden Boot odds — Mbappé, Haaland, Vinicius Jr, Kane, Bellingham, Julián Álvarez and Yamal.',
+      'Full Golden Boot odds — Mbappé, Vinicius Jr, Kane, Bellingham, Julián Álvarez and Yamal.',
   },
 };
 
@@ -50,11 +50,9 @@ export const metadata: Metadata = {
 const FAVOURITE_SLUGS = ['Kylian Mbappé', 'Harry Kane', 'Vinicius Jr', 'Lamine Yamal'];
 
 // Dark horse picks (outstanding value or unconventional routes to the award)
-const DARK_HORSE_SLUGS = ['Erling Haaland', 'Jude Bellingham', 'Julián Álvarez'];
+const DARK_HORSE_SLUGS = ['Jude Bellingham', 'Julián Álvarez'];
 
 const DARK_HORSE_NOTES: Record<string, string> = {
-  'Erling Haaland':
-    'Norway\'s first-ever World Cup qualifier opens up a whole tournament for the planet\'s most clinical finisher. Haaland has never scored zero in any competition he\'s entered — expect goals from the first whistle.',
   'Jude Bellingham':
     'Midfielders rarely win the Golden Boot, but Bellingham is not a conventional midfielder. He scored 23 goals for Real Madrid in his debut season. England\'s entire attacking system is built around him finding the net.',
   'Julián Álvarez':
@@ -102,7 +100,7 @@ function JsonLd() {
     '@type': 'Article',
     headline: 'World Cup 2026 Golden Boot Predictions',
     description:
-      'Expert top-scorer predictions for the FIFA World Cup 2026. Full player cards, odds and analysis for Mbappé, Haaland, Vinicius Jr, Bellingham, Kane, Julián Álvarez and Yamal.',
+      'Expert top-scorer predictions for the FIFA World Cup 2026. Full player cards, odds and analysis for Mbappé, Vinicius Jr, Bellingham, Kane, Julián Álvarez and Yamal.',
     url: PAGE_URL,
     datePublished: '2026-01-01',
     dateModified: new Date().toISOString().split('T')[0],
@@ -125,7 +123,7 @@ function JsonLd() {
         name: 'Who will win the Golden Boot at World Cup 2026?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'Kylian Mbappé is the overwhelming favourite to win the World Cup 2026 Golden Boot with a 20% implied probability. He top-scored in 2022 with 8 goals and arrives at 27 in his absolute prime. Erling Haaland (7%) and Harry Kane (12%) are the closest challengers, with Vinicius Jr (10%) and Julián Álvarez (6%) also firmly in contention.',
+          text: 'Kylian Mbappé is the overwhelming favourite to win the World Cup 2026 Golden Boot with a 20% implied probability. He top-scored in 2022 with 8 goals and arrives at 27 in his absolute prime. Harry Kane (12%) is the closest challenger, with Vinicius Jr (10%) and Julián Álvarez (6%) also firmly in contention.',
         },
       },
       {
@@ -542,7 +540,7 @@ export default function GoldenBootPredictionsPage() {
             {[
               {
                 q: 'Who will win the Golden Boot at World Cup 2026?',
-                a: 'Kylian Mbappé is the overwhelming favourite with a 20% implied probability. He top-scored in 2022 with 8 goals and arrives at 27 in his absolute prime at Real Madrid. Erling Haaland (7%), Harry Kane (12%), Vinicius Jr (10%) and Julián Álvarez (6%) are all genuine challengers.',
+                a: 'Kylian Mbappé is the overwhelming favourite with a 20% implied probability. He top-scored in 2022 with 8 goals and arrives at 27 in his absolute prime at Real Madrid. Harry Kane (12%), Vinicius Jr (10%) and Julián Álvarez (6%) are all genuine challengers.',
               },
               {
                 q: 'Who scored the most goals in World Cup history?',
