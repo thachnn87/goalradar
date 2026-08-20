@@ -572,13 +572,22 @@ async function getStandingsCachedImpl(competition: string): Promise<{
         } catch (err) {
           console.warn('[Standings] authority derivation failed:', err instanceof Error ? err.message : String(err));
         }
-        return { standings: getStaticWCGroupTables(), competition: wcMeta };
+        // INC-WC-DATA-001: WC 2026 is a completed tournament. Its standings must be
+        // REAL (KV merge above / authority-derived) or honestly UNAVAILABLE — NEVER the
+        // synthetic pre-draw skeleton (WC_ALL_TEAMS). Returning [] makes the pages render
+        // their "standings unavailable" state instead of publishing a fictional table.
+        // (getStaticWCGroupTables remains only as the KV-HIT merge scaffold at :535, which
+        // runs solely when real provider standings are present.)
+        console.warn('[Standings] WC: no real standings (KV miss + authority empty) — returning UNAVAILABLE, synthetic fallback suppressed');
+        return { standings: [], competition: wcMeta };
       }
       return empty;
     });
   } catch {
+    // INC-WC-DATA-001: completed WC 2026 — never fall back to the synthetic skeleton
+    // on error; render honest "unavailable" instead of a fictional table.
     if (competition === 'WC') {
-      return { standings: getStaticWCGroupTables(), competition: wcMeta };
+      return { standings: [], competition: wcMeta };
     }
     return empty;
   }

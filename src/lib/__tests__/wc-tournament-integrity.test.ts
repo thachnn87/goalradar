@@ -19,6 +19,8 @@
  * Pure data assertions. No KV, no network, no provider.
  */
 
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { WC_ALL_TEAMS } from '../wc-all-teams';
 import { WC_TEAMS } from '../wc-teams';
 import { WC_KNOCKOUT_SLOTS } from '../wc-fixtures';
@@ -240,5 +242,29 @@ describe('WC_KNOCKOUT_SLOTS ⟷ fixtures.json knockout structure', () => {
         .sort((a, b) => a - b);
       expect(nums).toEqual(nums.map((_, i) => i + 1));
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WC-2026 standings must NEVER fall back to the synthetic skeleton
+// (INC-WC-DATA-001). A completed tournament shows REAL standings (KV-hit merge
+// or authority-derived) or an honest "unavailable" state — never WC_ALL_TEAMS.
+// Source-level guard: fails if a synthetic terminal fallback is reintroduced
+// into getStandingsCachedImpl.
+// ---------------------------------------------------------------------------
+
+describe('WC standings never serve the synthetic skeleton (INC-WC-DATA-001)', () => {
+  const apiSrc = readFileSync(join(__dirname, '..', 'api.ts'), 'utf8');
+
+  it('no WC standings branch returns getStaticWCGroupTables()', () => {
+    // The removed synthetic fallbacks returned `standings: getStaticWCGroupTables()`.
+    // The surviving KV-hit merge uses `const staticTables = getStaticWCGroupTables()`
+    // (a scaffold, never returned directly), so this pattern must be absent.
+    expect(apiSrc).not.toMatch(/standings:\s*getStaticWCGroupTables\(\)/);
+  });
+
+  it('getStaticWCGroupTables survives only as the KV-hit merge scaffold (exactly one call site)', () => {
+    const calls = (apiSrc.match(/getStaticWCGroupTables\(\)/g) ?? []).length;
+    expect(calls).toBe(1);
   });
 });
