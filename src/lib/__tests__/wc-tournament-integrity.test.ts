@@ -268,3 +268,14 @@ describe('WC standings never serve the synthetic skeleton (INC-WC-DATA-001)', ()
     expect(calls).toBe(1);
   });
 });
+
+// The WC authority cache must not seed the synthetic pre-draw roster either
+// (INC-WC-DATA-001 extension). Empty provider feeds → empty authority → honest
+// "unavailable" on Fixtures/group pages, NEVER static group matches.
+describe('WC authority cache never seeds the synthetic roster (INC-WC-DATA-001)', () => {
+  const authSrc = readFileSync(join(__dirname, '..', 'authority-cache.ts'), 'utf8');
+
+  it('coldRebuild does not seed getStaticGroupMatches (synthetic team names)', () => {
+    expect(authSrc).not.toMatch(/getStaticGroupMatches/);
+  });
+});

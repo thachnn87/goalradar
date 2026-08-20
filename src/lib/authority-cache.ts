@@ -348,31 +348,18 @@ async function coldRebuild(builtAt: string): Promise<CanonicalMatch[]> {
           byId.set(m.id, m);
         }
       }
-      let fdMatches = [...byId.values()];
+      const fdMatches = [...byId.values()];
 
-      // A2: outage resilience — when EVERY provider feed is empty (FD/AF down +
-      // cold KV, no DR), seed the canonical tournament STRUCTURE from bundled
-      // static data so structural surfaces (fixtures, bracket, hub) stay populated
-      // instead of collapsing to blank. Structure only: static matches are
-      // SCHEDULED with null scores and non-linkable negative ids, so NO result is
-      // ever fabricated. Skipped whenever the provider returned any match, so this
-      // is behavior-preserving except in a total outage.
-      // NOTE (WS-B): getStaticKnockoutMatches currently lives in knockout-vm; a
-      // clean layering would relocate the static builders to a low-level data
-      // module. Deferred — not a recovery concern.
+      // INC-WC-DATA-001: the former A2 static seed is REMOVED. WC 2026 is a
+      // COMPLETED tournament — its authority cache must hold REAL provider matches
+      // or stay empty (→ pages render honest "unavailable"), NEVER the synthetic
+      // pre-draw roster. The seed injected static group matches (United States /
+      // France / Switzerland / Japan …) which surfaced on Fixtures and group-detail
+      // pages as if they were the tournament. Empty provider feeds now yield an
+      // empty authority, not fabricated structure. Real data is untouched: when the
+      // provider returns matches, this path is unaffected.
       if (fdMatches.length === 0) {
-        const [{ getStaticGroupMatches }, { getStaticKnockoutMatches }] = await Promise.all([
-          import('../data/worldcup/loader'),
-          import('./knockout-vm'),
-        ]);
-        const seed = [...getStaticGroupMatches(), ...getStaticKnockoutMatches()];
-        if (seed.length > 0) {
-          fdMatches = seed;
-          console.warn(
-            `[Authority] STATIC-SEED | all provider feeds empty — seeded ${seed.length} ` +
-            `canonical fixtures from bundled static data (structure only, no results)`,
-          );
-        }
+        console.warn('[Authority] provider feeds empty — authority left EMPTY (synthetic seed suppressed, INC-WC-DATA-001)');
       }
 
       // Build live map (live cache is separate — IN_PLAY/PAUSED only).
@@ -555,6 +542,13 @@ export async function readAuthorityCache(
 ): Promise<CanonicalMatch[]> {
   const _readStart = Date.now();
 
+  // INC-WC-DATA-001: a served envelope may still contain the former A2 static
+  // seed (negative synthetic ids) persisted in KV/DR (7-day TTL). Real provider
+  // matches have positive ids; drop synthetic so a poisoned / seed-only envelope
+  // resolves to an EMPTY (honest "unavailable") authority instead of rendering
+  // the synthetic pre-draw tournament. Also future-proofs against re-seeding.
+  const realOnly = (ms: CanonicalMatch[]): CanonicalMatch[] => ms.filter((m) => m.id > 0);
+
   if (KV_ENABLED) {
     // ── 1. Primary key ────────────────────────────────────────────────────
     try {
@@ -563,7 +557,7 @@ export async function readAuthorityCache(
         telemetry.hits++;
         logHit('primary', envelope);
         recordAuthorityRead('primary', Date.now() - _readStart, builtAt, attribution); // fire-and-forget
-        return overlayFreshState(envelope.matches, builtAt);
+        return overlayFreshState(realOnly(envelope.matches), builtAt);
       }
     } catch (err) {
       console.error(
@@ -592,13 +586,13 @@ export async function readAuthorityCache(
             telemetry.drHits++;
             logHit('dr', drEnvelope);
             recordAuthorityRead('dr', Date.now() - _readStart, builtAt, attribution); // fire-and-forget
-            return overlayFreshState(drEnvelope.matches, builtAt);
+            return overlayFreshState(realOnly(drEnvelope.matches), builtAt);
           }
         } else {
           telemetry.drHits++;
           logHit('dr', drEnvelope);
           recordAuthorityRead('dr', Date.now() - _readStart, builtAt, attribution); // fire-and-forget
-          return overlayFreshState(drEnvelope.matches, builtAt);
+          return overlayFreshState(realOnly(drEnvelope.matches), builtAt);
         }
       }
     } catch (err) {
@@ -610,7 +604,7 @@ export async function readAuthorityCache(
   }
 
   // ── 3. Cold rebuild ────────────────────────────────────────────────────
-  const matches = await coldRebuild(builtAt);
+  const matches = realOnly(await coldRebuild(builtAt));
   recordAuthorityRead('cold', Date.now() - _readStart, builtAt, attribution); // fire-and-forget
 
   // Write-back: cache the cold-rebuild result to primary KV so subsequent
