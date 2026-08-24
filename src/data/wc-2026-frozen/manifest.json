@@ -1,0 +1,138 @@
+{
+  "datasetId": "WC-2026",
+  "version": "v1",
+  "schemaVersion": 1,
+  "status": {
+    "captured": true,
+    "validated": true,
+    "signedOff": false,
+    "frozen": false,
+    "note": "Candidate. VALIDATED against 30 integrity checks. NOT signed off, NOT frozen: production freeze gate (wc-frozen.ts) remains OFF pending Business + Historical-Authority sign-off (DGP-001 G8)."
+  },
+  "tournament": {
+    "competitionId": "17",
+    "seasonId": "285023",
+    "name": "FIFA World Cup 2026",
+    "year": 2026,
+    "hostCountries": [
+      "CAN",
+      "MEX",
+      "USA"
+    ]
+  },
+  "authoritativeSource": {
+    "organisation": "FIFA",
+    "description": "FIFA official World Cup 2026 record",
+    "role": "AUTHORITATIVE — truth of what happened"
+  },
+  "acquisitionSource": {
+    "channel": "api.fifa.com/api/v3 (FIFA-owned public JSON API)",
+    "role": "ACQUISITION — how the record was obtained",
+    "endpoints": {
+      "matches": "https://api.fifa.com/api/v3/calendar/matches?language=en&count=500&idSeason=285023",
+      "stages": "https://api.fifa.com/api/v3/stages?idSeason=285023&language=en"
+    },
+    "authentication": "none",
+    "competitionId": "17",
+    "seasonId": "285023"
+  },
+  "sources": [
+    "FIFA official (authoritative)",
+    "api.fifa.com/api/v3 (acquisition)"
+  ],
+  "captureTimestamp": "2026-08-24T15:45:03Z",
+  "freezeTimestamp": null,
+  "counts": {
+    "teams": 48,
+    "groups": 12,
+    "matches": 104,
+    "groupStageMatches": 72,
+    "knockoutMatches": 32,
+    "last32": 16,
+    "last16": 8,
+    "quarterFinals": 4,
+    "semiFinals": 2,
+    "thirdPlace": 1,
+    "final": 1,
+    "venues": 16,
+    "penaltyShootouts": 4
+  },
+  "checksum": {
+    "algorithm": "sha256",
+    "canonicalisation": "recursive key-sorted JSON",
+    "dataset": "c9498255d554bb46310b11ee86aeab1571fd156e19610a76f6ea0aa30ee54aab",
+    "rawMatchesResponse": "a79a299b6bd6931ab2da94f16659d32ac2c35de000f24025f6905c1c1aba4c9b",
+    "rawStagesResponse": "260efed0c30580c45fa34b8d35d93f650dcab0c33d56d113954c701c7cc529f0"
+  },
+  "integrityChecks": {
+    "total": 30,
+    "passed": 30,
+    "failed": 0,
+    "summary": "48 teams; 12 groups x4; 104 matches (72 group + 32 knockout: R32=16,R16=8,QF=4,SF=2,3rd=1,F=1); positive FIFA ids; no orphans; all FINISHED with scores; valid chronology; knockout progression reconciles round-by-round via Winner; top-2 of every group advanced; exactly 8 third-placed advanced; 16 venues; penalties only in knockout; checksum deterministic."
+  },
+  "provenance": {
+    "chain": [
+      "FIFA official",
+      "api.fifa.com/api/v3 acquisition",
+      "raw capture (provenance/*.json)",
+      "normalization v1",
+      "reconciliation v1 vs WC_ALL_TEAMS",
+      "30-check validation",
+      "sha256 checksum",
+      "version WC-2026@v1",
+      "sign-off (PENDING)",
+      "production (GATED OFF)"
+    ],
+    "captureMethod": "in-app browser network discovery (Phase 2A) + shell curl capture (Phase 2B)",
+    "operator": "GoalRadar incident execution (Claude Code)"
+  },
+  "normalizationVersion": "1.0.0",
+  "reconciliationVersion": "1.0.0",
+  "sourceDiffs": {
+    "note": "Historical truth (FIFA) supersedes the synthetic pre-draw WC_ALL_TEAMS roster and draw. WC_ALL_TEAMS retained only as Draft/Live fallback infra; NOT used for this dataset.",
+    "reconciliationActions": {
+      "MATCH": 36,
+      "NEW": 12
+    },
+    "realEntrantsNotInSyntheticRoster": [
+      "Czechia",
+      "Bosnia and Herzegovina",
+      "Paraguay",
+      "Haiti",
+      "Scotland",
+      "Curaçao",
+      "Sweden",
+      "Tunisia",
+      "Cabo Verde",
+      "Norway",
+      "Congo DR",
+      "Uzbekistan"
+    ],
+    "syntheticTeamsThatDidNotParticipate": [
+      "Costa Rica",
+      "Honduras",
+      "Venezuela",
+      "Italy",
+      "Poland",
+      "Denmark",
+      "Serbia",
+      "Nigeria",
+      "Cameroon",
+      "Bolivia",
+      "Peru",
+      "Ukraine"
+    ],
+    "standingsNote": "Group P/W/D/L/GF/GA/GD/Pts derived from the 72 authoritative results. Position ordering uses standard tiebreak (Pts, GD, GF); validated: every group top-2 matches FIFA advancers and exactly 8 thirds advanced. Exact ordering among fully-tied teams is derived, not asserted as official."
+  },
+  "releaseCommit": null,
+  "signOff": {
+    "status": "PENDING",
+    "required": [
+      "Business owner",
+      "Historical Authority (DGP-001 G8)"
+    ],
+    "approvals": [],
+    "note": "No approval recorded. Do NOT set frozen/true or flip WC_2026_HISTORICAL_AVAILABLE without recorded sign-off."
+  },
+  "supersedes": null
+}
