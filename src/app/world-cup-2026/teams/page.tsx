@@ -8,6 +8,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { WC_ALL_TEAMS } from '@/lib/wc-all-teams';
+import { WC_2026_HISTORICAL_AVAILABLE } from '@/lib/wc-frozen';
 import { getStandingsCached } from '@/lib/api';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCPageNav from '@/components/WCPageNav';
@@ -97,6 +98,31 @@ function JsonLd() {
 // ---------------------------------------------------------------------------
 
 export default async function WCTeamsPage() {
+  // INC-WC-DATA-001 Phase 2: the team roster (confederation grid) + SportsTeam
+  // JSON-LD are the synthetic WC_ALL_TEAMS pre-draw roster. WC 2026 is completed
+  // with no frozen canonical dataset, so we must not present it as the historical
+  // field. Render an honest "unavailable" state (route preserved for future FROZEN).
+  if (!WC_2026_HISTORICAL_AVAILABLE) {
+    return (
+      <div className="max-w-5xl mx-auto pb-16">
+        <Breadcrumb items={[
+          { label: 'Home', href: '/' },
+          { label: 'World Cup 2026', href: '/world-cup-2026' },
+          { label: 'Teams' },
+        ]} />
+        <div className="mt-3 mb-6"><WCPageNav /></div>
+        <div className="mt-4 mb-8">
+          <h1 className="text-3xl sm:text-4xl font-black text-white leading-tight mb-3">World Cup 2026 Teams</h1>
+        </div>
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-10 text-center">
+          <p className="text-4xl mb-3">👥</p>
+          <p className="text-gray-300 font-semibold">Team list temporarily unavailable</p>
+          <p className="text-gray-500 text-sm mt-1">The confirmed World Cup 2026 team list is not available right now. Please check back soon.</p>
+        </div>
+      </div>
+    );
+  }
+
   const byConfederation = CONFEDERATION_ORDER.map((conf) => ({
     conf,
     label: CONFEDERATION_LABELS[conf] ?? conf,

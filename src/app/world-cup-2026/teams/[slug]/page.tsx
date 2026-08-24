@@ -10,6 +10,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { WC_ALL_TEAM_SLUGS, getWCTeam } from '@/lib/wc-all-teams';
+import { WC_2026_HISTORICAL_AVAILABLE } from '@/lib/wc-frozen';
 import type { WCGroupFixture } from '@/lib/wc-fixtures';
 // DATA-18WC.CONSOLIDATE: WC match collections come from the single authority:v1
 // source; standings keep their own canonical owner.
@@ -55,6 +56,16 @@ export async function generateMetadata({
   if (!team) return {};
 
   const canonicalUrl = `${BASE_URL}/world-cup-2026/teams/${slug}`;
+  // INC-WC-DATA-001 Phase 2: team.metaTitle/metaDesc assert synthetic WC-2026
+  // participation ("X at FIFA World Cup 2026 — Fixtures, Results & Squad"). With
+  // no frozen dataset, emit neutral metadata that makes no historical claim.
+  if (!WC_2026_HISTORICAL_AVAILABLE) {
+    return {
+      title: 'World Cup 2026 Team | GoalRadar',
+      description: 'FIFA World Cup 2026 team information.',
+      alternates: { canonical: canonicalUrl },
+    };
+  }
   return {
     title: team.metaTitle,
     description: team.metaDesc,
@@ -289,6 +300,35 @@ export default async function WCTeamPage({
   const { slug } = await params;
   const team = getWCTeam(slug);
   if (!team) notFound();
+
+  // INC-WC-DATA-001 Phase 2: this profile is built from the synthetic WC_ALL_TEAMS
+  // pre-draw roster (group membership, "qualified", squad, fixtures, FAQ, JSON-LD).
+  // WC 2026 is completed with no frozen canonical dataset — do NOT assert synthetic
+  // participation. Render an honest, non-committal "unavailable" state; the route is
+  // preserved so it can serve real data once a FROZEN dataset exists.
+  if (!WC_2026_HISTORICAL_AVAILABLE) {
+    return (
+      <div className="max-w-3xl mx-auto pb-16">
+        <Breadcrumb items={[
+          { label: 'Home', href: '/' },
+          { label: 'World Cup 2026', href: '/world-cup-2026' },
+          { label: 'Teams', href: '/world-cup-2026/teams' },
+          { label: 'Team' },
+        ]} />
+        <div className="mt-3 mb-6"><WCPageNav /></div>
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-10 text-center mt-6">
+          <p className="text-4xl mb-3">👥</p>
+          <p className="text-gray-300 font-semibold">Team information unavailable</p>
+          <p className="text-gray-500 text-sm mt-1">
+            Confirmed World Cup 2026 data for this team is not available right now. Please check back soon.
+          </p>
+          <Link href="/world-cup-2026" className="inline-block mt-4 text-yellow-500 hover:text-yellow-300 text-sm font-medium transition-colors">
+            ← World Cup 2026 hub
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const canonicalUrl = `${BASE_URL}/world-cup-2026/teams/${slug}`;
 

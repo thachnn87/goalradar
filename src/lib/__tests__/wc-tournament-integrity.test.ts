@@ -279,3 +279,32 @@ describe('WC authority cache never seeds the synthetic roster (INC-WC-DATA-001)'
     expect(authSrc).not.toMatch(/getStaticGroupMatches/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// WC-2026 synthetic-history containment (INC-WC-DATA-001 Phase 2)
+// Historical editorial/SEO surfaces must consult the frozen gate and, while no
+// frozen dataset exists, must NOT present the synthetic WC_ALL_TEAMS roster.
+// ---------------------------------------------------------------------------
+
+import { getFrozenWCTournament, WC_2026_HISTORICAL_AVAILABLE } from '../wc-frozen';
+
+describe('WC-2026 frozen gate + editorial containment (INC-WC-DATA-001 Phase 2)', () => {
+  it('no frozen dataset is available yet (gate is OFF)', () => {
+    expect(getFrozenWCTournament()).toBeNull();
+    expect(WC_2026_HISTORICAL_AVAILABLE).toBe(false);
+  });
+
+  it('historical editorial surfaces gate their synthetic roster on the frozen flag', () => {
+    const app = join(__dirname, '..', '..', 'app', 'world-cup-2026');
+    const gated = [
+      'page.tsx',                    // hub 48-team grid
+      'teams/page.tsx',              // all-teams roster + JSON-LD
+      'teams/[slug]/page.tsx',       // per-team profile + metadata + JSON-LD
+      'bracket/page.tsx',            // knockout structural fallback
+    ];
+    for (const rel of gated) {
+      const src = readFileSync(join(app, rel), 'utf8');
+      expect(src).toMatch(/WC_2026_HISTORICAL_AVAILABLE/);
+    }
+  });
+});

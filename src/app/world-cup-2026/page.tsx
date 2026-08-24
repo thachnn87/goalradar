@@ -27,6 +27,7 @@ import WCRelatedLinks from '@/components/WCRelatedLinks';
 import AdSlot from '@/components/AdSlot';
 import NewsletterSignup from '@/components/NewsletterSignup';
 import { WC_ALL_TEAMS } from '@/lib/wc-all-teams';
+import { WC_2026_HISTORICAL_AVAILABLE } from '@/lib/wc-frozen';
 import { WC_ROUNDS } from '@/lib/wc-rounds';
 import PushNotificationButton from '@/components/PushNotificationButton';
 // DATA-18WC.13: knockout slot fallback for when authority cache has no upcoming matches
@@ -625,23 +626,28 @@ export default async function WorldCup2026Page() {
             </div>
           </div>
 
-          {/* All 48 teams */}
-          <div>
-            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
-              All 48 Teams
-            </h2>
-            <div className="flex flex-wrap gap-2">
-              {WC_ALL_TEAMS.map((team) => (
-                <Link
-                  key={team.slug}
-                  href={`/world-cup-2026/teams/${team.slug}`}
-                  className="px-2.5 py-1 rounded-lg border border-gray-800 bg-gray-950 text-xs text-gray-400 hover:text-white hover:border-gray-700 transition-colors"
-                >
-                  {team.flag} {team.shortName}
-                </Link>
-              ))}
+          {/* All 48 teams — INC-WC-DATA-001: this grid renders the synthetic
+              WC_ALL_TEAMS pre-draw roster. WC 2026 is completed with no frozen
+              canonical dataset, so the roster must NOT be presented as the
+              tournament field. Omitted until a frozen dataset is available. */}
+          {WC_2026_HISTORICAL_AVAILABLE && (
+            <div>
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
+                All 48 Teams
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {WC_ALL_TEAMS.map((team) => (
+                  <Link
+                    key={team.slug}
+                    href={`/world-cup-2026/teams/${team.slug}`}
+                    className="px-2.5 py-1 rounded-lg border border-gray-800 bg-gray-950 text-xs text-gray-400 hover:text-white hover:border-gray-700 transition-colors"
+                  >
+                    {team.flag} {team.shortName}
+                  </Link>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </nav>
 
         {/* ── Footer ────────────────────────────────────────────────────── */}

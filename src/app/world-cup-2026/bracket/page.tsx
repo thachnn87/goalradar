@@ -14,6 +14,7 @@ import WCBracket from '@/components/WCBracket';
 import { WC_KNOCKOUT_SLOTS, type WCKnockoutSlot } from '@/lib/wc-fixtures';
 import { getRoundDateRange } from '@/lib/wc-rounds';
 import { buildKnockoutViewModel, getStaticKnockoutMatches, BRACKET_TREE_STAGES, type KnockoutStage } from '@/lib/knockout-vm';
+import { WC_2026_HISTORICAL_AVAILABLE } from '@/lib/wc-frozen';
 
 export const revalidate = 900; // 15 min — bracket scores update during active knockout rounds
 
@@ -359,15 +360,20 @@ async function BracketContent() {
 
   const { r32: r32Matches, thirdPlace: thirdMatches, final: finalMatches, bracketMatches } = vm;
 
-  const useLocalSlots = !vm.hasApiData;
+  // INC-WC-DATA-001 Phase 2: the static knockout structure (positional slot
+  // placeholders) may only be shown for a completed WC 2026 when a frozen
+  // canonical dataset exists. Without it, do NOT present a placeholder "upcoming"
+  // bracket for a finished tournament — fall back to the empty/unavailable state.
+  const useLocalSlots = !vm.hasApiData && WC_2026_HISTORICAL_AVAILABLE;
 
-  // Visual tree (R16 → Final): when the authority cache is empty (provider
-  // outage / cold KV) bracketMatches is [], which would collapse the tree to
-  // blank "TBD" columns. Feed the canonical static structure instead so the
-  // bracket tree stays present. Same SSOT as the R32/3rd/Final local rows below.
+  // Visual tree (R16 → Final): real authority data when present; otherwise the
+  // canonical static structure ONLY if frozen data is available (else empty →
+  // WCBracket renders its neutral TBD skeleton, never synthetic participants).
   const treeMatches = bracketMatches.length > 0
     ? bracketMatches
-    : getStaticKnockoutMatches().filter((m) => BRACKET_TREE_STAGES.has(m.stage as KnockoutStage));
+    : WC_2026_HISTORICAL_AVAILABLE
+      ? getStaticKnockoutMatches().filter((m) => BRACKET_TREE_STAGES.has(m.stage as KnockoutStage))
+      : [];
   const localSlots = (round: WCKnockoutSlot['round']) =>
     useLocalSlots ? WC_KNOCKOUT_SLOTS.filter((s) => s.round === round) : [];
 
