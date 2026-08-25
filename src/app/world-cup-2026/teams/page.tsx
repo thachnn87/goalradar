@@ -3,18 +3,22 @@
  *
  * SEO landing page listing all 48 FIFA World Cup 2026 teams.
  * Targets: "world cup 2026 teams", "wc 2026 squads", "world cup 2026 countries"
+ *
+ * EPIC-WC-FROZEN-DATA-001 Phase 2C: when the frozen FIFA dataset is active this
+ * renders the REAL 48-team field (grouped by the real draw + confederation). While
+ * the gate is off it renders an honest "unavailable" shell — never the synthetic
+ * WC_ALL_TEAMS pre-draw roster.
  */
 
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { WC_ALL_TEAMS } from '@/lib/wc-all-teams';
 import { WC_2026_HISTORICAL_AVAILABLE } from '@/lib/wc-frozen';
-import { getStandingsCached } from '@/lib/api';
+import { frozenTeams, type Confederation, type FrozenTeamView } from '@/lib/wc-frozen-view';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCPageNav from '@/components/WCPageNav';
 import WCRelatedLinks from '@/components/WCRelatedLinks';
 
-export const revalidate = 3600; // DATA-9: reduced from 86400 — group assignments are live data
+export const revalidate = 3600;
 
 const BASE_URL = 'https://goalradar.org';
 const PAGE_URL = `${BASE_URL}/world-cup-2026/teams`;
@@ -42,7 +46,7 @@ export const metadata: Metadata = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const CONFEDERATION_LABELS: Record<string, string> = {
+const CONFEDERATION_LABELS: Record<Confederation, string> = {
   UEFA:     'UEFA – Europe',
   CONMEBOL: 'CONMEBOL – South America',
   CONCACAF: 'CONCACAF – North & Central America',
@@ -51,7 +55,7 @@ const CONFEDERATION_LABELS: Record<string, string> = {
   OFC:      'OFC – Oceania',
 };
 
-const CONFEDERATION_ORDER = ['UEFA', 'CONMEBOL', 'CONCACAF', 'CAF', 'AFC', 'OFC'];
+const CONFEDERATION_ORDER: Confederation[] = ['UEFA', 'CONMEBOL', 'CONCACAF', 'CAF', 'AFC', 'OFC'];
 
 const GROUPS = ['A','B','C','D','E','F','G','H','I','J','K','L'];
 
@@ -59,7 +63,7 @@ const GROUPS = ['A','B','C','D','E','F','G','H','I','J','K','L'];
 // JSON-LD
 // ---------------------------------------------------------------------------
 
-function JsonLd() {
+function JsonLd({ teams }: { teams: FrozenTeamView[] }) {
   const breadcrumb = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
@@ -77,10 +81,10 @@ function JsonLd() {
     description: 'All 48 national teams competing at the FIFA World Cup 2026 in USA, Canada and Mexico.',
     url: PAGE_URL,
     isPartOf: { '@type': 'WebSite', name: 'GoalRadar', url: BASE_URL },
-    numberOfItems: WC_ALL_TEAMS.length,
-    hasPart: WC_ALL_TEAMS.map((t) => ({
+    numberOfItems: teams.length,
+    hasPart: teams.map((t) => ({
       '@type': 'SportsTeam',
-      name: t.displayName,
+      name: t.name,
       url: `${BASE_URL}/world-cup-2026/teams/${t.slug}`,
     })),
   };
@@ -98,10 +102,9 @@ function JsonLd() {
 // ---------------------------------------------------------------------------
 
 export default async function WCTeamsPage() {
-  // INC-WC-DATA-001 Phase 2: the team roster (confederation grid) + SportsTeam
-  // JSON-LD are the synthetic WC_ALL_TEAMS pre-draw roster. WC 2026 is completed
-  // with no frozen canonical dataset, so we must not present it as the historical
-  // field. Render an honest "unavailable" state (route preserved for future FROZEN).
+  // EPIC-WC-FROZEN-DATA-001: the team roster is served from the frozen FIFA
+  // dataset. While the gate is off (no recorded sign-off) render an honest
+  // "unavailable" state — never the synthetic WC_ALL_TEAMS pre-draw roster.
   if (!WC_2026_HISTORICAL_AVAILABLE) {
     return (
       <div className="max-w-5xl mx-auto pb-16">
@@ -123,35 +126,19 @@ export default async function WCTeamsPage() {
     );
   }
 
-  const byConfederation = CONFEDERATION_ORDER.map((conf) => ({
-    conf,
-    label: CONFEDERATION_LABELS[conf] ?? conf,
-    teams: WC_ALL_TEAMS.filter((t) => t.confederation === conf),
-  })).filter((c) => c.teams.length > 0);
+  const teams = frozenTeams();
 
-  // Derive by-group from authority standings — not from wc-all-teams group field
-  let byGroup: { group: string; teams: typeof WC_ALL_TEAMS }[] = [];
-  try {
-    const standingsData = await getStandingsCached('WC');
-    const tables = (standingsData.standings ?? []).filter((s) => s.type === 'TOTAL');
-    if (tables.length > 0) {
-      byGroup = tables.map((t) => {
-        const letter = (t.group ?? '').replace('GROUP_', '').replace(/^Group\s+/i, '').trim();
-        const teams = t.table.map((e) => {
-          const wct = WC_ALL_TEAMS.find(
-            (wt) => wt.apiName.toLowerCase() === (e.team?.name ?? '').toLowerCase() ||
-                    wt.displayName.toLowerCase() === (e.team?.name ?? '').toLowerCase()
-          );
-          return wct ?? null;
-        }).filter((wct): wct is NonNullable<typeof wct> => Boolean(wct));
-        return { group: letter, teams };
-      }).filter((g) => g.teams.length > 0);
-    }
-  } catch { /* show confederation view only */ }
+  const byGroup = GROUPS
+    .map((letter) => ({ group: letter, teams: teams.filter((t) => t.group === letter) }))
+    .filter((g) => g.teams.length > 0);
+
+  const byConfederation = CONFEDERATION_ORDER
+    .map((conf) => ({ conf, label: CONFEDERATION_LABELS[conf], teams: teams.filter((t) => t.confederation === conf) }))
+    .filter((c) => c.teams.length > 0);
 
   return (
     <>
-      <JsonLd />
+      <JsonLd teams={teams} />
 
       <div className="max-w-5xl mx-auto pb-16">
         <Breadcrumb items={[
@@ -171,7 +158,7 @@ export default async function WCTeamsPage() {
             World Cup 2026 Teams
           </h1>
           <p className="text-gray-400 text-base max-w-2xl leading-relaxed">
-            <strong className="text-white">48 nations</strong> compete at the FIFA World Cup 2026 across{' '}
+            <strong className="text-white">48 nations</strong> competed at the FIFA World Cup 2026 across{' '}
             <strong className="text-white">12 groups</strong> (A–L), playing{' '}
             <strong className="text-white">104 matches</strong> in the United States, Canada and Mexico.
             Browse every team&apos;s fixtures, results, squad and group standing below.
@@ -227,10 +214,7 @@ export default async function WCTeamsPage() {
                     >
                       <span className="text-lg leading-none">{team.flag}</span>
                       <span className="text-sm text-gray-300 group-hover:text-white transition-colors flex-1">
-                        {team.displayName}
-                      </span>
-                      <span className="text-[10px] text-gray-600 group-hover:text-gray-400 transition-colors">
-                        #{team.fifaRanking}
+                        {team.name}
                       </span>
                     </Link>
                   ))}
@@ -261,10 +245,10 @@ export default async function WCTeamsPage() {
                       <span className="text-xl leading-none shrink-0">{team.flag}</span>
                       <div className="min-w-0">
                         <p className="text-sm text-gray-200 group-hover:text-white transition-colors truncate leading-tight">
-                          {team.shortName || team.displayName}
+                          {team.name}
                         </p>
                         <p className="text-[10px] text-gray-600 leading-tight">
-                          Group {team.group !== 'TBD' ? team.group : '—'}
+                          Group {team.group}
                         </p>
                       </div>
                     </Link>
@@ -295,7 +279,7 @@ export default async function WCTeamsPage() {
 
         <WCRelatedLinks links={[
           { href: '/world-cup-2026',              icon: '🏆', label: 'WC 2026 Hub',       desc: 'Full tournament overview' },
-          { href: '/world-cup-2026/groups',        icon: '📊', label: 'Group Standings',   desc: 'Live points tables for all 12 groups' },
+          { href: '/world-cup-2026/groups',        icon: '📊', label: 'Group Standings',   desc: 'Final points tables for all 12 groups' },
           { href: '/world-cup-2026/venues',        icon: '🏟️', label: 'Stadiums & Venues', desc: 'All 16 host stadiums across 3 countries' },
           { href: '/world-cup-2026/host-cities',   icon: '🌆', label: 'Host Cities',       desc: '16 cities hosting World Cup 2026 matches' },
           { href: '/world-cup-2026/matches',       icon: '⚽', label: 'All Matches',       desc: 'Fixtures, results and live scores' },

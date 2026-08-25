@@ -287,14 +287,20 @@ describe('WC authority cache never seeds the synthetic roster (INC-WC-DATA-001)'
 // ---------------------------------------------------------------------------
 
 import { getFrozenWCTournament, WC_2026_HISTORICAL_AVAILABLE } from '../wc-frozen';
+import { FROZEN_WC_2026_MANIFEST } from '../wc-frozen-dataset';
 
-describe('WC-2026 frozen gate + editorial containment (INC-WC-DATA-001 Phase 2)', () => {
-  it('no frozen dataset is available yet (gate is OFF)', () => {
-    expect(getFrozenWCTournament()).toBeNull();
-    expect(WC_2026_HISTORICAL_AVAILABLE).toBe(false);
+describe('WC-2026 frozen gate + editorial containment (INC-WC-DATA-001 Phase 2 / EPIC Phase 2C)', () => {
+  // The gate is keyed on the manifest sign-off flag, NOT on the data merely
+  // existing. Committed state is signedOff:false → gate OFF → surfaces stay
+  // "unavailable". Recording sign-off (manifest signedOff:true) is the single
+  // edit that flips this — no code/test change required.
+  it('frozen gate exactly matches the manifest sign-off flag', () => {
+    const signedOff = FROZEN_WC_2026_MANIFEST.status.signedOff === true;
+    expect(WC_2026_HISTORICAL_AVAILABLE).toBe(signedOff);
+    expect(getFrozenWCTournament() !== null).toBe(signedOff);
   });
 
-  it('historical editorial surfaces gate their synthetic roster on the frozen flag', () => {
+  it('historical editorial surfaces consult the frozen flag', () => {
     const app = join(__dirname, '..', '..', 'app', 'world-cup-2026');
     const gated = [
       'page.tsx',                    // hub 48-team grid

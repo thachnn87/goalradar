@@ -15,6 +15,8 @@ import { deriveMatchDisplay } from './match-display';
 import { canonicalToMatch } from './canonical-match';
 import type { CanonicalMatch } from './canonical-match';
 import { injectKnockoutSlotLabels, WC_KNOCKOUT_SLOTS } from './wc-fixtures';
+import { WC_2026_HISTORICAL_AVAILABLE } from './wc-frozen';
+import { frozenMatches } from './wc-frozen-view';
 
 // ---------------------------------------------------------------------------
 // Static knockout structure — outage-safe fallback for the bracket tree
@@ -225,13 +227,20 @@ export function getTeamKnockoutPath(vm: KnockoutViewModel, teamId: number): Matc
 
 export const buildKnockoutViewModel: () => Promise<KnockoutViewModel> = async () => {
   let raw: Match[] = [];
-  try {
-    const data = await getWCAuthorityMatchesV2(new Date().toISOString(), {
-      source: 'knockout-vm', sourceType: 'unknown',
-    });
-    raw = data.matches.map(canonicalToMatch);
-  } catch {
-    // graceful degradation — all stage arrays will be empty, hasApiData = false
+  if (WC_2026_HISTORICAL_AVAILABLE) {
+    // EPIC-WC-FROZEN-DATA-001 Phase 2C: completed WC-2026 → serve the frozen
+    // FIFA-derived knockout matches (real teams, real winners). buildKnockoutGraph
+    // reconstructs the tree from winner identity, which the frozen chain satisfies.
+    raw = frozenMatches();
+  } else {
+    try {
+      const data = await getWCAuthorityMatchesV2(new Date().toISOString(), {
+        source: 'knockout-vm', sourceType: 'unknown',
+      });
+      raw = data.matches.map(canonicalToMatch);
+    } catch {
+      // graceful degradation — all stage arrays will be empty, hasApiData = false
+    }
   }
 
   // Filter to knockout stages and sort by date

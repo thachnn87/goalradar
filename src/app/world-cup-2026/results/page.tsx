@@ -6,6 +6,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getWCAuthorityMatchesV2 } from '@/lib/api';
 import { getLiveMatchIdSet } from '@/lib/wc-live-ssot';
+import { WC_2026_HISTORICAL_AVAILABLE } from '@/lib/wc-frozen';
+import { frozenCanonicalMatches } from '@/lib/wc-frozen-view';
 import { canonicalToMatch, type CanonicalMatch } from '@/lib/canonical-match';
 import { deriveMatchDisplay } from '@/lib/match-display';
 import AdSlot from '@/components/AdSlot';
@@ -60,10 +62,14 @@ function statusBadge(e: CanonicalMatch): { label: string; cls: string } {
 export default async function WC2026ResultsPage() {
   const builtAt = new Date().toISOString();
 
-  const [{ matches }, liveMatchIds] = await Promise.all([
-    getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026/results', sourceType: 'page' }).catch(() => ({ matches: [] as CanonicalMatch[] })),
-    getLiveMatchIdSet().catch(() => new Set<number>()),
-  ]);
+  // EPIC-WC-FROZEN-DATA-001 Phase 2C: completed WC-2026 → real frozen results
+  // (all FINISHED, no live). Otherwise the live authority pipeline.
+  const [{ matches }, liveMatchIds] = WC_2026_HISTORICAL_AVAILABLE
+    ? [{ matches: frozenCanonicalMatches() }, new Set<number>()]
+    : await Promise.all([
+        getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026/results', sourceType: 'page' }).catch(() => ({ matches: [] as CanonicalMatch[] })),
+        getLiveMatchIdSet().catch(() => new Set<number>()),
+      ]);
 
   // DATA-18B.3E: live is decided ONLY by the live SSOT (liveMatchIds), never by
   // authority `state`. A match the authority cache still marks 'live' but that

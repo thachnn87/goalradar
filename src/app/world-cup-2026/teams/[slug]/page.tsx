@@ -1,9 +1,14 @@
 /**
  * /world-cup-2026/teams/[slug]
  *
- * Programmatic SEO pages for ALL 48 World Cup 2026 teams.
- * Static generation at build time via generateStaticParams.
- * ISR 3600 — team data updates hourly during the tournament.
+ * Programmatic SEO pages for the World Cup 2026 teams.
+ *
+ * EPIC-WC-FROZEN-DATA-001 Phase 2C: when the frozen FIFA dataset is active the
+ * page renders a real, FIFA-derived team profile (group, results, standing,
+ * knockout run) via FrozenTeamProfile — including honest "did not take part"
+ * pages for preserved legacy URLs whose nation was not in the 48-team field.
+ * While the gate is off it renders an honest "unavailable" shell and never
+ * asserts synthetic WC_ALL_TEAMS participation.
  */
 
 import type { Metadata } from 'next';
@@ -11,28 +16,10 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { WC_ALL_TEAM_SLUGS, getWCTeam } from '@/lib/wc-all-teams';
 import { WC_2026_HISTORICAL_AVAILABLE } from '@/lib/wc-frozen';
-import type { WCGroupFixture } from '@/lib/wc-fixtures';
-// DATA-18WC.CONSOLIDATE: WC match collections come from the single authority:v1
-// source; standings keep their own canonical owner.
-import {
-  getStandingsCached        as getStandings,
-  getWCAuthorityMatchesV2,
-} from '@/lib/api';
-import { canonicalToMatch } from '@/lib/canonical-match';
-import { classifyMatchState } from '@/lib/match-classify';
-import type { Match, StandingTable, StandingEntry } from '@/lib/types';
-import {
-  calculateQualificationStatus,
-  findQualByName,
-  QUAL_BADGE_STYLES,
-  type TeamQualification,
-} from '@/lib/wc-qualification';
-import AdSlot from '@/components/AdSlot';
+import { frozenTeamSlugs } from '@/lib/wc-frozen-view';
+import FrozenTeamProfile, { resolveFrozenTeamStatus } from '@/components/FrozenTeamProfile';
 import Breadcrumb from '@/components/Breadcrumb';
-import KnockoutJourney from '@/components/KnockoutJourney';
 import WCPageNav from '@/components/WCPageNav';
-import WCRelatedLinks from '@/components/WCRelatedLinks';
-import { matchPath } from '@/lib/url';
 
 export const revalidate = 3600;
 
@@ -43,7 +30,11 @@ const BASE_URL = 'https://goalradar.org';
 // ---------------------------------------------------------------------------
 
 export function generateStaticParams() {
-  return WC_ALL_TEAM_SLUGS.map((slug) => ({ slug }));
+  // Union of legacy editorial slugs (preserve existing URLs) + real frozen-roster
+  // slugs (12 nations the synthetic roster never had). Legacy-only slugs for
+  // nations that did not play resolve to an honest "did not take part" page.
+  const slugs = new Set<string>([...WC_ALL_TEAM_SLUGS, ...frozenTeamSlugs()]);
+  return [...slugs].map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({
@@ -52,240 +43,38 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const team = getWCTeam(slug);
-  if (!team) return {};
-
   const canonicalUrl = `${BASE_URL}/world-cup-2026/teams/${slug}`;
-  // INC-WC-DATA-001 Phase 2: team.metaTitle/metaDesc assert synthetic WC-2026
-  // participation ("X at FIFA World Cup 2026 — Fixtures, Results & Squad"). With
-  // no frozen dataset, emit neutral metadata that makes no historical claim.
-  if (!WC_2026_HISTORICAL_AVAILABLE) {
+
+  // Frozen dataset active → real, FIFA-derived metadata (or an honest
+  // "did not take part" title for a preserved legacy URL).
+  if (WC_2026_HISTORICAL_AVAILABLE) {
+    const st = resolveFrozenTeamStatus(slug);
+    if (st.kind === 'unknown') return {};
+    if (st.kind === 'absent') {
+      return {
+        title: `${st.name} & the FIFA World Cup 2026 | GoalRadar`,
+        description: `${st.name} did not take part in the FIFA World Cup 2026. See the 48 nations that competed.`,
+        alternates: { canonical: canonicalUrl },
+      };
+    }
+    const title = `${st.name} at World Cup 2026 — Group, Results & Knockout Run | GoalRadar`;
+    const description = `${st.name}'s FIFA World Cup 2026 campaign: group, every match result, final standing and knockout run.`;
     return {
-      title: 'World Cup 2026 Team | GoalRadar',
-      description: 'FIFA World Cup 2026 team information.',
+      title, description,
       alternates: { canonical: canonicalUrl },
+      openGraph: { title, description, type: 'website', url: canonicalUrl },
+      twitter: { card: 'summary_large_image', title, description },
     };
   }
+
+  // Gate off: neutral metadata that makes no historical claim.
+  const team = getWCTeam(slug);
+  if (!team) return {};
   return {
-    title: team.metaTitle,
-    description: team.metaDesc,
+    title: 'World Cup 2026 Team | GoalRadar',
+    description: 'FIFA World Cup 2026 team information.',
     alternates: { canonical: canonicalUrl },
-    openGraph: {
-      title: team.metaTitle,
-      description: team.metaDesc,
-      type: 'website',
-      url: canonicalUrl,
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title: team.metaTitle,
-      description: team.metaDesc,
-    },
   };
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function formatKickoff(utcDate: string): string {
-  return new Date(utcDate).toLocaleDateString('en-GB', {
-    weekday: 'short', day: 'numeric', month: 'short',
-    hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
-  }) + ' UTC';
-}
-
-function formatScore(m: Match): string {
-  const h = m.score?.fullTime?.home;
-  const a = m.score?.fullTime?.away;
-  if (h === null || h === undefined || a === null || a === undefined) return 'vs';
-  return `${h} – ${a}`;
-}
-
-const STAGE_LABELS: Record<string, string> = {
-  GROUP_STAGE:    'Group Stage',
-  LAST_32:        'Round of 32',
-  LAST_16:        'Round of 16',
-  QUARTER_FINALS: 'QF',
-  SEMI_FINALS:    'SF',
-  FINAL:          'Final',
-};
-
-// ---------------------------------------------------------------------------
-// Route to Final component
-// ---------------------------------------------------------------------------
-
-const KNOCKOUT_PATH = [
-  {
-    key:   'GROUP_STAGE',
-    label: 'Group Stage',
-    short: 'Groups',
-    desc:  '3 group matches',
-  },
-  {
-    key:   'LAST_32',
-    label: 'Round of 32',
-    short: 'R32',
-    desc:  'First knockout round',
-  },
-  {
-    key:   'LAST_16',
-    label: 'Round of 16',
-    short: 'R16',
-    desc:  'Second knockout round',
-  },
-  {
-    key:   'QUARTER_FINALS',
-    label: 'Quarter-Final',
-    short: 'QF',
-    desc:  'Last 8',
-  },
-  {
-    key:   'SEMI_FINALS',
-    label: 'Semi-Final',
-    short: 'SF',
-    desc:  'Last 4',
-  },
-  {
-    key:   'FINAL',
-    label: 'World Cup Final',
-    short: '🏆 Final',
-    desc:  '19 Jul 2026 · MetLife Stadium',
-  },
-] as const;
-
-function RouteToFinal({
-  team,
-  standingEntry,
-  recentMatches,
-}: {
-  team: { displayName: string; flag: string; group: string };
-  standingEntry: StandingEntry | null;
-  recentMatches: Match[];
-}) {
-  // Determine the furthest stage this team has reached based on available data.
-  // Pre-tournament / API empty → stays at idx -1 (not yet started).
-  // Group stage kicked off → idx 0.
-  // Knockout wins → we walk recent matches to find the max stage.
-  const stageOrder = KNOCKOUT_PATH.map((s) => s.key);
-
-  let reachedIdx = standingEntry && standingEntry.playedGames > 0 ? 0 : -1;
-
-  for (const m of recentMatches) {
-    const idx = stageOrder.indexOf((m.stage ?? '') as typeof stageOrder[number]);
-    if (idx > reachedIdx) reachedIdx = idx;
-  }
-
-  const isPreTournament = reachedIdx < 0;
-
-  return (
-    <section aria-labelledby="route-to-final-heading" className="mb-8">
-      <h2 id="route-to-final-heading" className="text-lg font-bold text-white mb-3">
-        {team.flag} {team.displayName} — Route to the Final
-      </h2>
-
-      {isPreTournament && (
-        <p className="text-gray-500 text-xs mb-3 px-0.5">
-          Pre-tournament view · updated live once {team.displayName} kick off on 11 June 2026
-        </p>
-      )}
-
-      {/* Desktop: horizontal stepper */}
-      <div className="hidden sm:flex items-center gap-0">
-        {KNOCKOUT_PATH.map((stage, i) => {
-          const reached    = i <= reachedIdx;
-          const isCurrent  = i === reachedIdx;
-          const isLast     = i === KNOCKOUT_PATH.length - 1;
-
-          return (
-            <div key={stage.key} className="flex items-center flex-1 min-w-0">
-              <div className={`flex flex-col items-center flex-1 min-w-0 px-1 py-2 rounded-lg transition-colors ${
-                isCurrent
-                  ? 'bg-yellow-500/10 border border-yellow-500/30'
-                  : reached
-                  ? 'bg-green-500/10 border border-green-500/20'
-                  : 'bg-gray-900 border border-gray-800'
-              }`}>
-                <span className={`text-xs font-black uppercase tracking-wider ${
-                  isCurrent ? 'text-yellow-400' : reached ? 'text-green-400' : 'text-gray-500'
-                }`}>
-                  {stage.short}
-                </span>
-                <span className={`text-xs mt-0.5 text-center leading-tight ${
-                  isCurrent ? 'text-yellow-300/80' : reached ? 'text-green-300/70' : 'text-gray-500'
-                }`}>
-                  {stage.desc}
-                </span>
-              </div>
-              {!isLast && (
-                <span className={`text-xs mx-0.5 shrink-0 ${reached && i < reachedIdx ? 'text-green-500' : 'text-gray-700'}`}>
-                  →
-                </span>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Mobile: vertical list */}
-      <div className="sm:hidden space-y-2">
-        {KNOCKOUT_PATH.map((stage, i) => {
-          const reached   = i <= reachedIdx;
-          const isCurrent = i === reachedIdx;
-          return (
-            <div key={stage.key} className={`flex items-start gap-3 rounded-xl px-4 py-3 border ${
-              isCurrent
-                ? 'bg-yellow-500/10 border-yellow-500/30'
-                : reached
-                ? 'bg-green-500/10 border-green-500/20'
-                : 'bg-gray-900 border-gray-800'
-            }`}>
-              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 mt-0.5 ${
-                isCurrent
-                  ? 'bg-yellow-500/20 text-yellow-400'
-                  : reached
-                  ? 'bg-green-500/20 text-green-400'
-                  : 'bg-gray-800 text-gray-600'
-              }`}>
-                {i + 1}
-              </span>
-              <div className="min-w-0">
-                <p className={`text-sm font-bold ${
-                  isCurrent ? 'text-yellow-400' : reached ? 'text-green-400' : 'text-gray-500'
-                }`}>
-                  {stage.label}
-                </p>
-                <p className={`text-xs mt-0.5 ${reached ? 'text-gray-400' : 'text-gray-700'}`}>
-                  {stage.desc}
-                </p>
-              </div>
-              {isCurrent && (
-                <span className="ml-auto shrink-0 text-xs font-semibold text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-full">
-                  Current
-                </span>
-              )}
-              {reached && !isCurrent && (
-                <span className="ml-auto shrink-0 text-xs font-semibold text-green-400">✓</span>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Matches needed to win */}
-      <div className="mt-4 bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-sm text-gray-400">
-        To lift the World Cup, {team.displayName} must win{' '}
-        <strong className="text-white">
-          {reachedIdx < 0
-            ? '7 matches in total'
-            : reachedIdx === 0
-            ? '5 more knockout matches after advancing from the group'
-            : `${Math.max(0, 5 - reachedIdx)} more match${5 - reachedIdx !== 1 ? 'es' : ''}`}
-        </strong>
-        {' '}— any of which could go to extra time and penalties.
-      </div>
-    </section>
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -298,512 +87,35 @@ export default async function WCTeamPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+
+  // Frozen dataset active → real FIFA-derived team profile.
+  if (WC_2026_HISTORICAL_AVAILABLE) {
+    return <FrozenTeamProfile slug={slug} />;
+  }
+
+  // Gate off: only serve known (legacy) routes, as an honest "unavailable" shell.
   const team = getWCTeam(slug);
   if (!team) notFound();
 
-  // INC-WC-DATA-001 Phase 2: this profile is built from the synthetic WC_ALL_TEAMS
-  // pre-draw roster (group membership, "qualified", squad, fixtures, FAQ, JSON-LD).
-  // WC 2026 is completed with no frozen canonical dataset — do NOT assert synthetic
-  // participation. Render an honest, non-committal "unavailable" state; the route is
-  // preserved so it can serve real data once a FROZEN dataset exists.
-  if (!WC_2026_HISTORICAL_AVAILABLE) {
-    return (
-      <div className="max-w-3xl mx-auto pb-16">
-        <Breadcrumb items={[
-          { label: 'Home', href: '/' },
-          { label: 'World Cup 2026', href: '/world-cup-2026' },
-          { label: 'Teams', href: '/world-cup-2026/teams' },
-          { label: 'Team' },
-        ]} />
-        <div className="mt-3 mb-6"><WCPageNav /></div>
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-10 text-center mt-6">
-          <p className="text-4xl mb-3">👥</p>
-          <p className="text-gray-300 font-semibold">Team information unavailable</p>
-          <p className="text-gray-500 text-sm mt-1">
-            Confirmed World Cup 2026 data for this team is not available right now. Please check back soon.
-          </p>
-          <Link href="/world-cup-2026" className="inline-block mt-4 text-yellow-500 hover:text-yellow-300 text-sm font-medium transition-colors">
-            ← World Cup 2026 hub
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  const canonicalUrl = `${BASE_URL}/world-cup-2026/teams/${slug}`;
-
-  // Fetch all WC match data — filter by team name client side (no dedicated endpoint)
-  let upcoming: Match[] = [];
-  let recent: Match[]   = [];
-  let standingEntry: StandingEntry | null = null;
-  let standingGroupLabel = '';
-  let qualification: TeamQualification | undefined;
-
-  // Local fallback fixtures — used when API returns nothing (pre-tournament or API down)
-  let localTeamFixtures: WCGroupFixture[] = [];
-
-  // DATA-18WC.7B: NFC-normalise team names before comparison so that Unicode
-  // variants (e.g. 'Türkiye' precomposed vs decomposed) match consistently.
-  const normName = (s: string | null | undefined) => (s ?? '').normalize('NFC').toLowerCase();
-  const apiNorm  = normName(team.apiName);
-  const dispNorm = normName(team.displayName);
-
-  try {
-    const builtAt = new Date().toISOString();
-    const [authorityData, standingsData] = await Promise.allSettled([
-      getWCAuthorityMatchesV2(builtAt, {
-        source: `/world-cup-2026/teams/${slug}`,
-        sourceType: 'page',
-      }),
-      getStandings('WC'),
-    ]);
-
-    if (authorityData.status === 'fulfilled') {
-      const todayISO = new Date().toISOString().split('T')[0];
-      const teamMatches = authorityData.value.matches
-        .map(canonicalToMatch)
-        .filter(
-          (m) =>
-            normName(m.homeTeam?.name).includes(apiNorm) ||
-            normName(m.awayTeam?.name).includes(apiNorm) ||
-            normName(m.homeTeam?.name) === dispNorm ||
-            normName(m.awayTeam?.name) === dispNorm
-        );
-      upcoming = teamMatches
-        .filter((m) => {
-          const bucket = classifyMatchState(m, todayISO);
-          return bucket === 'today' || bucket === 'upcoming' || bucket === 'live';
-        })
-        .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
-      recent = teamMatches
-        .filter((m) => m.status === 'FINISHED')
-        .sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime());
-    }
-
-    if (standingsData.status === 'fulfilled') {
-      const tables: StandingTable[] = (standingsData.value.standings ?? []).filter(
-        (s) => s.type === 'TOTAL'
-      );
-      for (let i = 0; i < tables.length; i++) {
-        const entry = tables[i].table.find(
-          (e) =>
-            normName(e.team?.name).includes(apiNorm) ||
-            normName(e.team?.name) === dispNorm
-        );
-        if (entry) {
-          standingEntry = entry;
-          // Handle both 'GROUP_A' and 'Group A' formats from football-data.org
-          standingGroupLabel = (tables[i].group ?? '').replace('GROUP_', '').replace(/^Group\s+/i, '').trim();
-          break;
-        }
-      }
-      // Run qualification engine — needs ALL groups for the best-8 third-place calculation
-      const qualMap = calculateQualificationStatus(tables);
-      qualification = findQualByName(qualMap, team.apiName)
-        ?? findQualByName(qualMap, team.displayName)
-        ?? (standingEntry ? qualMap.get(standingEntry.team.id) : undefined);
-    }
-  } catch { /* render with static content */ }
-
-  // Form helper
-  const recentForm: string[] = (recent.slice(0, 5).map((m) => {
-    const isHome = normName(m.homeTeam?.name).includes(apiNorm) ||
-                   normName(m.homeTeam?.name) === dispNorm;
-    const hg = m.score?.fullTime?.home ?? 0;
-    const ag = m.score?.fullTime?.away ?? 0;
-    if (hg === ag) return 'D';
-    const teamWon = isHome ? hg > ag : ag > hg;
-    return teamWon ? 'W' : 'L';
-  })).filter(Boolean);
-
-  const groupSlug = standingGroupLabel ? `group-${standingGroupLabel.toLowerCase()}` : null;
-
-  // Knockout journey data — filter all team matches to knockout stages
-  const KNOCKOUT_STAGE_SET = new Set(['LAST_32', 'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL', 'THIRD_PLACE']);
-  const knockoutMatches = [...recent, ...upcoming].filter((m) => KNOCKOUT_STAGE_SET.has(m.stage ?? ''));
-  const teamId = standingEntry?.team?.id
-    ?? recent.find((m) => {
-        const n = normName(m.homeTeam?.name);
-        return n.includes(apiNorm) || n === dispNorm;
-      })?.homeTeam?.id
-    ?? recent.find((m) => {
-        const n = normName(m.awayTeam?.name);
-        return n.includes(apiNorm) || n === dispNorm;
-      })?.awayTeam?.id
-    ?? 0;
-
-  const jsonLdTeam = {
-    '@context': 'https://schema.org',
-    '@type': 'SportsTeam',
-    name: team.displayName,
-    memberOf: {
-      '@type': 'SportsOrganization',
-      name: 'FIFA',
-    },
-    sport: 'Football (Soccer)',
-    url: canonicalUrl,
-  };
-
-  const jsonLdBreadcrumb = {
-    '@context': 'https://schema.org',
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'Home',                    item: BASE_URL },
-      { '@type': 'ListItem', position: 2, name: 'World Cup 2026',          item: `${BASE_URL}/world-cup-2026` },
-      { '@type': 'ListItem', position: 3, name: `${team.displayName} — WC 2026`, item: canonicalUrl },
-    ],
-  };
-
-  const faq = [
-    {
-      q: `Is ${team.displayName} in the World Cup 2026?`,
-      a: team.qualified === false
-        ? `No. ${team.displayName} did not qualify for the FIFA World Cup 2026. ${team.intro}`
-        : `Yes. ${team.displayName} (${team.confederation}) qualified for the FIFA World Cup 2026, which takes place in USA, Canada and Mexico from 11 June to 19 July 2026.`,
-    },
-    ...(team.qualified !== false ? [
-      {
-        q: `What group is ${team.displayName} in at World Cup 2026?`,
-        a: standingGroupLabel
-          ? `${team.displayName} are in Group ${standingGroupLabel} at the FIFA World Cup 2026. The top two teams from each group advance to the Round of 32.`
-          : `${team.displayName}'s group at the FIFA World Cup 2026 will be confirmed after the official draw.`,
-      },
-      {
-        q: `When does ${team.displayName} play at World Cup 2026?`,
-        a: upcoming.length > 0
-          ? `${team.displayName}'s next match is ${upcoming[0].homeTeam?.name} vs ${upcoming[0].awayTeam?.name} on ${formatKickoff(upcoming[0].utcDate)}.`
-          : `Check the full FIFA World Cup 2026 schedule on GoalRadar for ${team.displayName}'s upcoming fixtures.`,
-      },
-      {
-        q: `How can I watch ${team.displayName} at World Cup 2026?`,
-        a: `World Cup 2026 is broadcast in the USA on Fox Sports and Telemundo. In the UK on ITV and BBC. In Australia on SBS. Check our Watch Live guide for all country broadcasters.`,
-      },
-    ] : []),
-  ];
-
-  const jsonLdFaq = {
-    '@context': 'https://schema.org',
-    '@type': 'FAQPage',
-    mainEntity: faq.map(({ q, a }) => ({
-      '@type': 'Question', name: q,
-      acceptedAnswer: { '@type': 'Answer', text: a },
-    })),
-  };
-
   return (
-    <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdTeam) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdBreadcrumb) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdFaq) }} />
-
-      <div className="max-w-3xl mx-auto pb-16">
-        <Breadcrumb items={[
-          { label: 'Home', href: '/' },
-          { label: 'World Cup 2026', href: '/world-cup-2026' },
-          { label: team.displayName },
-        ]} />
-        <div className="mt-3 mb-6"><WCPageNav /></div>
-
-        {/* Hero */}
-        <div className="mt-6 mb-8">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-yellow-400 text-xs font-semibold uppercase tracking-wider">
-              {team.flag} FIFA World Cup 2026 · {team.confederation}
-            </span>
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-black text-white leading-tight mb-2">
-            {team.displayName} at World Cup 2026
-          </h1>
-          <p className="text-gray-400 text-sm leading-relaxed">{team.intro}</p>
-          <div className="flex flex-wrap gap-2 mt-4">
-            {standingGroupLabel && (
-              <span className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs font-bold px-3 py-1 rounded-full">
-                Group {standingGroupLabel}
-              </span>
-            )}
-            <span className="bg-white/5 border border-white/10 text-gray-300 text-xs px-3 py-1 rounded-full">
-              FIFA #{team.fifaRanking}
-            </span>
-            <span className="bg-white/5 border border-white/10 text-gray-300 text-xs px-3 py-1 rounded-full">
-              {team.confederation}
-            </span>
-          </div>
-        </div>
-
-        <AdSlot slotId={`team-${slug}-top`} variant="banner" />
-
-        {/* Current standing */}
-        {standingEntry && (
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-white mb-3">
-              Group {standingGroupLabel} Standing
-            </h2>
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <div className="grid grid-cols-8 text-xs text-gray-500 font-semibold uppercase px-4 py-2 border-b border-gray-800">
-                <span>#</span>
-                <span className="col-span-3">Team</span>
-                <span className="text-center">P</span>
-                <span className="text-center">GD</span>
-                <span className="text-center">W-D-L</span>
-                <span className="text-center font-bold text-white">Pts</span>
-              </div>
-              <div className="bg-yellow-500/5 border-l-2 border-yellow-400 px-4 py-3 grid grid-cols-8 items-center text-sm">
-                <span className="text-gray-400">{standingEntry.position}</span>
-                <span className="col-span-3 text-white font-bold flex items-center gap-2">
-                  {team.flag} {team.shortName}
-                </span>
-                <span className="text-center text-gray-400">{standingEntry.playedGames}</span>
-                <span className="text-center text-gray-400">
-                  {standingEntry.goalDifference > 0 ? `+${standingEntry.goalDifference}` : standingEntry.goalDifference}
-                </span>
-                <span className="text-center text-gray-400 text-xs">
-                  {standingEntry.won}-{standingEntry.draw}-{standingEntry.lost}
-                </span>
-                <span className="text-center text-white font-black">{standingEntry.points}</span>
-              </div>
-            </div>
-            {groupSlug && (
-              <Link href={`/world-cup-2026/${groupSlug}`}
-                className="inline-block mt-2 text-xs text-yellow-500 hover:text-yellow-300 transition-colors">
-                Full Group {standingGroupLabel} standings →
-              </Link>
-            )}
-          </section>
-        )}
-
-        {/* Qualification status */}
-        {qualification && (() => {
-          const style = QUAL_BADGE_STYLES[qualification.qualificationStatus];
-          return (
-            <section className="mb-8">
-              <h2 className="text-lg font-bold text-white mb-3">Qualification Status</h2>
-              <div className={`border rounded-xl p-4 flex items-start gap-4 ${
-                qualification.qualificationStatus === 'QUALIFIED'  ? 'bg-green-950/20 border-green-800/50' :
-                qualification.qualificationStatus === 'ELIMINATED' ? 'bg-red-950/20 border-red-800/50' :
-                qualification.qualificationStatus === 'THIRD_PLACE_CONTENDER' ? 'bg-yellow-950/20 border-yellow-800/50' :
-                'bg-gray-900 border-gray-800'
-              }`}>
-                <span className={`text-2xl shrink-0 mt-0.5 ${style.textColor}`}>
-                  {qualification.qualificationStatus === 'QUALIFIED'             ? '✅' :
-                   qualification.qualificationStatus === 'ELIMINATED'            ? '❌' :
-                   qualification.qualificationStatus === 'THIRD_PLACE_CONTENDER' ? '🟡' :
-                   '⏳'}
-                </span>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`text-sm font-bold px-2 py-0.5 rounded-full border ${style.badgeClass}`}>
-                      {style.label}
-                    </span>
-                    {qualification.qualificationProbability < 1 && qualification.qualificationProbability > 0 && (
-                      <span className="text-xs text-gray-500">
-                        {Math.round(qualification.qualificationProbability * 100)}% chance
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-400 leading-relaxed">{qualification.qualificationReason}</p>
-                </div>
-              </div>
-            </section>
-          );
-        })()}
-
-        {/* Route to Final */}
-        <RouteToFinal
-          team={team}
-          standingEntry={standingEntry}
-          recentMatches={recent}
-        />
-
-        {/* Knockout journey — actual match results per stage */}
-        {teamId > 0 && (
-          <section className="mb-8">
-            <KnockoutJourney
-              matches={knockoutMatches}
-              teamId={teamId}
-              teamName={team.displayName}
-            />
-          </section>
-        )}
-
-        {/* Recent form */}
-        {recentForm.length > 0 && (
-          <div className="flex items-center gap-3 mb-8">
-            <span className="text-xs text-gray-500 font-semibold">Recent form:</span>
-            <div className="flex gap-1.5">
-              {recentForm.map((r, i) => (
-                <span key={i} className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black ${
-                  r === 'W' ? 'bg-green-500/20 text-green-400 border border-green-500/30' :
-                  r === 'D' ? 'bg-gray-700 text-gray-300 border border-gray-600' :
-                  'bg-red-500/20 text-red-400 border border-red-500/30'
-                }`}>
-                  {r}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Upcoming fixtures */}
-        {upcoming.length > 0 && (
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-white mb-3">Upcoming Fixtures</h2>
-            <div className="space-y-2">
-              {upcoming.slice(0, 5).map((m) => (
-                <Link key={m.id} href={matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name)}
-                  className="flex items-center justify-between bg-gray-900 border border-gray-800 hover:border-yellow-700/40 rounded-xl px-4 py-3 transition-colors group">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-white group-hover:text-yellow-400 transition-colors truncate">
-                      {m.homeTeam?.name} vs {m.awayTeam?.name}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-0.5">{formatKickoff(m.utcDate)}</p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs text-gray-500">{STAGE_LABELS[m.stage ?? ''] ?? ''}</span>
-                    <span className="text-yellow-600 text-xs">→</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Recent results */}
-        {recent.length > 0 && (
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-white mb-3">Recent Results</h2>
-            <div className="space-y-2">
-              {recent.slice(0, 5).map((m) => {
-                const isHome = normName(m.homeTeam?.name).includes(apiNorm) ||
-                               normName(m.homeTeam?.name) === dispNorm;
-                const hg = m.score?.fullTime?.home ?? 0;
-                const ag = m.score?.fullTime?.away ?? 0;
-                const result = hg === ag ? 'D' : (isHome ? hg > ag : ag > hg) ? 'W' : 'L';
-                return (
-                  <Link key={m.id} href={matchPath(m.id, m.homeTeam?.name, m.awayTeam?.name)}
-                    className="flex items-center justify-between bg-gray-900 border border-gray-800 hover:border-yellow-700/40 rounded-xl px-4 py-3 transition-colors group">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black border ${
-                        result === 'W' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
-                        result === 'D' ? 'bg-gray-700 text-gray-300 border-gray-600' :
-                        'bg-red-500/20 text-red-400 border-red-500/30'
-                      }`}>{result}</span>
-                      <p className="text-sm font-semibold text-white group-hover:text-yellow-400 transition-colors truncate">
-                        {m.homeTeam?.name} vs {m.awayTeam?.name}
-                      </p>
-                    </div>
-                    <span className="text-white font-bold font-mono text-sm shrink-0">{formatScore(m)}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-        )}
-
-        {/* Scheduled fixtures from local dataset — shown when API is empty */}
-        {upcoming.length === 0 && recent.length === 0 && localTeamFixtures.length > 0 && (
-          <section className="mb-8">
-            <h2 className="text-lg font-bold text-white mb-3">
-              Group {standingGroupLabel || team.group} Schedule
-            </h2>
-            <div className="space-y-2">
-              {localTeamFixtures.map((f) => {
-                const isHome = f.homeSlug === slug;
-                return (
-                  <div key={f.localId}
-                    className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-white truncate">
-                        <span className={isHome ? 'text-yellow-400' : ''}>{f.homeFlag} {f.homeLabel}</span>
-                        <span className="text-gray-500 font-normal mx-2">vs</span>
-                        <span className={!isHome ? 'text-yellow-400' : ''}>{f.awayLabel} {f.awayFlag}</span>
-                      </p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {new Date(f.utcDate).toLocaleDateString('en-GB', {
-                          weekday: 'short', day: 'numeric', month: 'short',
-                          hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
-                        })} UTC · {f.venueCity}
-                      </p>
-                    </div>
-                    <span className="text-xs text-gray-500 shrink-0">MD{f.matchday}</span>
-                  </div>
-                );
-              })}
-            </div>
-            <p className="text-xs text-gray-500 mt-2 px-1">
-              ℹ️ Scheduled kickoff times — live match links appear once the tournament begins.
-            </p>
-          </section>
-        )}
-
-        {/* No data state — only shown if authority cache also returns nothing */}
-        {upcoming.length === 0 && recent.length === 0 && localTeamFixtures.length === 0 && (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center mb-8">
-            <p className="text-3xl mb-3">{team.flag}</p>
-            <p className="text-gray-300 font-semibold">No match data available yet</p>
-            <p className="text-gray-500 text-sm mt-1">Match data will appear here once available.</p>
-            <div className="flex items-center justify-center gap-4 mt-4">
-              <Link href="/world-cup-2026/fixtures"
-                className="text-xs text-yellow-500 hover:text-yellow-300 transition-colors">
-                View fixtures →
-              </Link>
-              <Link href="/world-cup-2026/bracket"
-                className="text-xs text-yellow-500 hover:text-yellow-300 transition-colors">
-                View bracket →
-              </Link>
-            </div>
-          </div>
-        )}
-
-        <AdSlot slotId={`team-${slug}-mid`} variant="rectangle" className="mx-auto mb-8" />
-
-        {/* Watch Live CTA */}
-        <div className="bg-gradient-to-br from-yellow-950/30 to-gray-900 border border-yellow-800/30 rounded-2xl p-5 mb-8">
-          <p className="text-yellow-400 text-xs font-bold uppercase tracking-wider mb-1">
-            📺 Watch {team.displayName} Live
-          </p>
-          <p className="text-white font-bold text-base mb-1">Stream every {team.displayName} match</p>
-          <p className="text-gray-400 text-sm mb-4">
-            Find your official broadcaster and streaming options for every {team.displayName} match at World Cup 2026.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Link href="/world-cup-2026/watch-live"
-              className="bg-yellow-500 hover:bg-yellow-400 text-black text-sm font-bold px-4 py-2.5 rounded-xl transition-colors">
-              Watch Live Guide →
-            </Link>
-            <Link href="/world-cup-2026/tv-schedule"
-              className="bg-gray-800 hover:bg-gray-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl border border-gray-700 transition-colors">
-              TV Schedule
-            </Link>
-          </div>
-        </div>
-
-        {/* FAQ */}
-        <section id="faq" className="mb-8">
-          <h2 className="text-xl font-bold text-white mb-4">{team.displayName} at World Cup 2026 — FAQ</h2>
-          <div className="space-y-3">
-            {faq.map(({ q, a }) => (
-              <details key={q} className="bg-gray-900 border border-gray-800 rounded-xl group">
-                <summary className="px-5 py-4 cursor-pointer text-white font-semibold text-sm list-none flex items-center justify-between gap-3">
-                  {q}
-                  <span className="text-gray-600 group-open:rotate-180 transition-transform shrink-0">▾</span>
-                </summary>
-                <div className="px-5 pb-4 text-gray-400 text-sm leading-relaxed">{a}</div>
-              </details>
-            ))}
-          </div>
-        </section>
-
-        <AdSlot slotId={`team-${slug}-bottom`} variant="banner" />
-
-        <WCRelatedLinks links={[
-          ...(groupSlug ? [{ href: `/world-cup-2026/${groupSlug}`, icon: '🗂️', label: `Group ${standingGroupLabel} Standings`, desc: `Table, fixtures and results for Group ${standingGroupLabel}` }] : []),
-          { href: '/world-cup-2026-schedule',       icon: '📅', label: 'WC 2026 Schedule',    desc: 'All 104 fixtures with kickoff times and dates' },
-          { href: '/world-cup-2026-results',        icon: '🏁', label: 'WC 2026 Results',     desc: 'Live and full-time scores for every match' },
-          { href: '/world-cup-2026-standings',      icon: '📊', label: 'Group Standings',     desc: 'Points tables for all 12 groups' },
-          { href: '/world-cup-2026-live-stream',    icon: '📡', label: 'Watch Live',          desc: 'Free streaming options for every country' },
-          { href: '/world-cup-2026/teams',           icon: '👥', label: 'All 48 Teams',        desc: 'Browse squads for all WC 2026 nations' },
-        ]} />
+    <div className="max-w-3xl mx-auto pb-16">
+      <Breadcrumb items={[
+        { label: 'Home', href: '/' },
+        { label: 'World Cup 2026', href: '/world-cup-2026' },
+        { label: 'Teams', href: '/world-cup-2026/teams' },
+        { label: 'Team' },
+      ]} />
+      <div className="mt-3 mb-6"><WCPageNav /></div>
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-10 text-center mt-6">
+        <p className="text-4xl mb-3">👥</p>
+        <p className="text-gray-300 font-semibold">Team information unavailable</p>
+        <p className="text-gray-500 text-sm mt-1">
+          Confirmed World Cup 2026 data for this team is not available right now. Please check back soon.
+        </p>
+        <Link href="/world-cup-2026" className="inline-block mt-4 text-yellow-500 hover:text-yellow-300 text-sm font-medium transition-colors">
+          ← World Cup 2026 hub
+        </Link>
       </div>
-    </>
+    </div>
   );
 }

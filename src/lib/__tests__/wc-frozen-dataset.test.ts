@@ -93,20 +93,18 @@ describe('WC-2026@v1 frozen dataset — checksum + manifest provenance', () => {
   });
 });
 
-describe('WC-2026 candidate is NOT yet signed off / frozen (gate stays OFF)', () => {
-  it('manifest marks the candidate captured + validated but NOT signed off / frozen', () => {
-    const s = FROZEN_WC_2026_MANIFEST.status;
-    expect(s.captured).toBe(true);
-    expect(s.validated).toBe(true);
-    expect(s.signedOff).toBe(false);
-    expect(s.frozen).toBe(false);
-    expect(FROZEN_WC_2026_MANIFEST.signOff.status).toBe('PENDING');
+describe('WC-2026 candidate sign-off + gate wiring', () => {
+  it('manifest marks the candidate captured + validated', () => {
+    expect(FROZEN_WC_2026_MANIFEST.status.captured).toBe(true);
+    expect(FROZEN_WC_2026_MANIFEST.status.validated).toBe(true);
   });
 
-  it('the production freeze gate remains OFF (candidate not wired into wc-frozen.ts)', () => {
-    // Until Business + Historical-Authority sign-off is recorded, historical
-    // WC-2026 surfaces must still render "unavailable", never this candidate.
-    expect(getFrozenWCTournament()).toBeNull();
-    expect(WC_2026_HISTORICAL_AVAILABLE).toBe(false);
+  it('the production freeze gate exactly matches the recorded sign-off (never invented)', () => {
+    // The gate is keyed on manifest.status.signedOff — NOT on the data existing.
+    // Committed state is signedOff:false → gate OFF → surfaces stay "unavailable".
+    // Recording sign-off (signedOff:true) is the single edit that activates it.
+    const signedOff = FROZEN_WC_2026_MANIFEST.status.signedOff === true;
+    expect(getFrozenWCTournament() !== null).toBe(signedOff);
+    expect(WC_2026_HISTORICAL_AVAILABLE).toBe(signedOff);
   });
 });

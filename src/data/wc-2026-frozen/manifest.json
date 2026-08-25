@@ -7,7 +7,7 @@
     "validated": true,
     "signedOff": false,
     "frozen": false,
-    "note": "Candidate. VALIDATED against 30 integrity checks. NOT signed off, NOT frozen: production freeze gate (wc-frozen.ts) remains OFF pending Business + Historical-Authority sign-off (DGP-001 G8)."
+    "note": "Candidate. VALIDATED against 30 integrity checks. NOT signed off, NOT frozen: production freeze gate (wc-frozen.ts) remains OFF pending Business + Historical-Authority sign-off (DGP-001 G8). Phase 2C wiring is complete on branch epic/wc-frozen-flip: setting signedOff:true (and frozen:true, freezeTimestamp, signOff.approvals) is the SINGLE edit that activates every historical WC-2026 surface with real FIFA data — no code change. Do not set true without recorded approval."
   },
   "tournament": {
     "competitionId": "17",

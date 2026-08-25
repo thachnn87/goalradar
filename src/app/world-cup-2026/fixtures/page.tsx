@@ -2,6 +2,8 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 
 import { getWCAuthorityMatchesV2 } from '@/lib/api';
+import { WC_2026_HISTORICAL_AVAILABLE } from '@/lib/wc-frozen';
+import { frozenCanonicalMatches, frozenChampion } from '@/lib/wc-frozen-view';
 import { enrichKnockoutSlots } from '@/lib/knockout-vm';
 import { getRoundIsoRange } from '@/lib/wc-rounds';
 import { classifyMatchState } from '@/lib/match-classify';
@@ -238,14 +240,24 @@ function JsonLd({ matches }: { matches: CanonicalMatch[] }) {
 
 export default async function WCFixturesPage() {
   const builtAt = new Date().toISOString();
+  const completed = WC_2026_HISTORICAL_AVAILABLE;
+  const champion = completed ? frozenChampion() : null;
   let fixtures: CanonicalMatch[] = [];
-  try {
-    const data = await getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026/fixtures', sourceType: 'page' });
-    const sorted = [...data.matches].sort(
+  if (completed) {
+    // EPIC-WC-FROZEN-DATA-001 Phase 2C: completed WC-2026 → all frozen matches,
+    // chronological. Every match is FINISHED so the Upcoming section resolves empty.
+    fixtures = [...frozenCanonicalMatches()].sort(
       (a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()
     );
-    fixtures = await enrichKnockoutSlots(sorted);
-  } catch { /* graceful degradation */ }
+  } else {
+    try {
+      const data = await getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026/fixtures', sourceType: 'page' });
+      const sorted = [...data.matches].sort(
+        (a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()
+      );
+      fixtures = await enrichKnockoutSlots(sorted);
+    } catch { /* graceful degradation */ }
+  }
   const today = new Date().toISOString().split('T')[0];
 
   const upcoming = fixtures.filter(m => classifyMatchState(m, today) !== 'finished');
@@ -296,7 +308,23 @@ export default async function WCFixturesPage() {
         {/* Timezone banner */}
         <TimezoneBanner />
 
-        {/* ── Section A: Upcoming Fixtures ─────────────────────────────── */}
+        {/* ── Section A (completed): champion banner ───────────────────── */}
+        {completed && champion ? (
+          <section className="bg-gradient-to-br from-yellow-950/50 via-gray-900 to-gray-900 border border-yellow-600/40 rounded-2xl p-6 text-center">
+            <p className="text-yellow-400 text-xs font-bold uppercase tracking-widest mb-2">🏆 FIFA World Cup 2026 — Champions</p>
+            <p className="text-2xl font-black text-white">{champion.name}</p>
+            {champion.runnerUp && (
+              <p className="text-gray-400 text-sm mt-1">
+                Beat {champion.runnerUp.name} {champion.final.homeScore}–{champion.final.awayScore}
+                {champion.final.homePenalty != null ? ` (pens ${champion.final.homePenalty}–${champion.final.awayPenalty})` : ''} in the Final
+              </p>
+            )}
+            <Link href="/world-cup-2026/bracket" className="inline-block mt-3 text-xs text-yellow-400 hover:text-yellow-300 transition-colors font-medium">
+              View full knockout bracket →
+            </Link>
+          </section>
+        ) : (
+        /* ── Section A: Upcoming Fixtures ─────────────────────────────── */
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-white">Upcoming Fixtures</h2>
@@ -331,6 +359,7 @@ export default async function WCFixturesPage() {
             <MatchDateList byDate={upcomingByDate} dates={upcomingDates} today={today} />
           )}
         </section>
+        )}
 
         {/* ── Section B: Recent Results ────────────────────────────────── */}
         {results.length > 0 && (

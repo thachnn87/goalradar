@@ -3,11 +3,13 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
 import { getStandingsCached, getWCAuthorityMatchesV2 } from '@/lib/api';
+import { WC_2026_HISTORICAL_AVAILABLE } from '@/lib/wc-frozen';
+import { frozenStandings, frozenCanonicalMatches } from '@/lib/wc-frozen-view';
 import { classifyMatchState } from '@/lib/match-classify';
 import type { WCGroupFixture } from '@/lib/wc-fixtures';
 import { WC_ALL_TEAMS } from '@/lib/wc-all-teams';
 import { matchPath } from '@/lib/url';
-import type { StandingEntry } from '@/lib/types';
+import type { StandingEntry, StandingTable } from '@/lib/types';
 import type { CanonicalMatch } from '@/lib/canonical-match';
 import {
   calculateQualificationStatus,
@@ -75,8 +77,10 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const url   = `${BASE_URL}/world-cup-2026/${slug}`;
   const letter = letterFromSlug(slug);
 
-  // Use authority standings data for team names in SEO
-  const standingsMeta = await getStandingsCached('WC');
+  // Use authority (or frozen) standings data for team names in SEO
+  const standingsMeta = WC_2026_HISTORICAL_AVAILABLE
+    ? { standings: frozenStandings() }
+    : await getStandingsCached('WC');
   const groupTableMeta = (standingsMeta.standings ?? []).find(
     (s) => s.type === 'TOTAL' && normalizeGroupLetter(s.group) === letter
   );
@@ -685,16 +689,27 @@ export default async function WCGroupPage({ params }: Params) {
   const today = new Date().toISOString().split('T')[0];
   const classify = (m: CanonicalMatch) => classifyMatchState(m, today);
 
-  const [standingsResult, authorityResult] = await Promise.allSettled([
-    getStandingsCached('WC'),
-    getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026/[group]', sourceType: 'page' }),
-  ]);
-
-  // All group standings — used for the best-8 third-place engine across groups
-  const allStandingsTables =
-    standingsResult.status === 'fulfilled'
-      ? standingsResult.value.standings.filter((s) => s.type === 'TOTAL')
-      : [];
+  // EPIC-WC-FROZEN-DATA-001 Phase 2C: completed WC-2026 → frozen FIFA standings +
+  // matches for this group. Otherwise the live authority pipeline.
+  let allStandingsTables: StandingTable[] = [];
+  let allGroupAuthority: CanonicalMatch[] = [];
+  if (WC_2026_HISTORICAL_AVAILABLE) {
+    allStandingsTables = frozenStandings();
+    allGroupAuthority = frozenCanonicalMatches().filter((m) => m.group === apiGroup);
+  } else {
+    const [standingsResult, authorityResult] = await Promise.allSettled([
+      getStandingsCached('WC'),
+      getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026/[group]', sourceType: 'page' }),
+    ]);
+    allStandingsTables =
+      standingsResult.status === 'fulfilled'
+        ? standingsResult.value.standings.filter((s) => s.type === 'TOTAL')
+        : [];
+    allGroupAuthority =
+      authorityResult.status === 'fulfilled'
+        ? authorityResult.value.matches.filter((m) => m.group === apiGroup)
+        : [];
+  }
 
   // Run qualification engine across ALL groups (best-8 third-place needs cross-group data)
   const qualMap = calculateQualificationStatus(allStandingsTables);
@@ -710,20 +725,10 @@ export default async function WCGroupPage({ params }: Params) {
 
   // Group standings table — fall back to empty table if API fails
   const liveGroupTable =
-    standingsResult.status === 'fulfilled'
-      ? standingsResult.value.standings.find(
-          (s) => s.type === 'TOTAL' && normalizeGroupLetter(s.group) === letter
-        ) ?? null
-      : null;
+    allStandingsTables.find((s) => normalizeGroupLetter(s.group) === letter) ?? null;
 
   const tableEntries: StandingEntry[] = liveGroupTable?.table ?? [];
   const isStaticStandings = false;
-
-  // All group matches from authority — filter to this group, then classify
-  const allGroupAuthority: CanonicalMatch[] =
-    authorityResult.status === 'fulfilled'
-      ? authorityResult.value.matches.filter((m) => m.group === apiGroup)
-      : [];
 
   const allGroupUpcoming = allGroupAuthority.filter(
     (m) => { const b = classify(m); return b === 'today' || b === 'upcoming'; }

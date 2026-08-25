@@ -19,6 +19,8 @@
  * change to the live-league architecture.
  */
 
+import { FROZEN_WC_2026_DATASET, FROZEN_WC_2026_MANIFEST } from './wc-frozen-dataset';
+
 /** Shape reserved for the future frozen canonical dataset (see EPIC-WC-FROZEN-DATA-001). */
 export interface FrozenWCTournament {
   version: string;
@@ -30,14 +32,33 @@ export interface FrozenWCTournament {
 }
 
 /**
- * Returns the frozen canonical WC-2026 dataset, or null when none is available.
+ * Returns the frozen canonical WC-2026 dataset, or null when it is not yet active.
  *
- * Currently ALWAYS null: no verified frozen dataset exists (GO-NOGO-002: NO-GO —
- * blocked on owner-supplied authoritative real data). Do NOT synthesize, guess,
- * or substitute WC_ALL_TEAMS / provider data here.
+ * EPIC-WC-FROZEN-DATA-001 Phase 2C: the VALIDATED FIFA-derived dataset
+ * (WC-2026@v1) is present in the repo, but the gate is keyed on the manifest's
+ * `status.signedOff` flag — NOT merely on the data existing. While signedOff is
+ * false the tournament reads as null (WC_2026_HISTORICAL_AVAILABLE === false) and
+ * every historical surface stays honestly "unavailable", so this change is safe
+ * to merge without activating anything.
+ *
+ * ACTIVATION (one commit): once the required Business + Historical-Authority
+ * sign-off is recorded, set `status.signedOff: true` (+ approvals + freezeTimestamp)
+ * in src/data/wc-2026-frozen/manifest.json. That single edit flips this gate ON
+ * and every gated surface switches from "unavailable" to real FIFA data at once —
+ * no code change, no provider/KV/cron dependency. Never set signedOff true without
+ * recorded approval (DGP-001 G8).
  */
 export function getFrozenWCTournament(): FrozenWCTournament | null {
-  return null;
+  if (FROZEN_WC_2026_MANIFEST.status?.signedOff !== true) return null;
+  const d = FROZEN_WC_2026_DATASET;
+  return {
+    version: d.version,
+    teams: d.teams,
+    groups: d.groups as unknown as Record<string, unknown[]>,
+    matches: d.matches,
+    standings: d.standings,
+    knockout: d.knockout as unknown[],
+  };
 }
 
 /**

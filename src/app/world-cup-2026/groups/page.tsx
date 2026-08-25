@@ -4,6 +4,8 @@ import type { Metadata } from 'next';
 
 // PERF-4.5
 import { getStandingsCached } from '@/lib/api';
+import { WC_2026_HISTORICAL_AVAILABLE } from '@/lib/wc-frozen';
+import { frozenStandings } from '@/lib/wc-frozen-view';
 import type { StandingTable } from '@/lib/types';
 import Breadcrumb from '@/components/Breadcrumb';
 import WCGroupTable from '@/components/WCGroupTable';
@@ -106,11 +108,15 @@ function WCGroupsSkeleton() {
 async function GroupsBody() {
   let groupTables: StandingTable[] = [];
   let apiError = false;
-  try {
-    const data = await getStandingsCached('WC');
-    groupTables = data.standings.filter(s => s.type === 'TOTAL');
-  } catch {
-    apiError = true;
+  if (WC_2026_HISTORICAL_AVAILABLE) {
+    groupTables = frozenStandings();
+  } else {
+    try {
+      const data = await getStandingsCached('WC');
+      groupTables = data.standings.filter(s => s.type === 'TOTAL');
+    } catch {
+      apiError = true;
+    }
   }
 
   const matchesPlayed = groupTables.some(t => t.table.some(e => e.playedGames > 0));
@@ -194,10 +200,14 @@ async function GroupsBody() {
 export default async function WCGroupsPage() {
   // Shell renders immediately; GroupsBody suspends for the API call
   const groupTablesForJsonLd: StandingTable[] = [];
-  try {
-    const data = await getStandingsCached('WC');
-    groupTablesForJsonLd.push(...data.standings.filter(s => s.type === 'TOTAL'));
-  } catch { /* JSON-LD degrades gracefully */ }
+  if (WC_2026_HISTORICAL_AVAILABLE) {
+    groupTablesForJsonLd.push(...frozenStandings());
+  } else {
+    try {
+      const data = await getStandingsCached('WC');
+      groupTablesForJsonLd.push(...data.standings.filter(s => s.type === 'TOTAL'));
+    } catch { /* JSON-LD degrades gracefully */ }
+  }
 
   return (
     <>
