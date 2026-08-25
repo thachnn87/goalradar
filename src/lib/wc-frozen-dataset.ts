@@ -120,8 +120,15 @@ export const FROZEN_WC_2026_DATASET = datasetJson as unknown as FrozenDataset;
 export const FROZEN_WC_2026_MANIFEST = manifestJson as unknown as {
   datasetId: string;
   version: string;
-  status: { captured: boolean; validated: boolean; signedOff: boolean; frozen: boolean; note: string };
+  status: {
+    captured: boolean; validated: boolean;
+    checksummed?: boolean; versioned?: boolean;
+    signedOff: boolean; frozen: boolean;
+    lifecycle?: string;
+    note: string;
+  };
   checksum: { algorithm: string; dataset: string; rawMatchesResponse: string; rawStagesResponse: string };
+  integrityChecks: { total: number; passed: number; failed: number; summary?: string };
   counts: Record<string, number>;
   signOff: { status: string; required: string[]; approvals: unknown[]; note: string };
   [k: string]: unknown;

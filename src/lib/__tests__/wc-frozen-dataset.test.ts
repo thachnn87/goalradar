@@ -19,7 +19,7 @@ import {
   validateFrozenDataset,
   computeFrozenChecksum,
 } from '../wc-frozen-dataset';
-import { getFrozenWCTournament, WC_2026_HISTORICAL_AVAILABLE } from '../wc-frozen';
+import { getFrozenWCTournament, WC_2026_HISTORICAL_AVAILABLE, getFreezeDecision } from '../wc-frozen';
 
 const d = FROZEN_WC_2026_DATASET;
 
@@ -99,12 +99,10 @@ describe('WC-2026 candidate sign-off + gate wiring', () => {
     expect(FROZEN_WC_2026_MANIFEST.status.validated).toBe(true);
   });
 
-  it('the production freeze gate exactly matches the recorded sign-off (never invented)', () => {
-    // The gate is keyed on manifest.status.signedOff — NOT on the data existing.
-    // Committed state is signedOff:false → gate OFF → surfaces stay "unavailable".
-    // Recording sign-off (signedOff:true) is the single edit that activates it.
-    const signedOff = FROZEN_WC_2026_MANIFEST.status.signedOff === true;
-    expect(getFrozenWCTournament() !== null).toBe(signedOff);
-    expect(WC_2026_HISTORICAL_AVAILABLE).toBe(signedOff);
+  it('the production freeze gate matches the full contract decision (never invented)', () => {
+    // The gate is the AND of the complete freeze contract, not a single boolean.
+    const active = getFreezeDecision().active;
+    expect(getFrozenWCTournament() !== null).toBe(active);
+    expect(WC_2026_HISTORICAL_AVAILABLE).toBe(active);
   });
 });

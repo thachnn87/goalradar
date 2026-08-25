@@ -169,7 +169,7 @@ function MatchDateList({
 // JSON-LD
 // ---------------------------------------------------------------------------
 
-function JsonLd({ matches }: { matches: CanonicalMatch[] }) {
+function JsonLd({ matches, completed = false }: { matches: CanonicalMatch[]; completed?: boolean }) {
   const breadcrumb = {
     '@context': 'https://schema.org', '@type': 'BreadcrumbList',
     itemListElement: [
@@ -181,8 +181,10 @@ function JsonLd({ matches }: { matches: CanonicalMatch[] }) {
 
   const collection = {
     '@context': 'https://schema.org', '@type': 'CollectionPage',
-    name: 'FIFA World Cup 2026 Fixtures',
-    description: 'All upcoming FIFA World Cup 2026 matches and kick-off times.',
+    name: completed ? 'FIFA World Cup 2026 Fixtures & Results' : 'FIFA World Cup 2026 Fixtures',
+    description: completed
+      ? 'Every FIFA World Cup 2026 match with its final result — the completed tournament record.'
+      : 'All upcoming FIFA World Cup 2026 matches and kick-off times.',
     url: PAGE_URL,
     isPartOf: { '@type': 'WebSite', name: 'GoalRadar', url: BASE_URL },
     hasPart: matches.slice(0, 50).map(m => ({
@@ -199,8 +201,10 @@ function JsonLd({ matches }: { matches: CanonicalMatch[] }) {
   const itemList = matches.length > 0 ? {
     '@context': 'https://schema.org',
     '@type': 'ItemList',
-    name: 'FIFA World Cup 2026 Fixtures',
-    description: 'Upcoming FIFA World Cup 2026 match fixtures and kick-off times',
+    name: completed ? 'FIFA World Cup 2026 Results' : 'FIFA World Cup 2026 Fixtures',
+    description: completed
+      ? 'FIFA World Cup 2026 match results — the completed tournament record'
+      : 'Upcoming FIFA World Cup 2026 match fixtures and kick-off times',
     url: PAGE_URL,
     numberOfItems: matches.length,
     itemListElement: matches.slice(0, 24).map((m, i) => ({
@@ -275,7 +279,7 @@ export default async function WCFixturesPage() {
 
   return (
     <>
-      <JsonLd matches={upcoming.length > 0 ? upcoming : results} />
+      <JsonLd matches={upcoming.length > 0 ? upcoming : results} completed={completed} />
 
       <div className="max-w-5xl mx-auto space-y-8 pb-12">
         <Breadcrumb items={[
@@ -294,7 +298,7 @@ export default async function WCFixturesPage() {
               </h1>
             </div>
             <p className="text-gray-500 text-sm">
-              FIFA World Cup 2026 · Group stage results{upcoming.length > 0 ? ' & upcoming matches' : ` · Knockout bracket starts ${r32Start}`}
+              FIFA World Cup 2026 · {completed ? 'Full tournament results — group stage through the Final' : `Group stage results${upcoming.length > 0 ? ' & upcoming matches' : ` · Knockout bracket starts ${r32Start}`}`}
             </p>
           </div>
           <Link href="/world-cup-2026" className="text-xs text-yellow-500 hover:text-yellow-300 transition-colors font-medium shrink-0 mt-1">

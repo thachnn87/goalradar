@@ -12,6 +12,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 // DATA-18WC.VERIFY: authority:v1 direct read — same source as fixtures page.
 import { getWCAuthorityMatchesV2 } from '@/lib/api';
+import { WC_2026_HISTORICAL_AVAILABLE } from '@/lib/wc-frozen';
+import { frozenCanonicalMatches } from '@/lib/wc-frozen-view';
 import { enrichKnockoutSlots } from '@/lib/knockout-vm';
 import { classifyMatchState } from '@/lib/match-classify';
 import type { CanonicalMatch } from '@/lib/canonical-match';
@@ -133,19 +135,29 @@ export default async function WC2026SchedulePage() {
   // DATA-6: authority source only. Filter to SCHEDULED/TIMED — never show
   // live, paused, or finished matches inside a schedule view.
   const builtAt = new Date().toISOString();
+  const completed = WC_2026_HISTORICAL_AVAILABLE;
   let upcoming: CanonicalMatch[] = [];
-  try {
-    const today = new Date().toISOString().split('T')[0];
-    const data = await getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026-schedule', sourceType: 'page' });
-    const raw = data.matches
-      .filter((m) => { const b = classifyMatchState(m, today); return b === 'today' || b === 'upcoming'; })
-      .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
-      .slice(0, 48);
-    upcoming = await enrichKnockoutSlots(raw);
-  } catch { /* empty state renders below */ }
+  if (completed) {
+    // EPIC-WC-FROZEN-DATA-001 Phase 2C: completed WC-2026 → the full frozen match
+    // schedule (all 104), chronological. Every match links to its frozen record.
+    upcoming = [...frozenCanonicalMatches()].sort(
+      (a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime()
+    );
+  } else {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const data = await getWCAuthorityMatchesV2(builtAt, { source: '/world-cup-2026-schedule', sourceType: 'page' });
+      const raw = data.matches
+        .filter((m) => { const b = classifyMatchState(m, today); return b === 'today' || b === 'upcoming'; })
+        .sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime())
+        .slice(0, 48);
+      upcoming = await enrichKnockoutSlots(raw);
+    } catch { /* empty state renders below */ }
+  }
 
   const byDay = groupByDay(upcoming);
-  const days = Array.from(byDay.keys()).sort().slice(0, 14);
+  const allDays = Array.from(byDay.keys()).sort();
+  const days = completed ? allDays : allDays.slice(0, 14);
 
   const jsonLdFaq = {
     '@context': 'https://schema.org',
@@ -268,10 +280,10 @@ export default async function WC2026SchedulePage() {
           </div>
         </section>
 
-        {/* Live upcoming schedule — from API */}
+        {/* Schedule — full frozen record when completed, else live upcoming */}
         {days.length > 0 && (
           <section className="mb-8">
-            <h2 className="text-xl font-bold text-white mb-4">Upcoming Fixtures</h2>
+            <h2 className="text-xl font-bold text-white mb-4">{completed ? 'Full Match Schedule' : 'Upcoming Fixtures'}</h2>
             {days.map((day) => {
               const dayMatches = byDay.get(day) ?? [];
               return (

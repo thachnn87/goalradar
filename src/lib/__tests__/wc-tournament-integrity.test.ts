@@ -286,18 +286,17 @@ describe('WC authority cache never seeds the synthetic roster (INC-WC-DATA-001)'
 // frozen dataset exists, must NOT present the synthetic WC_ALL_TEAMS roster.
 // ---------------------------------------------------------------------------
 
-import { getFrozenWCTournament, WC_2026_HISTORICAL_AVAILABLE } from '../wc-frozen';
-import { FROZEN_WC_2026_MANIFEST } from '../wc-frozen-dataset';
+import { getFrozenWCTournament, WC_2026_HISTORICAL_AVAILABLE, getFreezeDecision } from '../wc-frozen';
 
 describe('WC-2026 frozen gate + editorial containment (INC-WC-DATA-001 Phase 2 / EPIC Phase 2C)', () => {
-  // The gate is keyed on the manifest sign-off flag, NOT on the data merely
-  // existing. Committed state is signedOff:false → gate OFF → surfaces stay
-  // "unavailable". Recording sign-off (manifest signedOff:true) is the single
-  // edit that flips this — no code/test change required.
-  it('frozen gate exactly matches the manifest sign-off flag', () => {
-    const signedOff = FROZEN_WC_2026_MANIFEST.status.signedOff === true;
-    expect(WC_2026_HISTORICAL_AVAILABLE).toBe(signedOff);
-    expect(getFrozenWCTournament() !== null).toBe(signedOff);
+  // The gate is the AND of the COMPLETE freeze contract (wc-frozen-gate.ts) — NOT
+  // a single boolean. The runtime flag, the reader, and the contract decision must
+  // agree. Committed state is deliberately OFF; the governed flip (manifest
+  // signedOff+frozen+lifecycle:ARCHIVED+approvals) is what activates it.
+  it('frozen flag, reader, and freeze-contract decision agree', () => {
+    const active = getFreezeDecision().active;
+    expect(WC_2026_HISTORICAL_AVAILABLE).toBe(active);
+    expect(getFrozenWCTournament() !== null).toBe(active);
   });
 
   it('historical editorial surfaces consult the frozen flag', () => {

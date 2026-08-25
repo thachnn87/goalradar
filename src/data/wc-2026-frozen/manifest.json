@@ -5,10 +5,19 @@
   "status": {
     "captured": true,
     "validated": true,
+    "checksummed": true,
+    "versioned": true,
     "signedOff": false,
     "frozen": false,
-    "note": "Candidate. VALIDATED against 30 integrity checks. NOT signed off, NOT frozen: production freeze gate (wc-frozen.ts) remains OFF pending Business + Historical-Authority sign-off (DGP-001 G8). Phase 2C wiring is complete on branch epic/wc-frozen-flip: setting signedOff:true (and frozen:true, freezeTimestamp, signOff.approvals) is the SINGLE edit that activates every historical WC-2026 surface with real FIFA data — no code change. Do not set true without recorded approval."
+    "lifecycle": "COMPLETED",
+    "note": "Candidate. Freeze stages reached: CAPTURED, VALIDATED (30/30), CHECKSUMMED, VERSIONED. NOT SIGNED_OFF, NOT FROZEN; lifecycle=COMPLETED (tournament is over but the record is not yet ARCHIVED for serving). The production freeze contract (wc-frozen-gate.ts) requires ALL of: signedOff:true + signOff.status:SIGNED_OFF + non-empty approvals + frozen:true + lifecycle:ARCHIVED + checksum recompute + integrity pass. ACTIVATION (governed flip, no code change): set signedOff:true, frozen:true, lifecycle:\"ARCHIVED\", freezeTimestamp, signOff.status:\"SIGNED_OFF\", signOff.approvals[…]. Never without recorded Business + Historical-Authority sign-off (DGP-001 G8)."
   },
+  "lifecycleVocabulary": [
+    "DRAFT",
+    "LIVE",
+    "COMPLETED",
+    "ARCHIVED"
+  ],
   "tournament": {
     "competitionId": "17",
     "seasonId": "285023",

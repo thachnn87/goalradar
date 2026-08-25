@@ -38,6 +38,8 @@ import { deriveRuntimeState, versionFromTimestamp, type EffectiveScore } from '@
 import StoryCardStrip from '@/components/StoryCardStrip';
 import MatchTimeline from '@/components/MatchTimeline';
 import RoadToFinal from '@/components/RoadToFinal';
+import { WC_2026_HISTORICAL_AVAILABLE } from '@/lib/wc-frozen';
+import FrozenMatchDetail, { isFrozenMatch, frozenMatchMetadata } from '@/components/FrozenMatchDetail';
 
 export const revalidate = 60;
 
@@ -53,6 +55,11 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { id: slug } = await params;
   const numericId = extractMatchId(slug);
   if (!numericId) return { title: 'Match Details | GoalRadar' };
+
+  // EPIC-WC-FROZEN-DATA-001 Phase 2C: archived WC-2026 match → frozen metadata.
+  if (WC_2026_HISTORICAL_AVAILABLE && isFrozenMatch(Number(numericId))) {
+    return frozenMatchMetadata(Number(numericId));
+  }
 
   try {
     // PERF-4 Phase 7: use snapshot instead of a bare getMatchDetail() call.
@@ -2210,6 +2217,13 @@ export default async function MatchDetailPage({ params }: Params) {
 
   // Extract the numeric ID from either "537327" or "537327-mexico-vs-south-africa"
   const numericId = extractMatchId(slug);
+
+  // EPIC-WC-FROZEN-DATA-001 Phase 2C: archived WC-2026 match → serve the frozen
+  // factual record (no KV snapshot / provider). Falls through if not a frozen id.
+  if (numericId && WC_2026_HISTORICAL_AVAILABLE && isFrozenMatch(Number(numericId))) {
+    return <FrozenMatchDetail id={Number(numericId)} />;
+  }
+
   if (!numericId) {
     // Completely non-numeric segment — treat as unavailable
     console.error(`[MatchPage] Non-numeric slug: ${slug}`);

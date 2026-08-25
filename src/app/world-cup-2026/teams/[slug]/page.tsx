@@ -48,8 +48,9 @@ export async function generateMetadata({
   // Frozen dataset active → real, FIFA-derived metadata (or an honest
   // "did not take part" title for a preserved legacy URL).
   if (WC_2026_HISTORICAL_AVAILABLE) {
+    const known = new Set<string>([...WC_ALL_TEAM_SLUGS, ...frozenTeamSlugs()]);
+    if (!known.has(slug)) return {};
     const st = resolveFrozenTeamStatus(slug);
-    if (st.kind === 'unknown') return {};
     if (st.kind === 'absent') {
       return {
         title: `${st.name} & the FIFA World Cup 2026 | GoalRadar`,
@@ -88,8 +89,11 @@ export default async function WCTeamPage({
 }) {
   const { slug } = await params;
 
-  // Frozen dataset active → real FIFA-derived team profile.
+  // Frozen dataset active → real FIFA-derived team profile. Only serve known
+  // routes (frozen roster + preserved legacy slugs); anything else is a 404.
   if (WC_2026_HISTORICAL_AVAILABLE) {
+    const known = new Set<string>([...WC_ALL_TEAM_SLUGS, ...frozenTeamSlugs()]);
+    if (!known.has(slug)) notFound();
     return <FrozenTeamProfile slug={slug} />;
   }
 

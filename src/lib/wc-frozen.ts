@@ -20,6 +20,7 @@
  */
 
 import { FROZEN_WC_2026_DATASET, FROZEN_WC_2026_MANIFEST } from './wc-frozen-dataset';
+import { evaluateFreezeContract, type FreezeDecision } from './wc-frozen-gate';
 
 /** Shape reserved for the future frozen canonical dataset (see EPIC-WC-FROZEN-DATA-001). */
 export interface FrozenWCTournament {
@@ -32,24 +33,36 @@ export interface FrozenWCTournament {
 }
 
 /**
- * Returns the frozen canonical WC-2026 dataset, or null when it is not yet active.
+ * The evaluated freeze contract for the in-repo WC-2026 dataset/manifest.
+ * Exposed for diagnostics and tests — the gate is the AND of every check.
+ */
+export function getFreezeDecision(): FreezeDecision {
+  return evaluateFreezeContract(FROZEN_WC_2026_DATASET, FROZEN_WC_2026_MANIFEST);
+}
+
+/**
+ * Returns the frozen canonical WC-2026 dataset, or null unless the COMPLETE
+ * freeze contract is satisfied.
  *
- * EPIC-WC-FROZEN-DATA-001 Phase 2C: the VALIDATED FIFA-derived dataset
- * (WC-2026@v1) is present in the repo, but the gate is keyed on the manifest's
- * `status.signedOff` flag — NOT merely on the data existing. While signedOff is
- * false the tournament reads as null (WC_2026_HISTORICAL_AVAILABLE === false) and
- * every historical surface stays honestly "unavailable", so this change is safe
- * to merge without activating anything.
+ * EPIC-WC-FROZEN-DATA-001 Phase 2C (hardened): serving the historical record is
+ * NOT gated on a single `signedOff` boolean. `evaluateFreezeContract` (wc-frozen-gate.ts)
+ * must confirm ALL of: dataset present, manifest present, datasetId match, valid
+ * version, checksum present, checksum RECOMPUTES to the manifest value, all
+ * integrity checks pass, sign-off recorded + valid, and lifecycle === ARCHIVED
+ * with frozen === true. Any failure → null → honest "unavailable", NEVER synthetic.
  *
- * ACTIVATION (one commit): once the required Business + Historical-Authority
- * sign-off is recorded, set `status.signedOff: true` (+ approvals + freezeTimestamp)
- * in src/data/wc-2026-frozen/manifest.json. That single edit flips this gate ON
- * and every gated surface switches from "unavailable" to real FIFA data at once —
- * no code change, no provider/KV/cron dependency. Never set signedOff true without
- * recorded approval (DGP-001 G8).
+ * Committed state is deliberately OFF (signedOff:false, frozen:false,
+ * lifecycle:"COMPLETED"), so this is safe to merge without activating anything.
+ *
+ * ACTIVATION (governed flip, no code change): once the Business + Historical-
+ * Authority sign-off is recorded, update src/data/wc-2026-frozen/manifest.json —
+ * status.signedOff:true, status.frozen:true, status.lifecycle:"ARCHIVED",
+ * freezeTimestamp, signOff.status:"SIGNED_OFF" + signOff.approvals[…]. The contract
+ * then evaluates active and every gated surface serves real FIFA data at once.
+ * Never set these without recorded approval (DGP-001 G8).
  */
 export function getFrozenWCTournament(): FrozenWCTournament | null {
-  if (FROZEN_WC_2026_MANIFEST.status?.signedOff !== true) return null;
+  if (!getFreezeDecision().active) return null;
   const d = FROZEN_WC_2026_DATASET;
   return {
     version: d.version,

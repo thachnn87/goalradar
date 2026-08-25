@@ -461,16 +461,18 @@ export default async function WorldCup2026Page() {
 
         {/* ── Countdown ────────────────────────────────────────────────── */}
         {/* LIVE-2: live matches drive the CTA; currentPath enables the
-            self-reference guard (this page previously linked to itself) */}
-        <WCCountdown compact liveMatches={allLive} currentPath="/world-cup-2026" />
+            self-reference guard (this page previously linked to itself).
+            Phase 2C: hidden for the completed/archived tournament. */}
+        {!frozen && <WCCountdown compact liveMatches={allLive} currentPath="/world-cup-2026" />}
 
-        {/* ── Push notification opt-in ─────────────────────────────────── */}
-        <PushNotificationButton variant="banner" matchLabel="World Cup 2026" />
+        {/* ── Push notification opt-in (live tournaments only) ──────────── */}
+        {!frozen && <PushNotificationButton variant="banner" matchLabel="World Cup 2026" />}
 
         {/* Ad: below countdown, above nav */}
         <AdSlot slotId="wc-top" variant="banner" />
 
-        {/* ── 1. Today (Live + scheduled) ───────────────────────────────── */}
+        {/* ── 1. Today (Live + scheduled) — live tournaments only ───────── */}
+        {!frozen && (
         <section aria-labelledby="today-heading">
           <SectionHeader
             id="today-heading"
@@ -490,8 +492,10 @@ export default async function WorldCup2026Page() {
             />
           )}
         </section>
+        )}
 
-        {/* ── 3. Upcoming Matches ───────────────────────────────────────── */}
+        {/* ── 3. Upcoming Matches — live tournaments only ───────────────── */}
+        {!frozen && (
         <section id="fixtures" aria-labelledby="upcoming-heading">
           <SectionHeader id="upcoming-heading" title="Upcoming Matches" count={upcomingMatches.length || knockoutSlots.length} />
           {upcomingMatches.length > 0 ? (
@@ -505,6 +509,7 @@ export default async function WorldCup2026Page() {
             />
           )}
         </section>
+        )}
 
 
         {/* ── 4. Group Standings ────────────────────────────────────────── */}

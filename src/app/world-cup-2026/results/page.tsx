@@ -132,7 +132,9 @@ export default async function WC2026ResultsPage() {
             World Cup 2026 Results
           </h1>
           <p className="text-gray-400 text-sm">
-            Live and full-time scores from every FIFA World Cup 2026 match. Updated every 5 minutes.
+            {WC_2026_HISTORICAL_AVAILABLE
+              ? 'Full-time scores from every match of the completed FIFA World Cup 2026 — the final historical record.'
+              : 'Live and full-time scores from every FIFA World Cup 2026 match. Updated every 5 minutes.'}
           </p>
         </div>
 

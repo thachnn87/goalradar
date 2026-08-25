@@ -10,6 +10,8 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 // PERF-4.5
 import { getStandingsCached } from '@/lib/api';
+import { WC_2026_HISTORICAL_AVAILABLE } from '@/lib/wc-frozen';
+import { frozenStandings } from '@/lib/wc-frozen-view';
 import type { StandingTable, StandingEntry } from '@/lib/types';
 import {
   calculateQualificationStatus,
@@ -29,24 +31,42 @@ export const revalidate = 3600; // align with STANDINGS TTL (1 hour)
 const BASE_URL = 'https://goalradar.org';
 const CANONICAL = `${BASE_URL}/world-cup-2026-standings`;
 
-export const metadata: Metadata = {
-  title: 'World Cup 2026 Standings — Live Group Tables & Points | GoalRadar',
-  description:
-    'Live FIFA World Cup 2026 standings for all 12 groups (A–L). Updated after every match with points, goal difference, goals scored and qualification status.',
-  alternates: { canonical: CANONICAL },
-  openGraph: {
-    title: 'World Cup 2026 Standings | GoalRadar',
-    description:
-      'Live FIFA World Cup 2026 group standings — all 12 groups with current points and goal difference.',
-    type: 'website',
-    url: CANONICAL,
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'World Cup 2026 Standings | GoalRadar',
-    description: 'Live FIFA World Cup 2026 group standings for all 12 groups.',
-  },
-};
+export const metadata: Metadata = WC_2026_HISTORICAL_AVAILABLE
+  ? {
+      title: 'World Cup 2026 Final Standings — Group Tables & Points | GoalRadar',
+      description:
+        'Final FIFA World Cup 2026 group standings for all 12 groups (A–L): points, goal difference, goals scored and how each group finished.',
+      alternates: { canonical: CANONICAL },
+      openGraph: {
+        title: 'World Cup 2026 Final Standings | GoalRadar',
+        description: 'Final FIFA World Cup 2026 group standings — all 12 groups, completed tournament.',
+        type: 'website',
+        url: CANONICAL,
+      },
+      twitter: {
+        card: 'summary_large_image',
+        title: 'World Cup 2026 Final Standings | GoalRadar',
+        description: 'Final FIFA World Cup 2026 group standings for all 12 groups.',
+      },
+    }
+  : {
+      title: 'World Cup 2026 Standings — Live Group Tables & Points | GoalRadar',
+      description:
+        'Live FIFA World Cup 2026 standings for all 12 groups (A–L). Updated after every match with points, goal difference, goals scored and qualification status.',
+      alternates: { canonical: CANONICAL },
+      openGraph: {
+        title: 'World Cup 2026 Standings | GoalRadar',
+        description:
+          'Live FIFA World Cup 2026 group standings — all 12 groups with current points and goal difference.',
+        type: 'website',
+        url: CANONICAL,
+      },
+      twitter: {
+        card: 'summary_large_image',
+        title: 'World Cup 2026 Standings | GoalRadar',
+        description: 'Live FIFA World Cup 2026 group standings for all 12 groups.',
+      },
+    };
 
 const FAQ = [
   {
@@ -147,19 +167,34 @@ function GroupTable({
 }
 
 export default async function WC2026StandingsPage() {
+  const completed = WC_2026_HISTORICAL_AVAILABLE;
   let standingTables: StandingTable[] = [];
 
-  try {
-    const data = await getStandingsCached('WC');
-    standingTables = (data.standings ?? []).filter((s) => s.type === 'TOTAL');
-  } catch { /* standings unavailable */ }
+  if (completed) {
+    // EPIC-WC-FROZEN-DATA-001 Phase 2C: completed WC-2026 → final frozen standings.
+    standingTables = frozenStandings();
+  } else {
+    try {
+      const data = await getStandingsCached('WC');
+      standingTables = (data.standings ?? []).filter((s) => s.type === 'TOTAL');
+    } catch { /* standings unavailable */ }
+  }
 
   const qualMap = calculateQualificationStatus(standingTables);
+
+  // Historical copy: no "updates every 5 minutes" claim once the tournament is done.
+  const faq = completed
+    ? FAQ.map((item) =>
+        /update/i.test(item.q)
+          ? { q: 'Are the World Cup 2026 group standings final?', a: 'Yes. The FIFA World Cup 2026 is complete — these are the final group standings after all matchdays were played.' }
+          : item,
+      )
+    : FAQ;
 
   const jsonLdFaq = {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
-    mainEntity: FAQ.map(({ q, a }) => ({
+    mainEntity: faq.map(({ q, a }) => ({
       '@type': 'Question', name: q,
       acceptedAnswer: { '@type': 'Answer', text: a },
     })),
@@ -200,8 +235,9 @@ export default async function WC2026StandingsPage() {
             World Cup 2026 Standings
           </h1>
           <p className="text-gray-400 text-sm">
-            Live group tables for all 12 World Cup 2026 groups (A–L). Updated every 5 minutes.
-            Top 2 from each group plus 8 best third-place teams advance to the Round of 32.
+            {completed
+              ? 'Final group tables for all 12 World Cup 2026 groups (A–L). The top 2 from each group plus the 8 best third-place teams advanced to the Round of 32.'
+              : 'Live group tables for all 12 World Cup 2026 groups (A–L). Updated every 5 minutes. Top 2 from each group plus 8 best third-place teams advance to the Round of 32.'}
           </p>
         </div>
 
@@ -210,7 +246,7 @@ export default async function WC2026StandingsPage() {
         {/* Group tables */}
         {standingTables.length > 0 ? (
           <section className="mb-8">
-            <h2 className="text-xl font-bold text-white mb-4">Live Group Standings</h2>
+            <h2 className="text-xl font-bold text-white mb-4">{completed ? 'Final Group Standings' : 'Live Group Standings'}</h2>
             {standingTables.map((st, i) => {
               const groupLetter = (st.group ?? '').replace(/^GROUP_/, '') || String.fromCharCode(65 + i);
               return (
@@ -257,7 +293,7 @@ export default async function WC2026StandingsPage() {
         <section id="faq" className="mb-8">
           <h2 className="text-xl font-bold text-white mb-4">World Cup 2026 Standings — FAQ</h2>
           <div className="space-y-3">
-            {FAQ.map(({ q, a }) => (
+            {faq.map(({ q, a }) => (
               <details key={q} className="bg-gray-900 border border-gray-800 rounded-xl group">
                 <summary className="px-5 py-4 cursor-pointer text-white font-semibold text-sm list-none flex items-center justify-between gap-3">
                   {q}

@@ -188,6 +188,11 @@ export function frozenCanonicalMatches(): CanonicalMatch[] {
   return DATA.matches.map(toCanonical);
 }
 
+/** Raw frozen match by numeric FIFA id (Number(idMatch)). */
+export function frozenMatchById(id: number): FrozenMatch | undefined {
+  return DATA.matches.find((m) => Number(m.idMatch) === id);
+}
+
 /** All 104 frozen matches as Match[] (via the one canonical adapter). */
 export function frozenMatches(): Match[] {
   return frozenCanonicalMatches().map(canonicalToMatch);

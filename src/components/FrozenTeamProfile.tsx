@@ -10,14 +10,12 @@
  */
 
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
 import {
   frozenTeamBySlug,
   frozenMatches,
   frozenStandings,
   frozenChampion,
 } from '@/lib/wc-frozen-view';
-import { getWCTeam } from '@/lib/wc-all-teams';
 import { deriveMatchDisplay } from '@/lib/match-display';
 import { calculateQualificationStatus, type QualificationStatus } from '@/lib/wc-qualification';
 import type { Match } from '@/lib/types';
@@ -45,21 +43,27 @@ function fmtDate(utc: string) {
   return new Date(utc).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
 
-/** Team resolution shared with generateMetadata. */
+/** Title-case a URL slug for a display name (used only for legacy "absent" slugs). */
+function slugToName(slug: string): string {
+  return slug.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+/**
+ * Team resolution shared with generateMetadata. Purely frozen-driven: a slug is
+ * 'played' iff it is in the frozen roster; any other (known legacy) slug is
+ * 'absent'. NO synthetic roster is read here. The caller (page) is responsible
+ * for 404-ing slugs that are not in the known route set.
+ */
 export function resolveFrozenTeamStatus(slug: string):
   | { kind: 'played'; name: string }
-  | { kind: 'absent'; name: string }
-  | { kind: 'unknown' } {
+  | { kind: 'absent'; name: string } {
   const frozen = frozenTeamBySlug(slug);
   if (frozen) return { kind: 'played', name: frozen.name };
-  const legacy = getWCTeam(slug);
-  if (legacy) return { kind: 'absent', name: legacy.displayName };
-  return { kind: 'unknown' };
+  return { kind: 'absent', name: slugToName(slug) };
 }
 
 export default async function FrozenTeamProfile({ slug }: { slug: string }) {
   const status = resolveFrozenTeamStatus(slug);
-  if (status.kind === 'unknown') notFound();
 
   const canonicalUrl = `${BASE_URL}/world-cup-2026/teams/${slug}`;
 
@@ -103,7 +107,6 @@ export default async function FrozenTeamProfile({ slug }: { slug: string }) {
   // ── Real participant ────────────────────────────────────────────────────────
   const team = frozenTeamBySlug(slug)!;
   const teamId = Number(team.idTeam);
-  const legacy = getWCTeam(slug); // optional editorial intro for teams that pre-existed
 
   const all = frozenMatches().filter((m) => m.homeTeam?.id === teamId || m.awayTeam?.id === teamId);
   const sortedAsc = [...all].sort((a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime());
@@ -198,7 +201,9 @@ export default async function FrozenTeamProfile({ slug }: { slug: string }) {
           <h1 className="text-3xl sm:text-4xl font-black text-white leading-tight mb-2">
             {team.name} at World Cup 2026
           </h1>
-          {legacy?.intro && <p className="text-gray-400 text-sm leading-relaxed">{legacy.intro}</p>}
+          <p className="text-gray-400 text-sm leading-relaxed">
+            {team.name} competed in Group {team.group} at the FIFA World Cup 2026. {finishLabel.replace(/^[^\w]+/, '')}.
+          </p>
           <div className="flex flex-wrap gap-2 mt-4">
             <span className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs font-bold px-3 py-1 rounded-full">
               Group {team.group}
