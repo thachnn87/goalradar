@@ -229,7 +229,7 @@ export default async function WC2026ResultsPage() {
 
         <WCRelatedLinks links={[
           { href: '/world-cup-2026-results',         icon: '🏁', label: 'Results Summary',    desc: 'Live-first results with tournament stats' },
-          { href: '/world-cup-2026/fixtures',        icon: '📅', label: 'Upcoming Fixtures',  desc: 'All remaining matches with kick-off times' },
+          { href: '/world-cup-2026/fixtures',        icon: '📅', label: 'Fixtures & Results',  desc: 'All 104 matches with final scores' },
           { href: '/world-cup-2026',                 icon: '🌍', label: 'WC 2026 Hub',        desc: 'Tournament overview and standings' },
           { href: '/world-cup-2026/groups',          icon: '🗂️', label: 'Group Stage',        desc: 'All 12 group draws and match schedules' },
         ]} />

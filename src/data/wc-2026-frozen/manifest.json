@@ -89,8 +89,8 @@
       "30-check validation",
       "sha256 checksum",
       "version WC-2026@v1",
-      "sign-off (PENDING)",
-      "production (GATED OFF)"
+      "sign-off (SIGNED_OFF 2026-08-26)",
+      "production (ARCHIVED / gate ON)"
     ],
     "captureMethod": "in-app browser network discovery (Phase 2A) + shell curl capture (Phase 2B)",
     "operator": "GoalRadar incident execution (Claude Code)"
