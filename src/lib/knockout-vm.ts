@@ -252,7 +252,14 @@ export const buildKnockoutViewModel: () => Promise<KnockoutViewModel> = async ()
   // Resolve decided group positions to the actual qualified team. Only meaningful
   // for LAST_32, whose labels are group positions ("1st Group A"); other rounds use
   // positional "Winner R32 Mx" labels that have no team to resolve.
-  const labelToTeam = await buildLabelToTeam();
+  //
+  // EPIC-WC-FROZEN-DATA-001: for the ARCHIVED frozen tournament the knockout
+  // matches already carry real team names, so there are no placeholder labels to
+  // resolve — skip buildLabelToTeam() entirely to keep the archived serving path
+  // free of any authority/KV read (getStandingsCached → readAuthorityCache).
+  const labelToTeam = WC_2026_HISTORICAL_AVAILABLE
+    ? new Map<string, SlotTeam>()
+    : await buildLabelToTeam();
 
   // Enrich null team names — slot mapping is by sorted match id (authority bracket
   // position); decided group positions resolve to real teams via labelToTeam.

@@ -7,10 +7,10 @@
     "validated": true,
     "checksummed": true,
     "versioned": true,
-    "signedOff": false,
-    "frozen": false,
-    "lifecycle": "COMPLETED",
-    "note": "Candidate. Freeze stages reached: CAPTURED, VALIDATED (30/30), CHECKSUMMED, VERSIONED. NOT SIGNED_OFF, NOT FROZEN; lifecycle=COMPLETED (tournament is over but the record is not yet ARCHIVED for serving). The production freeze contract (wc-frozen-gate.ts) requires ALL of: signedOff:true + signOff.status:SIGNED_OFF + non-empty approvals + frozen:true + lifecycle:ARCHIVED + checksum recompute + integrity pass. ACTIVATION (governed flip, no code change): set signedOff:true, frozen:true, lifecycle:\"ARCHIVED\", freezeTimestamp, signOff.status:\"SIGNED_OFF\", signOff.approvals[…]. Never without recorded Business + Historical-Authority sign-off (DGP-001 G8)."
+    "signedOff": true,
+    "frozen": true,
+    "lifecycle": "ARCHIVED",
+    "note": "ARCHIVED. FIFA-derived WC-2026@v1 frozen dataset is the operational historical source. Governed DGP-001 G8 sign-off recorded (see signOff). Freeze contract (wc-frozen-gate.ts) evaluates ACTIVE: signedOff+frozen+lifecycle:ARCHIVED+SIGNED_OFF+non-empty approvals+checksum recompute+integrity pass. dataset.json unchanged (checksum c9498255d554bb46)."
   },
   "lifecycleVocabulary": [
     "DRAFT",
@@ -50,7 +50,7 @@
     "api.fifa.com/api/v3 (acquisition)"
   ],
   "captureTimestamp": "2026-08-24T15:45:03Z",
-  "freezeTimestamp": null,
+  "freezeTimestamp": "2026-08-26T13:52:00Z",
   "counts": {
     "teams": 48,
     "groups": 12,
@@ -135,13 +135,29 @@
   },
   "releaseCommit": null,
   "signOff": {
-    "status": "PENDING",
+    "status": "SIGNED_OFF",
     "required": [
       "Business owner",
       "Historical Authority (DGP-001 G8)"
     ],
-    "approvals": [],
-    "note": "No approval recorded. Do NOT set frozen/true or flip WC_2026_HISTORICAL_AVAILABLE without recorded sign-off."
+    "approvals": [
+      {
+        "authority": "Business Authority",
+        "approver": "Thach Nguyen, Project Owner",
+        "decision": "APPROVED",
+        "timestamp": "2026-08-26T13:52:00Z"
+      },
+      {
+        "authority": "Historical Authority",
+        "approver": "Thach Nguyen, Project Owner (dual-role authorization; satisfies DGP-001 G8)",
+        "decision": "APPROVED",
+        "timestamp": "2026-08-26T13:52:00Z"
+      }
+    ],
+    "note": "Recorded DGP-001 G8 governance sign-off: Thach Nguyen (Project Owner) as both Business and Historical Authority (dual-role authorization). Decision APPROVED at 2026-08-26T13:52:00Z.",
+    "decision": "APPROVED",
+    "approvalTimestamp": "2026-08-26T13:52:00Z",
+    "scope": "FIFA World Cup 2026 frozen canonical dataset WC-2026@v1. Transition from COMPLETED to ARCHIVED."
   },
   "supersedes": null
 }

@@ -34,18 +34,21 @@ function validManifest(): FreezeManifestView {
   };
 }
 
-describe('A — committed state: gate OFF, no frozen data served', () => {
-  it('the real in-repo contract evaluates INACTIVE (safety: must stay OFF until governed flip)', () => {
+describe('A — activated state: gate ON, frozen data served (ARCHIVED)', () => {
+  // Governed DGP-001 G8 activation is recorded in the manifest. This tripwire was
+  // previously the committed-OFF safety guard; on genuine activation it flips to
+  // assert the ARCHIVED/ON state (it must never be weakened, skipped, or disabled).
+  it('the real in-repo contract evaluates ACTIVE (governed sign-off recorded)', () => {
     const d = getFreezeDecision();
-    expect(d.active).toBe(false);
-    expect(getFrozenWCTournament()).toBeNull();
-    expect(WC_2026_HISTORICAL_AVAILABLE).toBe(false);
+    expect(d.active).toBe(true);
+    expect(getFrozenWCTournament()).not.toBeNull();
+    expect(WC_2026_HISTORICAL_AVAILABLE).toBe(true);
   });
 
-  it('committed manifest is COMPLETED, not ARCHIVED (sign-off pending)', () => {
-    expect(FROZEN_WC_2026_MANIFEST.status.lifecycle).toBe('COMPLETED');
-    expect(FROZEN_WC_2026_MANIFEST.status.signedOff).toBe(false);
-    expect(FROZEN_WC_2026_MANIFEST.status.frozen).toBe(false);
+  it('committed manifest is ARCHIVED + SIGNED_OFF', () => {
+    expect(FROZEN_WC_2026_MANIFEST.status.lifecycle).toBe('ARCHIVED');
+    expect(FROZEN_WC_2026_MANIFEST.status.signedOff).toBe(true);
+    expect(FROZEN_WC_2026_MANIFEST.status.frozen).toBe(true);
   });
 });
 
