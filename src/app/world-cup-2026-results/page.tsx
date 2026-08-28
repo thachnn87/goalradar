@@ -11,6 +11,9 @@ import Link from 'next/link';
 import { getWCAuthorityMatches } from '@/lib/api';
 import { getLiveMatchIdSet } from '@/lib/wc-live-ssot';
 import { classifyMatchState } from '@/lib/match-classify';
+// EPIC-WC-FROZEN-DATA-001: same frozen SSOT the nested /world-cup-2026/results uses.
+import { WC_2026_HISTORICAL_AVAILABLE } from '@/lib/wc-frozen';
+import { frozenMatches } from '@/lib/wc-frozen-view';
 import type { Match } from '@/lib/types';
 import AdSlot from '@/components/AdSlot';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -27,8 +30,9 @@ const CANONICAL = `${BASE_URL}/world-cup-2026-results`;
 
 export const metadata: Metadata = {
   title: 'World Cup 2026 Results — All Scores & Match Reports | GoalRadar',
-  description:
-    'All FIFA World Cup 2026 results and scores. Live updates during matches, full-time scores, goal scorers and match reports from every game of the tournament.',
+  description: WC_2026_HISTORICAL_AVAILABLE
+    ? 'Complete results and final scores from all 104 FIFA World Cup 2026 matches — every group-stage and knockout result from the completed tournament.'
+    : 'All FIFA World Cup 2026 results and scores. Live updates during matches, full-time scores, goal scorers and match reports from every game of the tournament.',
   alternates: { canonical: CANONICAL },
   openGraph: {
     title: 'World Cup 2026 Results | GoalRadar',
@@ -47,11 +51,11 @@ export const metadata: Metadata = {
 const FAQ = [
   {
     q: 'Where can I find World Cup 2026 results?',
-    a: 'GoalRadar updates World Cup 2026 results in real time. Scores are refreshed every 60 seconds during live matches and immediately after full time.',
+    a: 'GoalRadar has the complete results of all 104 FIFA World Cup 2026 matches, from the group stage through to the Final — every full-time score in one place.',
   },
   {
-    q: 'How many goals have been scored at World Cup 2026?',
-    a: 'GoalRadar tracks every goal scored at the 2026 World Cup. Check our live results page above for the running total across all matches played so far.',
+    q: 'How many goals were scored at World Cup 2026?',
+    a: 'GoalRadar tracks every goal scored at the 2026 World Cup. See the results above for the goal totals across all 104 matches of the tournament.',
   },
   {
     q: 'Are there VAR decisions at World Cup 2026?',
@@ -89,10 +93,16 @@ export default async function WC2026ResultsPage() {
   // Snapshot (ESPN-enriched) → WC results feed → WC upcoming feed, so one call
   // replaces the previous getWCResultsCached + getWCLiveMatchesCached pair.
   const today = new Date().toISOString().split('T')[0];
-  const [authorityData, liveMatchIds] = await Promise.all([
-    getWCAuthorityMatches().catch(() => ({ matches: [] as Match[] })),
-    getLiveMatchIdSet().catch(() => new Set<number>()),
-  ]);
+  // EPIC-WC-FROZEN-DATA-001 Phase 2C: completed WC-2026 → real frozen results
+  // (all FINISHED, no live), mirroring /world-cup-2026/results. Otherwise the
+  // live authority pipeline. frozenMatches() derives from the same frozen SSOT
+  // (frozenCanonicalMatches) the nested route uses — never a second WC source.
+  const [authorityData, liveMatchIds] = WC_2026_HISTORICAL_AVAILABLE
+    ? [{ matches: frozenMatches() }, new Set<number>()]
+    : await Promise.all([
+        getWCAuthorityMatches().catch(() => ({ matches: [] as Match[] })),
+        getLiveMatchIdSet().catch(() => new Set<number>()),
+      ]);
 
   // DATA-18B.3E: live is decided ONLY by the live SSOT (liveMatchIds), never by
   // authority status/classify. Normalise each match's status so buckets AND the
@@ -164,7 +174,9 @@ export default async function WC2026ResultsPage() {
             World Cup 2026 Results
           </h1>
           <p className="text-gray-400 text-sm">
-            Live and full-time scores from every FIFA World Cup 2026 match. Updated every 60 seconds.
+            {WC_2026_HISTORICAL_AVAILABLE
+              ? 'Complete results from all 104 FIFA World Cup 2026 matches — the final historical record.'
+              : 'Live and full-time scores from every FIFA World Cup 2026 match. Updated every 60 seconds.'}
           </p>
         </div>
 
@@ -251,7 +263,7 @@ export default async function WC2026ResultsPage() {
           </section>
         )}
 
-        {played === 0 && (
+        {!WC_2026_HISTORICAL_AVAILABLE && played === 0 && (
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-10 text-center mb-8">
             <p className="text-4xl mb-3">📊</p>
             <p className="text-gray-300 font-semibold">No results yet</p>
