@@ -80,22 +80,73 @@ type OrchestratorTask = {
 };
 
 /**
- * Builds the ordered list of 12 tasks for one orchestrator run.
+ * Builds the ordered list of tasks for one orchestrator run.
  * Date-scoped endpoints are computed fresh on each invocation.
  *
- * Task order:
- *   Phase 1 — WC Fixtures (4 tasks)
- *   Phase 2 — Live matches (1 task, canonical KV key)
- *   Phase 3 — Standings   (7 tasks: WC + 6 leagues)
+ * Task order (P1-STANDINGS-ISO — live league standings isolation):
+ *   Phase A — LIVE LEAGUE STANDINGS (6: PL, PD, BL1, SA, FL1, CL)   ← FIRST
+ *   Phase B — Cross-competition today + live (2)
+ *   Phase C — WC live provider tasks (4 fixtures + WC standings)
+ *   Phase D — Team enrichment (in the GET handler, after this list)
+ *
+ * Rationale: the GLOBAL rate-safe latch (rate-safe.ts) is tripped by any
+ * provider 403/429/timeout and then skips every *subsequent* task in the run.
+ * Running the six live league standings FIRST guarantees a WC or team provider
+ * failure — which happens in Phase C/D — can never rob the leagues of their
+ * refresh opportunity in the same run. This does NOT change rate-safe behavior,
+ * task definitions, provider calls, or failover — only execution order.
+ * Exported so orchestrator-order tests can assert the ordering invariant.
  */
-function buildTasks(): OrchestratorTask[] {
+export function buildTasks(): OrchestratorTask[] {
   const today = new Date().toISOString().split('T')[0];
   const from  = new Date(Date.now() - 30 * 86_400_000).toISOString().split('T')[0];
 
+  // Shared standings task definition — identical shape for league and WC codes.
+  // PERF-6: standings skip if already refreshed within 30 min.
+  const standingsTask = (code: string): OrchestratorTask => ({
+    label: `standings-${code.toLowerCase()}`,
+    run:   () => refreshEndpoint(
+      `/competitions/${code}/standings`,
+      STANDINGS_FRESH,
+      STANDINGS_STALE,
+      { minIntervalSec: STANDINGS_MIN_INTERVAL_SEC, caller: CALLER },
+    ),
+  });
+
   return [
-    // ── Phase 1: WC Fixtures ─────────────────────────────────────────────────
-    // PERF-6: minIntervalSec guards prevent re-fetching data that is still
-    // within the 30-min freshness window even though the cron fires every 30 min.
+    // ── Phase A: LIVE LEAGUE STANDINGS (PL, PD, BL1, SA, FL1, CL) ──────────────
+    // MUST run before any WC/team provider call. A WC/team 403/429/timeout trips
+    // the GLOBAL rate-safe latch, which would otherwise skip these six here.
+    ...COMPETITIONS
+      .filter(({ code }) => code !== 'WC')
+      .map(({ code }) => standingsTask(code)),
+
+    // ── Phase B: Cross-competition today + live ───────────────────────────────
+    // PERF-4.5: getTodayMatches() now has KV backing.  Seed the KV key so
+    // page-safe getTodayMatchesCached() never needs to call the provider.
+    // PERF-6: 55s minimum interval keeps queue depth low between cron runs.
+    {
+      label: 'today-matches',
+      run:   () => refreshEndpoint(
+        `/matches?dateFrom=${today}&dateTo=${today}`,
+        60,    // fresh 60s (live page-level data)
+        120,   // stale 120s (matches SWR window)
+        { minIntervalSec: TODAY_MIN_INTERVAL_SEC, caller: CALLER },
+      ),
+    },
+    // Writes to goalradar:live:matches (30 s TTL) — NOT handled by refreshEndpoint.
+    // Live matches are NOT throttled — always refresh every run.
+    {
+      label: 'live-matches',
+      run:   refreshLiveMatches,
+    },
+
+    // ── Phase C: WC live provider tasks ───────────────────────────────────────
+    // Frozen WC pages are served independently of these (wc-frozen gate), so a WC
+    // provider failure here is non-fatal to public WC surfaces AND — thanks to the
+    // Phase-A ordering above — cannot starve the live league standings.
+    // PERF-6: minIntervalSec guards prevent re-fetching data still inside the
+    // 30-min freshness window even though the cron fires more often.
     {
       label: 'wc-all-matches',
       run:   () => refreshEndpoint('/competitions/WC/matches', WC_FRESH, WC_STALE,
@@ -131,38 +182,7 @@ function buildTasks(): OrchestratorTask[] {
         { minIntervalSec: WC_MIN_INTERVAL_SEC, caller: CALLER },
       ),
     },
-    // ── Phase 1b: Today's cross-competition matches ───────────────────────────
-    // PERF-4.5: getTodayMatches() now has KV backing.  Seed the KV key so
-    // page-safe getTodayMatchesCached() never needs to call the provider.
-    // PERF-6: 55s minimum interval keeps queue depth low between cron runs.
-    {
-      label: 'today-matches',
-      run:   () => refreshEndpoint(
-        `/matches?dateFrom=${today}&dateTo=${today}`,
-        60,    // fresh 60s (live page-level data)
-        120,   // stale 120s (matches SWR window)
-        { minIntervalSec: TODAY_MIN_INTERVAL_SEC, caller: CALLER },
-      ),
-    },
-    // ── Phase 2: Live ─────────────────────────────────────────────────────────
-    // Writes to goalradar:live:matches (30 s TTL) — NOT handled by refreshEndpoint.
-    // Live matches are NOT throttled — always refresh every run.
-    {
-      label: 'live-matches',
-      run:   refreshLiveMatches,
-    },
-    // ── Phase 3: Standings ────────────────────────────────────────────────────
-    // COMPETITIONS includes WC, PL, PD, BL1, SA, FL1, CL (7 total)
-    // PERF-6: standings skip if already refreshed within 30 min.
-    ...COMPETITIONS.map(({ code }) => ({
-      label: `standings-${code.toLowerCase()}`,
-      run:   () => refreshEndpoint(
-        `/competitions/${code}/standings`,
-        STANDINGS_FRESH,
-        STANDINGS_STALE,
-        { minIntervalSec: STANDINGS_MIN_INTERVAL_SEC, caller: CALLER },
-      ),
-    })),
+    standingsTask('WC'),
   ];
 }
 
